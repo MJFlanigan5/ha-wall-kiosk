@@ -242,6 +242,16 @@ struggling here. When building the actual dashboard this panel displays:
 - Keep DOM complexity reasonable per screen — this is a single full-time
   kiosk view, not a multi-tab desktop app
 
+## Going native (deferred)
+
+Browser-based (touchkio, or a lighter custom Chromium/WPE wrapper) is the
+practical path for now — it keeps the entire dashboard as the HTML/CSS
+already built. A real native app (PySide6 + QML, no browser engine at all
+— the same approach Savant/Control4/Crestron actually use) is spec'd out
+in [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md) for later, but
+deliberately **not started** — only worth it if the browser-based setup
+turns out to actually struggle in practice, not as a preemptive rewrite.
+
 ## Design background
 
 This mount and kiosk pairs with the Savant-inspired Home Assistant dashboard
