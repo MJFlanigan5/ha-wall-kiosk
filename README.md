@@ -247,12 +247,13 @@ struggling here. When building the actual dashboard this panel displays:
 - Keep DOM complexity reasonable per screen — this is a single full-time
   kiosk view, not a multi-tab desktop app
 
-## iPad companion (not started, spec only)
+## iPad + phone companion (not started, spec only)
 
-Same Savant-styled experience, for iPad — as a PWA wrapping the existing
-HTML mockup rather than a port of the native Pi app (different hardware,
-different constraints — the Pi's memory ceiling is why that one went
-native/no-browser, and iPads don't have that ceiling). See
+Same Savant-styled experience, for iPad and phone — one PWA wrapping the
+existing HTML mockup (responsive breakpoints cover both screen sizes from
+a single codebase) rather than a port of the native Pi app (different
+hardware, different constraints — the Pi's memory ceiling is why that one
+went native/no-browser, and iPads/phones don't have that ceiling). See
 [`docs/IPAD_PWA_SPEC.md`](docs/IPAD_PWA_SPEC.md).
 
 ## Notifications & interrupt events (not started, spec only)
