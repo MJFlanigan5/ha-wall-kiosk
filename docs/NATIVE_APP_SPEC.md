@@ -1,11 +1,48 @@
-# Native App Spec (deferred — not started)
+# Native App Spec
 
-This is a spec for replacing the browser-based kiosk (touchkio or a custom
-Chromium/WPE wrapper) with a real native app — no browser engine at all,
-the same approach Savant/Control4/Crestron actually use on their own touch
-panels. **Not started.** Written up now so it's ready to pick up later,
-after the browser-based setup is running and proven, and only if 2GB
-performance genuinely turns out to be a problem in practice.
+Replacing the browser-based kiosk (touchkio or a custom Chromium/WPE
+wrapper) with a real native app — no browser engine at all, the same
+approach Savant/Control4/Crestron actually use on their own touch panels.
+
+**Status: MVP phase (1 + 2) in progress**, building for personal use
+regardless of whether the browser-based kiosk turns out to need it —
+Mike's choice, not a performance-driven trigger anymore. Phases 3+ remain
+deferred/incremental — add screens as needed rather than porting
+everything up front.
+
+## Design principle: config-driven, not hardcoded to one home
+
+This is meant for other people to actually run against their own Home
+Assistant instance, not just Mike's. That means:
+
+- **No hardcoded room names, entity IDs, or area lists in code or QML.**
+  A `config.yaml` (gitignored where it holds real values; a
+  `config.example.yaml` checked in as a template) supplies the HA URL,
+  auth token, and which areas/entities to show.
+- **Prefer pulling structure from HA itself** (its Area registry, entity
+  `area_id` assignments) over a hand-maintained room list, so someone
+  else's existing HA organization "just works" rather than requiring them
+  to redeclare their whole house in a second config format.
+- **Credentials never touch this repo.** Long-lived access token lives in
+  a local config file or environment variable, excluded via `.gitignore`,
+  same discipline as the MQTT credentials note in the main README.
+
+## Phases and time estimate
+
+Estimated part-time (evenings/weekends), matching this project's pace:
+
+| Phase | What | Estimate | Status |
+|---|---|---|---|
+| 1 | `Theme.qml` — port every design token from the mockup's CSS | 2-4 hours | **In progress** |
+| 2 | HA WebSocket client + one working screen (Overview) end-to-end, live data | 3-7 days | **In progress** |
+| 3 | Remaining screens (~15-25, ported one at a time from the HTML mockups) | 4-8 weeks | Not started |
+| 4 | Service calls (write actions) on each interactive screen | rolled into 3 | Not started |
+| 5 | Hardware testing + touch/perf polish on the real Pi | 3-5 days | Not started |
+
+MVP (phases 1-2, plus a handful of the most-used screens) is realistically
+**1-2 weeks** total. Full port of everything designed so far is **6-10
+weeks**. Add screens incrementally after the MVP proves the architecture
+works — don't try to port everything before using it for real.
 
 ## Decision: PySide6 + QML (not Kivy, not raw Qt/C++)
 

@@ -1,0 +1,19 @@
+# Copy this file to config.yaml and fill in your own values.
+# config.yaml is gitignored -- never commit real credentials.
+
+home_assistant:
+  # ws:// for plain HTTP instances, wss:// if yours is behind TLS
+  url: "ws://homeassistant.local:8123/api/websocket"
+
+  # Create one at: Home Assistant -> your profile -> Security tab ->
+  # "Long-lived access tokens" -> Create Token. Paste it here, or leave
+  # this blank and set the HA_TOKEN environment variable instead (the
+  # env var takes precedence if both are set).
+  token: ""
+
+display:
+  # Which areas to show on the Overview screen, in order. Leave empty (a
+  # blank list, "[]") to show every area Home Assistant knows about --
+  # good default for a first run so nothing needs configuring just to see
+  # something on screen.
+  areas: []
