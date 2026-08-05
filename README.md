@@ -270,6 +270,15 @@ feature gating, authenticated album art, and an open scope question on
 multi-room grouping and search/browse. See
 [`docs/MUSIC_SPEC.md`](docs/MUSIC_SPEC.md).
 
+## Other interaction gaps (catalog, not yet speced)
+
+Live camera viewing, climate control (blocked on backend exposure),
+security/locks (blocked on hardware), scenes/moods, kiosk exit/admin
+access, idle/screensaver behavior, voice/Assist, connection-loss handling,
+and other device domains not yet inventoried. See
+[`docs/INTERACTION_GAPS.md`](docs/INTERACTION_GAPS.md) so none of these get
+forgotten and rediscovered late.
+
 ## Design background
 
 This mount and kiosk pairs with the Savant-inspired Home Assistant dashboard
