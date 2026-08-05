@@ -1,0 +1,2514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Home Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  /* Palette matched directly to real Savant app screenshots (savant.com/savant-app,
+     savant.com/power/savant-app) — near-black base, white/gray text, color reserved for
+     data (ring gauge / consumer icons) and green for on/active states, not a single tinted
+     accent used everywhere. See dashboard-design-spec.md for the source screenshots. */
+  :root {
+    --base: #0A0A0C;
+    --base-raised: #161618;
+    --hairline: #232326;
+    --hairline-soft: #1C1C1E;
+    --text: #F5F5F7;
+    --text-dim: #8E8E93;
+    --text-faint: #545456;
+    --accent: #FFFFFF;
+    --accent-dim: rgba(255, 255, 255, 0.10);
+    --on: #34C759;
+    --on-dim: rgba(52, 199, 89, 0.16);
+    /* -apple-system/BlinkMacSystemFont render actual San Francisco on Mac/iPad/iPhone —
+       Savant's app is Apple-first (Siri, HomeKit, Apple TV), this is almost certainly
+       the real font. Inter is the fallback everywhere else (closest open cousin). */
+    --font-head: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+    --rail-w: 84px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body { height: 100%; background: var(--base); color: var(--text); font-family: var(--font-body); overflow: hidden; }
+  body { display: flex; -webkit-font-smoothing: antialiased; }
+
+  /* ---------- Elevation rail (kept — deliberate adaptation for an always-on wall
+     tablet, not literally from Savant's phone-app nav. See dashboard-design-spec.md) --- */
+  .rail {
+    width: var(--rail-w); flex-shrink: 0; display: flex; flex-direction: column;
+    align-items: center; padding: 28px 0; background: var(--base-raised);
+    border-right: 1px solid var(--hairline); gap: 4px; overflow-y: auto;
+  }
+  .rail-brand {
+    font-family: var(--font-head); font-weight: 600; font-size: 13px; letter-spacing: 1px;
+    color: var(--text-dim); margin-bottom: 28px; writing-mode: vertical-rl; text-orientation: mixed;
+  }
+  .rail-item {
+    position: relative; width: 100%; display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: 14px 4px; cursor: pointer; border: none; background: transparent;
+    color: var(--text-dim); font-family: var(--font-body); font-size: 10.5px; letter-spacing: 0.3px;
+    -webkit-user-select: none; user-select: none;
+  }
+  .rail-item .stem { width: 1px; height: 22px; background: var(--hairline); position: relative; transition: background 0.35s ease; }
+  .rail-item .stem::after {
+    content: ""; position: absolute; left: 50%; top: 0; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text-dim); transform: translate(-50%, -50%); transition: background 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease;
+  }
+  .rail-item.active { color: var(--text); }
+  .rail-item.active .stem { background: var(--accent); }
+  .rail-item.active .stem::after { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-dim); transform: translate(-50%, -50%) scale(1.15); }
+  .rail-item span.label { max-width: 60px; text-align: center; line-height: 1.3; }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+  .content { flex: 1; overflow-y: auto; padding: 32px 40px 20px; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+  .header h1 { font-family: var(--font-head); font-weight: 600; font-size: 32px; letter-spacing: -0.2px; }
+  .header .meta { text-align: right; }
+  .header .clock { font-family: var(--font-head); font-size: 22px; font-weight: 600; letter-spacing: -0.2px; font-variant-numeric: tabular-nums; }
+  .header .outdoor { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ---------- TrueImage-style hero ----------
+     Real room photo goes in photos/<room-id>.jpg — see photos/README.txt. Until a photo
+     exists there, .photo-base falls back to a neutral gradient automatically: both are set
+     as CSS background layers on the same element, so a missing image simply paints nothing
+     and the gradient layer underneath shows through, no JS fallback logic needed. The glow
+     overlay on top still simulates TrueImage's live-light-state compositing either way. */
+  .hero {
+    position: relative; border-radius: 16px; overflow: hidden; margin-bottom: 22px;
+    height: 190px; display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 18px 20px; transition: filter 0.5s ease;
+  }
+  .hero .photo-base { position: absolute; inset: 0; background-size: cover, cover; background-position: center, center; }
+  .hero .glow {
+    position: absolute; inset: 0; pointer-events: none; transition: opacity 0.5s ease;
+    background: radial-gradient(ellipse 70% 60% at 50% 100%, rgba(255,236,204,0.4) 0%, rgba(255,236,204,0) 70%);
+  }
+  .hero .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,10,12,0) 30%, rgba(10,10,12,0.8) 100%); }
+  .hero-room-label {
+    position: relative; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: rgba(245,245,247,0.65);
+  }
+  .hero-status { position: relative; font-family: var(--font-body); font-size: 14.5px; color: var(--text); margin-top: 4px; }
+
+  /* ---------- Service tabs (Lighting / Climate / Media / Security) ---------- */
+  .service-tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--hairline); }
+  .service-tab {
+    font-family: var(--font-body); font-weight: 500; font-size: 13.5px; color: var(--text-dim);
+    background: none; border: none; padding: 10px 4px 12px; cursor: pointer; position: relative;
+    margin-right: 18px; flex-shrink: 0; white-space: nowrap;
+  }
+  .service-tab.active { color: var(--text); }
+  .service-tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent); border-radius: 2px; }
+
+  /* ---------- Lighting sub-nav: Sliders / Scenes / Global (matches real Savant dock) --- */
+  .subnav { display: flex; gap: 8px; margin-bottom: 18px; }
+  .subnav-btn {
+    width: 40px; height: 34px; border-radius: 9px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text-dim); cursor: pointer; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .subnav-btn.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
+
+  /* ---------- Lighting: list rows, not tiles (matches real Slider screen) ---------- */
+  .light-list { display: flex; flex-direction: column; }
+  .light-row { padding: 14px 0; border-bottom: 1px solid var(--hairline-soft); }
+  .light-row:last-child { border-bottom: none; }
+  .light-row-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 9px; }
+  .light-row-name { font-size: 14.5px; font-weight: 500; }
+  .light-row-sub { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+  .light-row-pct { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); }
+  .switch-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--hairline-soft); }
+  .switch-btn {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.5px; padding: 6px 16px;
+    border-radius: 999px; border: 1px solid var(--hairline); background: transparent; color: var(--text-dim); cursor: pointer;
+  }
+  .switch-btn.on { background: var(--on-dim); border-color: rgba(52,199,89,0.5); color: var(--on); }
+
+  .slider-track { width: 100%; height: 4px; border-radius: 999px; background: var(--hairline); position: relative; cursor: pointer; touch-action: none; }
+  .slider-fill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 999px; background: var(--accent); pointer-events: none; }
+  .slider-thumb { position: absolute; top: 50%; width: 15px; height: 15px; border-radius: 50%; background: var(--text); transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 4px var(--accent-dim); }
+
+  /* ---------- Scenes: big stacked full-width buttons (matches real Scenes screen) --- */
+  .scene-list { display: flex; flex-direction: column; gap: 10px; }
+  .scene-btn-full {
+    width: 100%; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text); font-family: var(--font-body);
+    font-size: 14.5px; font-weight: 500; text-align: left; cursor: pointer;
+  }
+  .scene-btn-full.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
+
+  /* ---------- Scene photo cards (matches Savant Touch wall-panel Scenes screen —
+     full-bleed photo per scene + subtitle, not the phone's plain text buttons) ------- */
+  .scene-card {
+    position: relative; width: 100%; height: 88px; border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--hairline); background: var(--base-raised); cursor: pointer;
+    display: flex; align-items: flex-end; padding: 14px 16px; text-align: left;
+  }
+  .scene-card .scene-photo { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0.55; }
+  .scene-card .scene-scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,10,12,0) 30%, rgba(10,10,12,0.88) 100%); }
+  .scene-card-body { position: relative; }
+  .scene-card-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .scene-card-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
+  .scene-card.active { border-color: rgba(255,255,255,0.5); }
+
+  /* ---------- Global: Bright/Mid/Dim/Off stacked (matches real Global Room Control) --- */
+  .global-list { display: flex; flex-direction: column; gap: 10px; }
+  .global-btn {
+    width: 100%; padding: 18px; border-radius: 12px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text); font-family: var(--font-head);
+    font-weight: 600; font-size: 15px; letter-spacing: 0.5px; text-align: center; cursor: pointer;
+  }
+  .global-btn.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
+
+  /* ---------- Climate / Media / Security — single-purpose panels ---------- */
+  .panel { padding: 4px 0; }
+  .climate-face { display: flex; flex-direction: column; align-items: center; padding: 20px 0 8px; }
+  .climate-temp { font-family: var(--font-mono); font-size: 64px; font-weight: 500; line-height: 1; color: var(--text); }
+  .climate-mode-badge {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.5px; color: var(--text-dim);
+    background: rgba(255,255,255,0.06); padding: 4px 12px; border-radius: 999px; margin-top: 10px;
+  }
+  .climate-target-row { display: flex; align-items: center; gap: 16px; margin-top: 22px; }
+  .stepper { width: 38px; height: 38px; border-radius: 10px; background: var(--base-raised); border: 1px solid var(--hairline); color: var(--text); font-family: var(--font-mono); font-size: 17px; cursor: pointer; }
+  .climate-target-label { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); min-width: 110px; text-align: center; }
+
+  /* ---------- Music playback — album art, scrubber, full transport, source pill.
+     Richer than a bare play/pause panel, matching real Savant's Music service. ---- */
+  .media-panel { display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
+  .media-name { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 16px; }
+  .music-art {
+    width: 140px; height: 140px; border-radius: 16px; margin-bottom: 18px; color: var(--text-faint);
+    background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .music-track-title { font-size: 17px; font-weight: 600; text-align: center; }
+  .media-artist { font-size: 13px; color: var(--text-dim); margin-top: 3px; margin-bottom: 20px; }
+  .music-scrub-row { width: 100%; display: flex; align-items: center; gap: 10px; }
+  .music-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); min-width: 30px; }
+  .music-time.right { text-align: right; }
+  .media-track { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin-bottom: 22px; }
+  .media-transport { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
+  .music-transport { display: flex; align-items: center; gap: 22px; margin: 18px 0 22px; }
+  .music-btn-sm { width: 34px; height: 34px; border-radius: 999px; background: none; color: var(--text-dim); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .music-btn-sm.active { color: var(--on); }
+  .media-btn-lg { width: 52px; height: 52px; border-radius: 999px; background: var(--accent-dim); color: var(--text); border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .media-vol-row { width: 100%; display: flex; align-items: center; gap: 10px; margin-top: 22px; }
+  .music-source-pill {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px; color: var(--text-dim);
+    background: var(--base-raised); border: 1px solid var(--hairline); padding: 5px 14px; border-radius: 999px; margin-top: 18px;
+  }
+
+  .security-list { display: flex; flex-direction: column; }
+  .security-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--hairline-soft); }
+  .security-row:last-child { border-bottom: none; }
+  .badge { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.4px; padding: 3px 10px; border-radius: 999px; }
+  .badge.ok { background: var(--on-dim); color: var(--on); }
+  .badge.fault { background: rgba(255,159,10,0.16); color: #FF9F0A; }
+
+  /* ---------- Security: ARM screen (3-way shield selector + quick actions) and
+     Status screen (fault-grouped list) — real Savant Security is two separate
+     dock-switched screens, matching the Lighting service's Sliders/Scenes/Global dock --- */
+  .arm-row { display: flex; justify-content: center; gap: 26px; margin: 10px 0 6px; }
+  .arm-shield {
+    width: 84px; height: 84px; border-radius: 50%; border: 1px solid var(--hairline);
+    background: var(--base-raised); display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 6px; cursor: pointer; color: var(--text-dim);
+  }
+  .arm-shield .label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.4px; }
+  .arm-shield.active { border-color: rgba(52,199,89,0.5); background: var(--on-dim); color: var(--on); }
+  .arm-status-text { text-align: center; font-family: var(--font-head); font-weight: 600; font-size: 15px; margin: 16px 0 24px; color: var(--text); }
+  .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .quick-btn {
+    padding: 15px 10px; border-radius: 12px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text); font-family: var(--font-body);
+    font-size: 12.5px; font-weight: 500; text-align: center; cursor: pointer;
+  }
+  .security-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .security-filter-tabs { display: flex; gap: 16px; margin-bottom: 14px; border-bottom: 1px solid var(--hairline); }
+  .security-filter-tab {
+    font-family: var(--font-body); font-weight: 500; font-size: 12px; color: var(--text-dim);
+    background: none; border: none; padding: 8px 0 10px; cursor: pointer; position: relative;
+  }
+  .security-filter-tab.active { color: var(--text); }
+  .security-filter-tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent); border-radius: 2px; }
+  .bypass-btn {
+    width: 100%; margin-top: 16px; padding: 14px; border-radius: 12px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text); font-family: var(--font-body);
+    font-size: 13.5px; font-weight: 500; text-align: center; cursor: pointer;
+  }
+  .security-group { margin-bottom: 22px; }
+  .security-group-header {
+    display: flex; justify-content: space-between; align-items: center; padding: 8px 0;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .security-fault-count { color: #FF9F0A; }
+
+  /* ---------- Icon sizing — Lucide replaces every icon `<i data-lucide>` with an
+     inline SVG on lucide.createIcons(); stroke uses currentColor so it inherits
+     the parent's color automatically, no per-icon color rules needed. ---------- */
+  .i14, .i16, .i18, .i20, .i22, .i24, .i28 { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+  .i14 { width: 14px; height: 14px; }
+  .i16 { width: 16px; height: 16px; }
+  .i18 { width: 18px; height: 18px; }
+  .i20 { width: 20px; height: 20px; }
+  .i22 { width: 22px; height: 22px; }
+  .i24 { width: 24px; height: 24px; }
+  .i28 { width: 28px; height: 28px; }
+
+  /* ---------- Footer status bar ---------- */
+  .footer {
+    flex-shrink: 0; padding: 12px 40px; border-top: 1px solid var(--hairline); display: flex;
+    justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim);
+  }
+  .footer .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--on); display: inline-block; margin-right: 8px; box-shadow: 0 0 0 3px var(--on-dim); }
+
+  /* ---------- Power section (ring gauge, consumer rows, water heater) ---------- */
+  .rail-divider { width: 32px; height: 1px; background: var(--hairline); margin: 6px 0 10px; }
+  .ring-wrap { display: flex; justify-content: center; margin-bottom: 22px; }
+  .ring-gauge {
+    width: 190px; height: 190px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; position: relative;
+  }
+  .ring-gauge::before { content: ""; position: absolute; inset: 14px; border-radius: 50%; background: var(--base); }
+  .ring-center { position: relative; text-align: center; }
+  .ring-center .icon { font-size: 18px; color: var(--text-dim); margin-bottom: 4px; }
+  .ring-center .kw { font-family: var(--font-mono); font-size: 26px; font-weight: 500; }
+  .ring-center .label { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 0.4px; text-transform: uppercase; margin-top: 2px; }
+
+  .section-label-sm { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; }
+  .consumer-list { display: flex; flex-direction: column; }
+  .consumer-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--hairline-soft); }
+  .consumer-row:last-child { border-bottom: none; }
+  .consumer-left { display: flex; align-items: center; gap: 12px; }
+  .consumer-dot { width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .consumer-name { font-size: 14px; font-weight: 500; }
+  .consumer-watts { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+
+  .kv-section { margin-bottom: 26px; }
+  .kv-row { display: flex; justify-content: space-between; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--hairline-soft); }
+  .kv-row:last-child { border-bottom: none; }
+  .kv-left { display: flex; align-items: center; gap: 12px; }
+  .kv-icon { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--text-dim); flex-shrink: 0; }
+  .kv-name { font-size: 14px; }
+  .kv-value { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+  .kv-value.linked { color: var(--text); cursor: pointer; }
+  .kv-chevron { color: var(--text-faint); font-size: 12px; }
+
+  /* ---------- iPad Energy Dashboard — a genuinely different grid layout, not the
+     phone's Overview reflowed wider. Both blocks always render; CSS toggles which
+     is visible per breakpoint (see dashboard-design-spec.md "iPad is NOT a scaled
+     phone" section — confirmed from the Pro 9 App brochure's iPad screenshots). --- */
+  .energy-grid { display: none; }
+  .video-tablet-only { display: none; }
+  @media (min-width: 768px) {
+    .energy-phone { display: none; }
+    .energy-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 4px; }
+    .video-phone-note { display: none; }
+    .video-tablet-only { display: block; }
+  }
+  .energy-card { background: var(--base-raised); border: 1px solid var(--hairline); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; }
+  .energy-card-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .energy-card-title .live { color: var(--on); font-size: 8.5px; }
+  .eco-icons { display: flex; justify-content: space-between; margin-top: auto; }
+  .eco-icon { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 15px; color: var(--text-faint); }
+  .eco-icon.active { color: var(--on); }
+  .eco-icon .lbl { font-family: var(--font-mono); font-size: 8px; }
+  .mini-ring-row { display: flex; align-items: center; gap: 14px; }
+  .mini-ring { width: 62px; height: 62px; border-radius: 50%; position: relative; flex-shrink: 0; }
+  .mini-ring::before { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--base-raised); }
+  .mini-legend { display: flex; flex-direction: column; gap: 5px; }
+  .mini-legend-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-dim); }
+  .mini-legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .flow-stat { font-family: var(--font-mono); font-size: 26px; font-weight: 500; text-align: center; margin: 8px 0 4px; }
+  .flow-sub { text-align: center; font-size: 10.5px; color: var(--text-dim); }
+  .mix-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin-bottom: 12px; }
+  .overview-rings { display: flex; justify-content: space-around; margin-top: auto; }
+  .overview-ring-stat { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .overview-ring-stat .dot { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
+  .battery-big { font-family: var(--font-mono); font-size: 30px; font-weight: 500; text-align: center; margin-top: auto; }
+
+  /* ---------- Favorites grid — shared by Media's Favorites view and Video
+     Tiling's Favorites view (real Savant surfaces one shared favorites list in
+     both places, not two separate ones). ---------- */
+  .favorites-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .favorite-tile {
+    aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text); font-family: var(--font-body);
+    font-weight: 600; font-size: 12.5px; text-align: center; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 8px;
+  }
+  .favorite-tile.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); }
+
+  /* ---------- Video Tiling — freeform multi-source composer, iPad-scoped in the
+     real product. Interaction is simplified vs. real Savant (tap-to-select audio
+     source instead of drag-and-drop; dock-switched Canvas/Layouts/Favorites screens
+     instead of a side panel) to match this app's established navigation language —
+     see dashboard-design-spec.md for the noted departure. ---------- */
+  .video-room-row { display: flex; gap: 8px; margin-bottom: 18px; overflow-x: auto; }
+  .video-room-chip {
+    padding: 8px 16px; border-radius: 999px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text-dim); font-family: var(--font-body);
+    font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .video-room-chip.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
+
+  .video-canvas { display: grid; gap: 6px; height: 340px; border-radius: 14px; overflow: hidden; position: relative; }
+  .video-tile {
+    position: relative; background: var(--base-raised); border: 2px solid transparent;
+    border-radius: 8px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;
+    justify-content: flex-end; padding: 10px;
+  }
+  .video-tile.selected { border-color: var(--accent); }
+  .video-tile-bg { position: absolute; inset: 0; background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%); }
+  .video-tile-name { position: relative; font-size: 13px; font-weight: 600; color: var(--text); }
+  .video-tile-audio {
+    position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; color: var(--text-faint);
+    background: rgba(0,0,0,0.45); border: none; cursor: pointer; z-index: 1;
+  }
+  .video-tile-audio.active { color: var(--on); background: var(--on-dim); }
+
+  .video-pip-main { position: absolute; inset: 0; }
+  .video-pip-corner { position: absolute; right: 12px; bottom: 12px; width: 34%; height: 38%; z-index: 2; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+
+  .video-transport { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 18px; }
+  .video-transport button {
+    width: 42px; height: 42px; border-radius: 999px; background: var(--base-raised);
+    border: 1px solid var(--hairline); color: var(--text); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .video-fullscreen-wrap { position: relative; height: 340px; border-radius: 14px; overflow: hidden; }
+  .video-fullscreen-close {
+    position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(0,0,0,0.5); color: var(--text); border: none; display: flex;
+    align-items: center; justify-content: center; cursor: pointer; z-index: 2;
+  }
+  .video-fullscreen-name { position: relative; z-index: 1; padding: 14px; font-size: 15px; font-weight: 600; }
+
+  .layout-list { display: flex; flex-direction: column; gap: 10px; }
+  .layout-row {
+    display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--hairline); background: var(--base-raised); cursor: pointer;
+  }
+  .layout-row.active { border-color: rgba(255,255,255,0.35); background: var(--accent-dim); }
+  .layout-preview { width: 44px; height: 32px; display: grid; gap: 2px; border-radius: 4px; overflow: hidden; flex-shrink: 0; position: relative; }
+  .layout-preview div { background: var(--hairline); }
+  .layout-preview .pip-corner { position: absolute; right: 3px; bottom: 3px; width: 40%; height: 40%; background: var(--text-dim); }
+  .layout-row-name { font-size: 13.5px; font-weight: 500; }
+
+  /* ---------- Security Cameras — live feed grid, tap to expand (reuses the
+     .video-fullscreen-* classes from Video Tiling for the expanded view — same
+     visual treatment, genuinely the same pattern). ---------- */
+  .camera-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .camera-tile {
+    position: relative; aspect-ratio: 16/10; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--hairline); background: var(--base-raised); cursor: pointer;
+    display: flex; align-items: flex-end; padding: 10px;
+  }
+  .camera-tile-bg { position: absolute; inset: 0; background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%); }
+  .camera-tile-name { position: relative; font-size: 12.5px; font-weight: 600; }
+  .camera-tile-live {
+    position: absolute; top: 8px; left: 8px; z-index: 1; font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.5px; color: #FF453A; background: rgba(0,0,0,0.5); padding: 3px 7px 3px 6px;
+    border-radius: 999px; display: flex; align-items: center; gap: 4px;
+  }
+  .camera-tile-live::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #FF453A; flex-shrink: 0; }
+
+  /* ---------- Entry — garage OPEN/CLOSE toggle pairs (matches the real Garage
+     Door Entry screen) + a Front Door camera/intercom quick panel. ---------- */
+  .toggle-pair { display: flex; gap: 8px; }
+  .toggle-pair-btn {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--hairline);
+    background: transparent; color: var(--text-dim); font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.5px; cursor: pointer;
+  }
+  .toggle-pair-btn.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
+  .garage-row { padding: 14px 0; border-bottom: 1px solid var(--hairline-soft); display: flex; flex-direction: column; gap: 10px; }
+  .garage-row:last-child { border-bottom: none; }
+  .garage-row-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+  .garage-status { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+
+  /* ---------- RGB color wheel — deeper sub-screen below the Lighting dock for
+     color-capable fixtures (LIFX, Govee RGB strips). ---------- */
+  .color-swatch-btn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hairline); cursor: pointer; flex-shrink: 0; padding: 0; }
+  .back-link { display: inline-flex; align-items: center; gap: 2px; background: none; border: none; color: var(--text-dim); font-family: var(--font-body); font-size: 13px; cursor: pointer; margin-bottom: 20px; padding: 0; }
+  .color-wheel {
+    width: 200px; height: 200px; border-radius: 50%; position: relative; margin: 0 auto 18px; cursor: pointer;
+    background: conic-gradient(from 90deg, #FF0000, #FFFF00, #00FF00, #00FFFF, #0000FF, #FF00FF, #FF0000);
+  }
+  .color-wheel::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%); }
+  .color-wheel-cursor { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); transform: translate(-50%,-50%); z-index: 2; pointer-events: none; }
+  .color-hex { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); text-align: center; letter-spacing: 1px; }
+
+  /* ---------- Apple TV 10-foot UI reference — horizontal carousels with a
+     focused center card, the real navigation model for a D-pad remote. Built
+     as one representative screen, not every existing screen re-done in
+     carousel form (Mike flagged this as lowest priority). ---------- */
+  .tv-frame { background: #050506; border-radius: 8px; padding: 24px 28px; border: 1px solid var(--hairline); }
+  .tv-row-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--text-faint); margin: 20px 0 10px; text-transform: uppercase; }
+  .tv-row-label:first-child { margin-top: 0; }
+  .tv-carousel { display: flex; gap: 12px; overflow-x: auto; padding: 4px 4px 10px; }
+  .tv-card {
+    flex-shrink: 0; width: 130px; height: 80px; border-radius: 10px; background: var(--base-raised);
+    border: 1px solid var(--hairline); display: flex; align-items: flex-end; padding: 10px; position: relative;
+    overflow: hidden; transition: transform 0.15s ease, border-color 0.15s ease; cursor: pointer;
+  }
+  .tv-card.focused { transform: scale(1.08); border-color: rgba(255,255,255,0.6); z-index: 1; }
+  .tv-card-bg { position: absolute; inset: 0; background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%); }
+  .tv-card-name { position: relative; font-size: 12px; font-weight: 600; }
+  .tv-card-icon {
+    flex-shrink: 0; width: 64px; height: 64px; border-radius: 10px; background: var(--base-raised);
+    border: 1px solid var(--hairline); display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .tv-card-icon.focused { transform: scale(1.12); border-color: rgba(255,255,255,0.6); color: var(--text); }
+
+  /* ---------- Settings — Notifications (name+description+toggle, matches the
+     real pattern) + Users + About. ---------- */
+  .notif-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid var(--hairline-soft); gap: 14px; }
+  .notif-row:last-child { border-bottom: none; }
+  .notif-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+  .notif-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+  .notif-check {
+    width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hairline); background: transparent;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; color: transparent;
+  }
+  .notif-check.on { background: var(--on); border-color: var(--on); color: var(--base); }
+
+  /* ---------- Energy Flow diagram — house/sun/battery/import icons connected by
+     curved lines, matching the real Power Flow Dashboard screenshot (not the
+     simplified text-stat "Power Flow" card in the iPad grid). ---------- */
+  .flow-diagram { position: relative; width: 260px; height: 210px; margin: 4px auto 6px; }
+  .flow-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .flow-line { fill: none; stroke: var(--hairline); stroke-width: 2; opacity: 0.3; transition: stroke 0.3s ease, opacity 0.3s ease; }
+  .flow-line.solar.active { stroke: #FF9F0A; opacity: 1; }
+  .flow-line.grid.active { stroke: #FF453A; opacity: 1; }
+  .flow-dot { fill: var(--hairline); opacity: 0.3; transition: fill 0.3s ease, opacity 0.3s ease; }
+  .flow-dot.solar.active { fill: #FF9F0A; opacity: 1; }
+  .flow-dot.grid.active { fill: #FF453A; opacity: 1; }
+  .flow-house { position: absolute; top: 0; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; }
+  .flow-house-icon { width: 44px; height: 44px; border-radius: 50%; background: var(--base-raised); border: 1px solid var(--hairline); display: flex; align-items: center; justify-content: center; color: var(--text); flex-shrink: 0; }
+  .flow-house-kw { font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: var(--text); }
+  .flow-node { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .flow-node-left { top: 82px; left: 0; }
+  .flow-node-right { top: 82px; right: 0; }
+  .flow-node-bottom { top: 132px; left: 50%; transform: translateX(-50%); }
+  .flow-node-icon { color: var(--text-dim); }
+  .flow-node-icon.solar { color: #FF9F0A; }
+  .flow-node-icon.grid { color: #FF453A; }
+  .flow-node-icon.battery { color: var(--on); }
+  .flow-node-val { font-family: var(--font-mono); font-size: 26px; font-weight: 600; color: var(--text); line-height: 1; }
+  .flow-node-val span { font-size: 13px; font-weight: 500; color: var(--text-dim); margin-left: 2px; }
+  .flow-node-label { font-size: 12px; color: var(--text-dim); }
+
+  /* ---------- Energy: History chart, Power Automation rule builder, EV
+     Charging, Storm Watch (Eco Mode variant), Message Center. ---------- */
+  .history-chart-wrap { background: var(--base-raised); border: 1px solid var(--hairline); border-radius: 14px; padding: 16px 16px 10px; }
+  .history-svg { width: 100%; height: 140px; display: block; }
+  .history-days { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); padding: 0 10px; margin-top: 4px; }
+
+  .automation-pills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .automation-pill { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-radius: 999px; background: var(--base-raised); border: 1px solid var(--hairline); font-size: 12.5px; }
+  .automation-pill button { background: rgba(255,255,255,0.08); border: none; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; color: var(--text-dim); cursor: pointer; padding: 0; }
+  .automation-add { width: 32px; height: 32px; border-radius: 50%; border: 1px dashed var(--hairline); background: none; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+  .ev-stats-row { display: flex; gap: 28px; }
+  .ev-stat-val { font-family: var(--font-mono); font-size: 20px; font-weight: 600; }
+  .ev-stat-label { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+  .ev-timeline { display: flex; align-items: flex-end; gap: 4px; height: 60px; margin-top: 16px; }
+  .ev-bar { flex: 1; background: #BF5AF2; border-radius: 3px 3px 0 0; min-height: 3px; }
+
+  .service-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .outage-bar { height: 8px; border-radius: 999px; background: var(--hairline); margin-top: 10px; overflow: hidden; }
+  .outage-bar-fill { height: 100%; background: #FF453A; border-radius: 999px; }
+
+  /* ---------- Climate: Fan mode tabs + Humidity slider — real screen has these,
+     our build only had the temp dial. ---------- */
+  .climate-row-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin: 22px 0 10px; text-align: center; }
+  .climate-tabs { display: flex; justify-content: center; gap: 8px; }
+  .climate-tab-btn {
+    padding: 8px 20px; border-radius: 8px; border: 1px solid var(--hairline);
+    background: transparent; color: var(--text-dim); font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.5px; cursor: pointer;
+  }
+  .climate-tab-btn.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
+
+  .mobile-rail { display: none; }
+
+  @media (max-width: 1024px) { .content { padding: 26px 24px 16px; } .header h1 { font-size: 27px; } }
+
+  @media (max-width: 640px) {
+    body { flex-direction: column; }
+    .rail { display: none; }
+    .content { padding: 18px 16px 14px; }
+    .header h1 { font-size: 23px; }
+    .header .clock { font-size: 17px; }
+    .hero { height: 150px; border-radius: 14px; }
+    .footer { padding: 10px 16px 14px; }
+    .footer .sync { display: none; }
+    .climate-temp { font-size: 52px; }
+
+    .mobile-rail { display: flex; flex-shrink: 0; justify-content: flex-start; align-items: center; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: var(--base-raised); border-top: 1px solid var(--hairline); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .mobile-rail .rail-item { flex-direction: row; flex-shrink: 0; gap: 6px; padding: 8px 12px; width: auto; }
+    .mobile-rail .rail-item .stem { width: 22px; height: 1px; }
+    .mobile-rail .rail-item .stem::after { top: 50%; left: 50%; }
+    .mobile-rail .rail-item span.label { font-size: 9.5px; max-width: none; }
+  }
+</style>
+</head>
+<body>
+
+  <nav class="rail" id="rail"></nav>
+
+  <div class="main">
+    <div class="content" id="content"></div>
+    <div class="footer">
+      <div><span class="dot"></span>All systems normal</div>
+      <div class="sync">last sync 2s ago</div>
+    </div>
+    <nav class="mobile-rail" id="mobileRail"></nav>
+  </div>
+
+<script src="config.js"></script>
+<script src="ha-client.js"></script>
+<script src="rooms.config.js"></script>
+<script>
+// Shared favorites list — real Savant favorites are largely shared across the house
+// (one "Cable Favorites" list, surfaced per-room), not fabricated per-device variation.
+const FAVORITE_CHANNELS = ["ESPN", "HBO", "Local News", "Apple TV", "Netflix", "FX"];
+const CAMERAS = ["Front Door", "Driveway", "Back Door", "Backyard"];
+// Real Savant has two separate screens here — "DOOR LOCKS / HOME" and "GARAGE /
+// HOME" — not one combined "Entry" screen (confirmed directly against the Entry
+// Services brochure screenshots, not assumed).
+const GARAGE = [
+  { name: "Garage Bay Right", open: true },
+  { name: "Garage Bay Left", open: false },
+];
+const DOORLOCKS = [
+  { name: "Front Door", locked: true },
+];
+const NOTIFICATIONS = [
+  { name: "Climate", desc: "The temperature is below 40° or above 78° in the home.", on: true },
+  { name: "Door Entry", desc: "If an entry ring is detected at the front door.", on: true },
+  { name: "Lighting", desc: "Lights are left on after everyone has left the house.", on: false },
+  { name: "Entertainment", desc: "A TV or media device is left on overnight.", on: false },
+];
+const USERS = [
+  { name: "Mike", role: "Owner" },
+  { name: "Guest", role: "Member" },
+];
+// Exact Kelvin values confirmed directly from the Lighting brochure's Whites
+// screenshot, not estimated.
+const WHITE_PRESETS = [
+  { name: "Cool White", k: 6100, hex: "#CFE8FF" },
+  { name: "Daylight", k: 5522, hex: "#E8F1FF" },
+  { name: "Sunlight", k: 5600, hex: "#FFF6E8" },
+  { name: "Natural White", k: 4570, hex: "#FFEFD9" },
+  { name: "Early Morning", k: 4200, hex: "#FFE3BE" },
+  { name: "Sunrise", k: 3700, hex: "#FFD3A0" },
+];
+// Pool & Spa — confirmed as its own distinct pattern (dial + a separate equipment
+// toggle list), not just "reuses the Climate dial" as first assumed.
+const POOLSPA = {
+  pool: { temp: 71, target: 70 },
+  spa: { temp: 105, target: 104 },
+  controls: [
+    { name: "Pool Lights", on: false },
+    { name: "Pool Jets", on: false },
+    { name: "Pool Waterfall", on: false },
+    { name: "Spa Lights", on: true },
+    { name: "Spa Jets", on: false },
+    { name: "Water Feature", on: true },
+    { name: "Walkway Lights", on: true },
+    { name: "Pool Cover", on: true },
+  ],
+};
+
+const ROOMS = {
+  living: {
+    name: "Living Room",
+    photoImg: "photos/living.jpg",
+    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "72°F · Clear",
+    scenes: ["Evening", "Movie Night", "Reading", "Away"],
+    activeScene: "Evening",
+    lighting: [
+      { name: "Couch", sub: "Govee · warm", type: "dim", on: true, brightness: 62 },
+      { name: "Spot", sub: "Govee", type: "dim", on: true, brightness: 40 },
+      { name: "Floor Lamp", sub: "LIFX", type: "dim", on: false, brightness: 0, color: true, hue: 265, sat: 75 },
+      { name: "Fan Light", sub: "Switch", type: "switch", on: false },
+    ],
+    climate: { temp: 71, target: 72, mode: "Auto", fan: "Auto", humidity: 52 },
+    media: { name: "Sonos Arc", track: "Evening Mix", artist: "KEXP", source: "AirPlay", playing: true, volume: 34, elapsed: 74, duration: 224, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    security: [ { name: "Front Door", status: "Locked" }, { name: "Motion", status: "Clear" } ],
+    shades: [ { name: "Picture Window", position: 40 }, { name: "Sliding Door", position: 0 } ],
+  },
+  kitchen: {
+    name: "Kitchen",
+    photoImg: "photos/kitchen.jpg",
+    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "72°F · Clear",
+    scenes: ["Cooking", "Cleanup", "Night Light"],
+    activeScene: "Cooking",
+    lighting: [
+      { name: "LIFX Ceiling", sub: "LIFX", type: "dim", on: true, brightness: 88 },
+      { name: "Sink COB", sub: "Govee strip", type: "dim", on: true, brightness: 55 },
+    ],
+    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 48 },
+    media: { name: "Kitchen Speaker", track: "—", artist: "", source: "AirPlay", playing: false, volume: 20, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    security: [ { name: "Back Door", status: "Locked" }, { name: "AQ Sensor", status: "Good" } ],
+    shades: [ { name: "Sink Window", position: 60 } ],
+  },
+  master: {
+    name: "Master Bedroom",
+    photoImg: "photos/master.jpg",
+    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "72°F · Clear",
+    scenes: ["Wind Down", "Reading", "Sleep", "Wake"],
+    activeScene: "Wind Down",
+    lighting: [
+      { name: "Ceiling", sub: "Warm dim", type: "dim", on: true, brightness: 18 },
+      { name: "Under-Bed", sub: "Govee", type: "dim", on: false, brightness: 0 },
+    ],
+    climate: { temp: 68, target: 67, mode: "Sleep", fan: "Auto", humidity: 45 },
+    media: { name: "Bedroom Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 12, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    security: [ { name: "Bed Presence", status: "Occupied" }, { name: "FP2", status: "Still" } ],
+    shades: [ { name: "Bedroom Window", position: 10 }, { name: "Blackout Shade", position: 0 } ],
+  },
+  office: {
+    name: "Office",
+    photoImg: "photos/office.jpg",
+    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "72°F · Clear",
+    scenes: ["Focus", "Call", "Evening"],
+    activeScene: "Focus",
+    lighting: [
+      { name: "Floor Lamp", sub: "Govee, segmented", type: "dim", on: true, brightness: 70, color: true, hue: 30, sat: 90 },
+      { name: "Window", sub: "Govee", type: "dim", on: true, brightness: 45 },
+    ],
+    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
+    media: { name: "Office Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    security: [ { name: "Motion", status: "Active" }, { name: "Door", status: "Unlocked" } ],
+    shades: [ { name: "Window", position: 70 } ],
+  },
+  utility: {
+    name: "Utility Room",
+    photoImg: "photos/utility.jpg",
+    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "72°F · Clear",
+    scenes: ["Entry", "Laundry", "Night"],
+    activeScene: "Entry",
+    lighting: [
+      { name: "Utility Light", sub: "Govee", type: "dim", on: false, brightness: 0 },
+      { name: "Diffuser Nightlight", sub: "Pura", type: "dim", on: true, brightness: 25 },
+    ],
+    climate: { temp: 69, target: 69, mode: "Auto", fan: "Auto", humidity: 55 },
+    media: { name: "Utility Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    security: [ { name: "MSR-2 Radar", status: "Clear" }, { name: "Washer", status: "Idle" } ],
+    shades: [ { name: "Utility Window", position: 100 } ],
+  },
+};
+
+const ROOM_ORDER = ["living", "kitchen", "utility"]; // MVP scope 2026-08-05 — only rooms with real wired entities (see rooms.config.js). Add more once entities are curated for them.
+let currentRoom = "living";
+let currentService = "lighting";     // lighting | climate | media | security
+let lightingView = "slider";         // slider | scenes | global
+let powerTab = "overview";           // overview | waterheater
+let securityView = "arm";            // arm | status
+let securityFilter = "all";          // all | ready | notready
+let armState = "disarmed";           // stay | disarmed | away (whole-home, matches real Savant)
+let mediaView = "now";               // now | favorites
+let videoView = "canvas";            // canvas | layouts | favorites
+let videoRoom = "living";            // which room's display Video Tiling is targeting
+let videoLayoutIdx = 0;              // index into VIDEO_LAYOUTS
+let videoSelectedTile = null;        // tile index with the transport bar showing
+let videoAudioTile = 0;              // tile index currently providing audio
+let videoFullscreenTile = null;      // tile index expanded fullscreen, or null
+let securityCameraFullscreen = null; // index into CAMERAS expanded fullscreen, or null
+let entryCameraFullscreen = false;   // Front Door camera expanded on the Entry screen
+let colorWheelIndex = null;          // room.lighting index whose color wheel is open, or null
+let tvFocused = { row: "scenes", index: 0 }; // Apple TV 10-foot UI carousel focus
+let energyMode = "eco";              // eco | storm — Storm Watch is a variant of the Eco Mode template
+let colorSubView = "wheel";          // wheel | white — dock inside the color screen
+let poolSpaZone = "pool";            // pool | spa
+let poolSpaView = "dial";            // dial | controls
+
+const GOOD_STATUSES = new Set(["Locked", "Clear", "Good", "Still", "Idle"]);
+function isFault(s) { return !GOOD_STATUSES.has(s.status); }
+
+// Lucide line icons instead of emoji — matches Savant's actual monochrome icon
+// style instead of platform-dependent emoji rendering. `icons()` must run after
+// any innerHTML write that includes ico() output.
+function ico(name, cls) { return `<i data-lucide="${name}" class="${cls || ""}"></i>`; }
+function icons() { lucide.createIcons({ attrs: { "stroke-width": 1.75 } }); }
+
+const POWER = {
+  totalKw: 17.9,
+  // Categorical colors matched to the real Top Consumers ring gauge (iOS-style palette) —
+  // color is data-identity here, not a brand accent, per how Savant actually uses color.
+  // toggleable consumers (chargers) get an ON/OFF switch in the row; everything
+  // else gets a "..." menu — matches the real Top Consumers screenshot exactly
+  // (Model X Charger / Rivian Charger have toggles, HVAC/Pool/Lighting don't).
+  consumers: [
+    { name: "Tesla Charger", watts: "7.4 kW", color: "#BF5AF2", icon: "car", toggleable: true, on: true },
+    { name: "HVAC", watts: "1.2 kW", color: "#0A84FF", icon: "snowflake", toggleable: false },
+    { name: "Water Heater (Rinnai)", watts: "480 W", color: "#FF9F0A", icon: "flame", toggleable: false },
+    { name: "Kitchen", watts: "310 W", color: "#32D74B", icon: "utensils-crossed", toggleable: false },
+    { name: "Server Rack", watts: "290 W", color: "#FF375F", icon: "server", toggleable: true, on: true },
+  ],
+  liveConsumption: { current: 3.2, totalToday: 12 },
+  battery: { pct: 92, charging: true, rate: "2.3 kW", eta: "1h 51m" },
+  // Source mix — only used by the iPad Energy Dashboard's Power Mix + Overview cards,
+  // there's no phone equivalent (see dashboard-design-spec.md).
+  mix: [
+    { name: "Grid", kw: 7.1, color: "#FF453A" },
+    { name: "Solar", kw: 3.2, color: "#FFD60A" },
+    { name: "Battery", kw: 2.1, color: "#34C759" },
+    { name: "Generator", kw: 0, color: "#8E8E93" },
+  ],
+  waterHeater: {
+    setTemp: 120, recirculation: "Active", flow: "Standby",
+    mode: "Recirculation + On-Demand", vacationMode: false,
+  },
+  history: {
+    days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    series: [
+      { name: "Solar", color: "#FFD60A", kind: "source", on: true, values: [2.1, 3.4, 2.8, 4.0, 3.2, 1.5, 2.9] },
+      { name: "Grid", color: "#FF453A", kind: "source", on: true, values: [5.0, 6.0, 7.0, 6.5, 7.1, 8.0, 6.0] },
+      { name: "Battery", color: "#34C759", kind: "source", on: true, values: [1.0, 2.0, 1.5, 2.5, 2.1, 1.0, 1.8] },
+      { name: "Tesla Charger", color: "#BF5AF2", kind: "consumer", on: false, values: [6.0, 7.0, 8.0, 5.0, 7.4, 6.0, 7.0] },
+      { name: "HVAC", color: "#0A84FF", kind: "consumer", on: false, values: [1.0, 1.1, 1.3, 1.2, 1.2, 1.0, 1.1] },
+    ],
+  },
+  evCharger: { name: "Garage Bay 2", charging: true, sessionKwh: 2.9, remaining: "1.5h", livePower: 1.6, rate: "Max", lastScene: "6:20pm", timeline: [0.8, 1.2, 1.6, 1.4, 1.6, 1.5, 1.6] },
+  events: [
+    { time: "2:01pm", text: "Pull Pump is turned off" },
+    { time: "11:42am", text: "Tesla Charger started charging" },
+    { time: "9:15am", text: "Storm Watch activated" },
+    { time: "7:30am", text: "HVAC mode changed to Auto" },
+  ],
+  dailyTotal: { kwh: 142, changePct: 30, direction: "more" },
+};
+
+// Video Tiling — the iPad-only freeform multi-source composer from the Pro 9 App /
+// IP Video brochures (layout picker with named presets, not a fixed grid). Three
+// representative presets rather than the full real list — enough to prove the pattern.
+const VIDEO_LAYOUTS = [
+  {
+    name: "2×2",
+    sources: ["Apple TV", "PS4", "DirecTV", "Cable TV"],
+    css: "grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); grid-template-areas: 't0 t1' 't2 t3';",
+  },
+  {
+    name: "1 Large Front 4 Back",
+    sources: ["DirecTV", "Apple TV", "PS4", "DVD", "Cable TV"],
+    css: "grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); grid-template-areas: 't0 t0 t1 t2' 't0 t0 t3 t4';",
+  },
+  {
+    name: "PIP Lower Right",
+    sources: ["DirecTV", "Apple TV"],
+    pip: true,
+  },
+];
+
+function renderRail() {
+  const rail = document.getElementById("rail");
+  const mobileRail = document.getElementById("mobileRail");
+  rail.innerHTML = `<div class="rail-brand">HOME</div>`;
+  mobileRail.innerHTML = "";
+  ROOM_ORDER.forEach(id => {
+    const room = ROOMS[id];
+    const active = id === currentRoom ? "active" : "";
+    const itemHtml = `<button class="rail-item ${active}" data-room="${id}"><span class="stem"></span><span class="label">${room.name}</span></button>`;
+    rail.insertAdjacentHTML("beforeend", itemHtml);
+    mobileRail.insertAdjacentHTML("beforeend", itemHtml);
+  });
+  const powerActive = currentRoom === "power" ? "active" : "";
+  const powerHtml = `<button class="rail-item ${powerActive}" data-room="power"><span class="stem"></span><span class="label">Energy</span></button>`;
+  const securityActive = currentRoom === "security" ? "active" : "";
+  const securityHtml = `<button class="rail-item ${securityActive}" data-room="security"><span class="stem"></span><span class="label">Security</span></button>`;
+  const videoActive = currentRoom === "video" ? "active" : "";
+  const videoHtml = `<button class="rail-item ${videoActive}" data-room="video"><span class="stem"></span><span class="label">Video</span></button>`;
+  const poolActive = currentRoom === "poolspa" ? "active" : "";
+  const poolHtml = `<button class="rail-item ${poolActive}" data-room="poolspa"><span class="stem"></span><span class="label">Pool & Spa</span></button>`;
+  const musicActive = currentRoom === "music" ? "active" : "";
+  const musicHtml = `<button class="rail-item ${musicActive}" data-room="music"><span class="stem"></span><span class="label">Music</span></button>`;
+  const entryActive = currentRoom === "entry" ? "active" : "";
+  const entryHtml = `<button class="rail-item ${entryActive}" data-room="entry"><span class="stem"></span><span class="label">Entry</span></button>`;
+  const tvActive = currentRoom === "appletv" ? "active" : "";
+  const tvHtml = `<button class="rail-item ${tvActive}" data-room="appletv"><span class="stem"></span><span class="label">Apple TV</span></button>`;
+  const settingsActive = currentRoom === "settings" ? "active" : "";
+  const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
+  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + videoHtml + poolHtml + musicHtml + entryHtml + tvHtml + `<div class="rail-divider"></div>` + settingsHtml);
+  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + videoHtml + poolHtml + musicHtml + entryHtml + tvHtml + settingsHtml);
+
+  document.querySelectorAll("[data-room]").forEach(el => {
+    el.addEventListener("click", () => { currentRoom = el.dataset.room; currentService = "lighting"; lightingView = "slider"; colorWheelIndex = null; mediaView = "now"; powerTab = "overview"; securityView = "arm"; securityFilter = "all"; poolSpaZone = "pool"; poolSpaView = "dial"; render(); });
+  });
+}
+
+function wattsOf(str) {
+  const n = parseFloat(str);
+  return str.includes("kW") ? n * 1000 : n;
+}
+
+function renderRing(compact) {
+  const stops = [];
+  let acc = 0;
+  const totalW = POWER.consumers.reduce((s, c) => s + wattsOf(c.watts), 0);
+  POWER.consumers.forEach(c => {
+    const frac = wattsOf(c.watts) / (totalW || 1);
+    const start = acc, end = acc + frac * 360;
+    stops.push(`${c.color} ${start}deg ${end}deg`);
+    acc = end;
+  });
+  stops.push(`var(--hairline) ${acc}deg 360deg`);
+  if (compact) {
+    return `<div class="mini-ring" style="background: conic-gradient(${stops.join(",")})"></div>`;
+  }
+  return `
+    <div class="ring-wrap">
+      <div class="ring-gauge" style="background: conic-gradient(${stops.join(",")})">
+        <div class="ring-center">
+          <div class="icon">${ico("home", "i20")}</div>
+          <div class="kw">${POWER.totalKw} kW</div>
+          <div class="label">Total Consumption</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderEnergyGrid() {
+  const importing = POWER.mix.find(m => m.name === "Grid").kw;
+  const producing = POWER.mix.find(m => m.name === "Solar").kw;
+  return `
+    <div class="energy-grid">
+      <div class="energy-card">
+        <div class="energy-card-title">Eco Mode</div>
+        <div class="eco-icons">
+          <div class="eco-icon ${importing > 0 ? "active" : ""}">${ico("arrow-down", "i16")}<div class="lbl">IMPORTING</div></div>
+          <div class="eco-icon ${POWER.battery.charging ? "active" : ""}">${ico("zap", "i16")}<div class="lbl">CHARGING</div></div>
+          <div class="eco-icon ${producing > 0 ? "active" : ""}">${ico("sun", "i16")}<div class="lbl">PRODUCING</div></div>
+          <div class="eco-icon">${ico("minus", "i16")}<div class="lbl">INACTIVE</div></div>
+        </div>
+      </div>
+      <div class="energy-card">
+        <div class="energy-card-title">Top Consumers <span class="live">● LIVE</span></div>
+        <div class="mini-ring-row">
+          ${renderRing(true)}
+          <div class="mini-legend">
+            ${POWER.consumers.slice(0, 4).map(c => `<div class="mini-legend-row"><span class="mini-legend-dot" style="background:${c.color}"></span>${c.name}</div>`).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="energy-card">
+        <div class="energy-card-title">Power Flow <span class="live">● LIVE</span></div>
+        ${renderFlowDiagram()}
+      </div>
+      <div class="energy-card">
+        <div class="energy-card-title">Power Mix</div>
+        <div class="mix-bar">
+          ${POWER.mix.map(m => `<div style="flex:${m.kw || 0.0001}; background:${m.color}"></div>`).join("")}
+        </div>
+        <div class="mini-legend">
+          ${POWER.mix.map(m => `<div class="mini-legend-row"><span class="mini-legend-dot" style="background:${m.color}"></span>${m.name} ${m.kw.toFixed(1)}kW</div>`).join("")}
+        </div>
+      </div>
+      <div class="energy-card">
+        <div class="energy-card-title">Overview <span class="live">● LIVE</span></div>
+        <div class="overview-rings">
+          <div class="overview-ring-stat"><div class="dot" style="background:rgba(10,132,255,0.16); color:#0A84FF">${importing.toFixed(1)}</div><div class="flow-sub">Importing</div></div>
+          <div class="overview-ring-stat"><div class="dot" style="background:rgba(255,159,10,0.16); color:#FF9F0A">${producing.toFixed(1)}</div><div class="flow-sub">Producing</div></div>
+        </div>
+      </div>
+      <div class="energy-card">
+        <div class="energy-card-title">Battery <span class="live">● LIVE</span></div>
+        <div class="battery-big">${POWER.battery.pct}%</div>
+        <div class="flow-sub">${POWER.battery.charging ? `Charging for ${POWER.battery.eta}` : "Idle"}</div>
+      </div>
+    </div>`;
+}
+
+// Matches the real Power Flow card exactly (confirmed against Savant's own
+// marketing screenshot, not just the brochure's simplified line art): bold
+// kW/percent readouts, a gold curve for the solar→house leg and a red curve
+// for the grid→house→battery leg, small waypoint dots along each curve, bare
+// colored icons (no circle badge except the house node).
+function renderFlowDiagram() {
+  const importing = POWER.mix.find(m => m.name === "Grid").kw;
+  const producing = POWER.mix.find(m => m.name === "Solar").kw;
+  const solarOn = producing > 0 ? "active" : "";
+  const gridOn = importing > 0 ? "active" : "";
+  return `
+    <div class="flow-diagram">
+      <svg class="flow-svg" viewBox="0 0 260 210" preserveAspectRatio="none">
+        <path class="flow-line solar ${solarOn}" d="M 50 97 Q 130 97 130 50" />
+        <circle class="flow-dot solar ${solarOn}" cx="118" cy="85" r="3" />
+        <circle class="flow-dot solar ${solarOn}" cx="126" cy="66" r="3" />
+        <path class="flow-line grid ${gridOn}" d="M 130 130 Q 130 85 210 97" />
+        <circle class="flow-dot grid ${gridOn}" cx="153" cy="99" r="3" />
+        <circle class="flow-dot grid ${gridOn}" cx="136" cy="111" r="3" />
+      </svg>
+      <div class="flow-house">
+        <div class="flow-house-icon">${ico("home", "i20")}</div>
+        <div class="flow-house-kw">${POWER.totalKw}kW</div>
+      </div>
+      <div class="flow-node flow-node-left">
+        <div class="flow-node-icon solar">${ico("sun", "i24")}</div>
+        <div class="flow-node-val">${producing.toFixed(1)}<span>kW</span></div>
+        <div class="flow-node-label">Status</div>
+      </div>
+      <div class="flow-node flow-node-right">
+        <div class="flow-node-icon battery">${ico("battery-charging", "i24")}</div>
+        <div class="flow-node-val">${POWER.battery.pct}<span>%</span></div>
+        <div class="flow-node-label">${POWER.battery.charging ? "Charging" : "Idle"}</div>
+      </div>
+      <div class="flow-node flow-node-bottom">
+        <div class="flow-node-icon grid">${ico("arrow-down", "i24")}</div>
+        <div class="flow-node-val">${importing.toFixed(1)}<span>kW</span></div>
+        <div class="flow-node-label">Status</div>
+      </div>
+    </div>`;
+}
+
+// Three variants of the same template, each with its OWN icon-label set —
+// confirmed directly from the Power brochure's phone screenshots (not assumed):
+// Eco Mode = Importing/In-Use/Producing/Ready-to-Use, Storm Watch =
+// Importing/Ready/Producing/Inactive, Power Outage = Power Outage/In-Use/
+// Producing/Ready-to-Use (plus a "X of Y loads powered" status bar).
+function renderEnergyModeCard() {
+  const importing = POWER.mix.find(m => m.name === "Grid").kw;
+  const producing = POWER.mix.find(m => m.name === "Solar").kw;
+  const modePicker = `
+    <div class="video-room-row" style="margin-bottom:14px">
+      <button class="video-room-chip ${energyMode === "eco" ? "active" : ""}" data-energy-mode="eco">Eco Mode</button>
+      <button class="video-room-chip ${energyMode === "storm" ? "active" : ""}" data-energy-mode="storm">Storm Watch</button>
+      <button class="video-room-chip ${energyMode === "outage" ? "active" : ""}" data-energy-mode="outage">Power Outage</button>
+    </div>`;
+
+  if (energyMode === "outage") {
+    return `
+      <div class="energy-card" style="margin-bottom:22px">
+        ${modePicker}
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px">
+          <div class="kv-icon" style="width:36px; height:36px; background:rgba(255,69,58,0.12); color:#FF453A; border-radius:50%">${ico("zap-off", "i20")}</div>
+          <div class="energy-card-title" style="margin:0; text-transform:none; font-size:15px; color:var(--text)">Power Outage</div>
+        </div>
+        <div class="notif-desc">Load Status: Essentials — 7 of 16 loads powered.</div>
+        <div class="outage-bar"><div class="outage-bar-fill" style="width:${(7 / 16) * 100}%"></div></div>
+        <div class="eco-icons" style="margin-top:14px">
+          <div class="eco-icon active">${ico("zap-off", "i16")}<div class="lbl">POWER OUTAGE</div></div>
+          <div class="eco-icon active">${ico("activity", "i16")}<div class="lbl">IN-USE</div></div>
+          <div class="eco-icon ${producing > 0 ? "active" : ""}">${ico("sun", "i16")}<div class="lbl">PRODUCING</div></div>
+          <div class="eco-icon active">${ico("battery-full", "i16")}<div class="lbl">READY TO USE</div></div>
+        </div>
+      </div>`;
+  }
+  if (energyMode === "storm") {
+    return `
+      <div class="energy-card" style="margin-bottom:22px">
+        ${modePicker}
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px">
+          <div class="kv-icon" style="width:36px; height:36px; background:rgba(255,159,10,0.12); color:#FF9F0A; border-radius:50%">${ico("cloud-lightning", "i20")}</div>
+          <div class="energy-card-title" style="margin:0; text-transform:none; font-size:15px; color:var(--text)">Storm Watch</div>
+        </div>
+        <div class="notif-desc">Your battery is fully charged and will be reserved for 72hrs in case of a power outage.</div>
+        <button class="back-link" style="margin:10px 0 0" data-storm-cancel>${ico("x", "i14")} Cancel</button>
+        <div class="eco-icons" style="margin-top:14px">
+          <div class="eco-icon ${importing > 0 ? "active" : ""}">${ico("arrow-down", "i16")}<div class="lbl">IMPORTING</div></div>
+          <div class="eco-icon active">${ico("battery-full", "i16")}<div class="lbl">READY</div></div>
+          <div class="eco-icon ${producing > 0 ? "active" : ""}">${ico("sun", "i16")}<div class="lbl">PRODUCING</div></div>
+          <div class="eco-icon">${ico("minus", "i16")}<div class="lbl">INACTIVE</div></div>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="energy-card" style="margin-bottom:22px">
+      ${modePicker}
+      <div class="energy-card-title" style="margin:0 0 4px; text-transform:none; font-size:15px; color:var(--text)">Eco Mode</div>
+      <div class="notif-desc">Load use is reduced by maximizing solar and battery.</div>
+      <div class="eco-icons" style="margin-top:14px">
+        <div class="eco-icon ${importing > 0 ? "active" : ""}">${ico("arrow-down", "i16")}<div class="lbl">IMPORTING</div></div>
+        <div class="eco-icon ${POWER.battery.charging ? "active" : ""}">${ico("activity", "i16")}<div class="lbl">IN-USE</div></div>
+        <div class="eco-icon ${producing > 0 ? "active" : ""}">${ico("sun", "i16")}<div class="lbl">PRODUCING</div></div>
+        <div class="eco-icon active">${ico("battery-full", "i16")}<div class="lbl">READY TO USE</div></div>
+      </div>
+    </div>`;
+}
+
+function renderEnergyHistory() {
+  const h = POWER.history;
+  const w = 320, hgt = 140, pad = 10;
+  const maxVal = Math.max(...h.series.filter(s => s.on).flatMap(s => s.values), 1);
+  const points = s => s.values.map((v, i) => {
+    const x = pad + (i / (h.days.length - 1)) * (w - pad * 2);
+    const y = hgt - pad - (v / maxVal) * (hgt - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  const legendRow = s => `
+    <div class="kv-row">
+      <div class="kv-left"><span class="mini-legend-dot" style="background:${s.color}"></span><div class="kv-name">${s.name}</div></div>
+      <button class="notif-check ${s.on ? "on" : ""}" style="border-radius:5px" data-history-toggle="${s.name}">${ico("check", "i14")}</button>
+    </div>`;
+  return `
+    <div class="history-chart-wrap">
+      <svg viewBox="0 0 ${w} ${hgt}" class="history-svg" preserveAspectRatio="none">
+        ${h.series.filter(s => s.on).map(s => `<polyline points="${points(s)}" fill="none" stroke="${s.color}" stroke-width="2" />`).join("")}
+      </svg>
+      <div class="history-days">${h.days.map(d => `<span>${d}</span>`).join("")}</div>
+    </div>
+    <div class="section-label-sm" style="margin-top:20px">Sources</div>
+    <div class="kv-section">${h.series.filter(s => s.kind === "source").map(legendRow).join("")}</div>
+    <div class="section-label-sm" style="margin-top:20px">Consumers</div>
+    <div class="kv-section">${h.series.filter(s => s.kind === "consumer").map(legendRow).join("")}</div>`;
+}
+
+function renderPowerAutomation() {
+  return `
+    <div class="section-label-sm">Then</div>
+    <div class="automation-pills">
+      <div class="automation-pill">3/12 Loads Enabled <button data-auto-remove>${ico("x", "i12")}</button></div>
+      <div class="automation-pill">Off Grid Budget <button data-auto-remove>${ico("x", "i12")}</button></div>
+      <button class="automation-add">${ico("plus", "i16")}</button>
+    </div>
+    <div class="section-label-sm" style="margin-top:26px">But Only When</div>
+    <div class="automation-pills">
+      <div class="automation-pill">1 Jun – 31 Aug <button data-auto-remove>${ico("x", "i12")}</button></div>
+      <button class="automation-add">${ico("plus", "i16")}</button>
+    </div>
+    <div class="notif-desc" style="margin-top:20px">Use state of charge, state of grid, or schedule to manage the power in your home.</div>
+    <div class="quick-grid" style="margin-top:20px; grid-template-columns:1fr 1fr">
+      <button class="quick-btn">Back</button>
+      <button class="quick-btn">Next</button>
+    </div>`;
+}
+
+function renderEVCharging() {
+  const ev = POWER.evCharger;
+  return `
+    <div class="section-label-sm">${ev.name}</div>
+    <div class="ev-stats-row">
+      <div class="ev-stat"><div class="ev-stat-val">${ev.sessionKwh} kWh</div><div class="ev-stat-label">This Session</div></div>
+      <div class="ev-stat"><div class="ev-stat-val">${ev.remaining}</div><div class="ev-stat-label">Remaining</div></div>
+      <div class="ev-stat"><div class="ev-stat-val">${ev.livePower} kW</div><div class="ev-stat-label">Live Power</div></div>
+    </div>
+    <div class="badge ok" style="display:inline-block; margin:16px 0">${ev.charging ? "CHARGING" : "IDLE"}</div>
+    <div class="ev-timeline">${ev.timeline.map(v => `<div class="ev-bar" style="height:${Math.max((v / 2) * 100, 4)}%"></div>`).join("")}</div>
+    <button class="bypass-btn" data-ev-stop style="margin-top:20px; ${ev.charging ? "" : "opacity:0.4; pointer-events:none;"}">${ev.charging ? "Stop Charging" : "Not Charging"}</button>
+    <div class="kv-row" style="margin-top:4px">
+      <div class="kv-name">Last Activated Scene</div>
+      <div class="kv-value">${ev.lastScene}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-name">Rate</div>
+      <div class="kv-value linked">${ev.rate} <span class="kv-chevron">›</span></div>
+    </div>`;
+}
+
+function renderMessageCenter() {
+  return `
+    <div class="security-list">
+      ${POWER.events.map(e => `
+        <div class="security-row">
+          <div class="light-row-name">${e.text}</div>
+          <div class="light-row-sub">${e.time}</div>
+        </div>`).join("")}
+    </div>
+    <div class="kv-row" style="margin-top:10px; border-top:1px solid var(--hairline-soft); padding-top:16px">
+      <div class="kv-name">Today's Total</div>
+      <div class="kv-value">${POWER.dailyTotal.kwh} kWh <span style="color:#FF9F0A">↗${POWER.dailyTotal.changePct}% ${POWER.dailyTotal.direction}</span></div>
+    </div>`;
+}
+
+function renderPowerOverview() {
+  return `
+    <div class="energy-phone">
+      ${renderEnergyModeCard()}
+      <div class="section-label-sm">Power Flow</div>
+      ${renderFlowDiagram()}
+      ${renderRing()}
+      <div class="section-label-sm">Top Consumers</div>
+      <div class="consumer-list">
+        ${POWER.consumers.map((c, i) => `
+          <div class="consumer-row">
+            <div class="consumer-left">
+              <div class="consumer-dot" style="background:${c.color}22; color:${c.color}">${ico(c.icon, "i16")}</div>
+              <div class="consumer-name">${c.name}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px">
+              <div class="consumer-watts">${c.watts}</div>
+              ${c.toggleable
+                ? `<button class="switch-btn ${c.on ? "on" : ""}" style="padding:4px 10px" data-consumer-toggle="${i}">${c.on ? "ON" : "OFF"}</button>`
+                : `<span style="color:var(--text-faint); display:flex">${ico("more-horizontal", "i14")}</span>`}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <div class="section-label-sm" style="margin-top:26px">Live Consumption</div>
+      <div class="ev-stats-row" style="margin-bottom:10px">
+        <div class="ev-stat"><div class="ev-stat-val">${POWER.liveConsumption.current} kW</div><div class="ev-stat-label">Current Usage</div></div>
+        <div class="ev-stat"><div class="ev-stat-val">${POWER.liveConsumption.totalToday} kWh</div><div class="ev-stat-label">Total Today</div></div>
+      </div>
+      <div class="section-label-sm" style="margin-top:26px">Battery</div>
+      <div class="kv-section">
+        <div class="kv-row">
+          <div class="kv-left"><div class="kv-icon">${ico("battery-charging", "i18")}</div><div class="kv-name">Powerwall</div></div>
+          <div class="kv-value">${POWER.battery.pct}% · ${POWER.battery.charging ? `Charging ${POWER.battery.rate}` : "Idle"}</div>
+        </div>
+        <div class="kv-row">
+          <div class="kv-left"><div class="kv-icon">${ico("clock", "i18")}</div><div class="kv-name">Est. until full</div></div>
+          <div class="kv-value">${POWER.battery.eta}</div>
+        </div>
+      </div>
+    </div>
+    ${renderEnergyGrid()}`;
+}
+
+function renderWaterHeater() {
+  const wh = POWER.waterHeater;
+  return `
+    <div class="kv-section">
+      <div class="section-label-sm">Status</div>
+      <div class="kv-row">
+        <div class="kv-left"><div class="kv-icon">${ico("thermometer", "i18")}</div><div class="kv-name">Set Temp</div></div>
+        <div class="kv-value">${wh.setTemp}°F</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-left"><div class="kv-icon">${ico("repeat", "i18")}</div><div class="kv-name">Recirculation</div></div>
+        <div class="kv-value">${wh.recirculation}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-left"><div class="kv-icon">${ico("waves", "i18")}</div><div class="kv-name">Flow</div></div>
+        <div class="kv-value">${wh.flow}</div>
+      </div>
+    </div>
+    <div class="kv-section">
+      <div class="section-label-sm">Settings</div>
+      <div class="kv-row">
+        <div class="kv-left"><div class="kv-icon">${ico("settings", "i18")}</div><div class="kv-name">Mode</div></div>
+        <div class="kv-value linked">${wh.mode} <span class="kv-chevron">›</span></div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-left"><div class="kv-icon">${ico("plane", "i18")}</div><div class="kv-name">Vacation Mode</div></div>
+        <button class="switch-btn ${wh.vacationMode ? "on" : ""}" data-vacation>${wh.vacationMode ? "ON" : "OFF"}</button>
+      </div>
+    </div>`;
+}
+
+function renderPowerContent() {
+  const content = document.getElementById("content");
+  const tabs = [
+    ["overview", "Overview"],
+    ["history", "History"],
+    ["automation", "Automation"],
+    ["ev", "EV Charging"],
+    ["waterheater", "Water Heater"],
+    ["events", "Events"],
+  ];
+  const bodies = {
+    history: renderEnergyHistory,
+    automation: renderPowerAutomation,
+    ev: renderEVCharging,
+    waterheater: renderWaterHeater,
+    events: renderMessageCenter,
+  };
+  content.innerHTML = `
+    <div class="header">
+      <h1>Energy</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Home energy</div></div>
+    </div>
+    <div class="service-tabs">
+      ${tabs.map(([id, label]) => `<button class="service-tab ${id === powerTab ? "active" : ""}" data-powertab="${id}">${label}</button>`).join("")}
+    </div>
+    ${(bodies[powerTab] || renderPowerOverview)()}
+  `;
+  updateClock();
+  icons();
+  document.querySelectorAll("[data-powertab]").forEach(el => {
+    el.addEventListener("click", () => { powerTab = el.dataset.powertab; renderPowerContent(); });
+  });
+  const vac = document.querySelector("[data-vacation]");
+  if (vac) vac.addEventListener("click", () => { POWER.waterHeater.vacationMode = !POWER.waterHeater.vacationMode; renderPowerContent(); });
+
+  document.querySelectorAll("[data-energy-mode]").forEach(el => {
+    el.addEventListener("click", () => { energyMode = el.dataset.energyMode; renderPowerContent(); });
+  });
+  const stormCancel = document.querySelector("[data-storm-cancel]");
+  if (stormCancel) stormCancel.addEventListener("click", () => { energyMode = "eco"; renderPowerContent(); });
+
+  document.querySelectorAll("[data-history-toggle]").forEach(el => {
+    el.addEventListener("click", () => {
+      const s = POWER.history.series.find(s => s.name === el.dataset.historyToggle);
+      s.on = !s.on;
+      renderPowerContent();
+    });
+  });
+
+  document.querySelectorAll("[data-auto-remove]").forEach(el => {
+    el.addEventListener("click", () => el.closest(".automation-pill").remove());
+  });
+
+  document.querySelectorAll("[data-consumer-toggle]").forEach(el => {
+    el.addEventListener("click", () => {
+      const c = POWER.consumers[+el.dataset.consumerToggle];
+      c.on = !c.on;
+      renderPowerContent();
+    });
+  });
+
+  const evStop = document.querySelector("[data-ev-stop]");
+  if (evStop) evStop.addEventListener("click", () => { POWER.evCharger.charging = false; renderPowerContent(); });
+}
+
+function avgBrightness(room) {
+  const dims = room.lighting.filter(l => l.type === "dim");
+  if (!dims.length) return 0;
+  return dims.reduce((s, l) => s + (l.on ? l.brightness : 0), 0) / dims.length;
+}
+
+function heroStatusText(room) {
+  const onLights = room.lighting.filter(l => l.on).length;
+  if (onLights === 0) return "All lighting off";
+  return `${onLights} light${onLights > 1 ? "s" : ""} on · ${room.activeScene} active`;
+}
+
+function renderHero(room) {
+  const glow = avgBrightness(room) / 100;
+  const bg = room.photoImg ? `url('${room.photoImg}'), ${room.photo}` : room.photo;
+  return `
+    <div class="hero" style="filter: brightness(${0.82 + glow * 0.3})">
+      <div class="photo-base" style="background-image:${bg}"></div>
+      <div class="glow" style="opacity:${glow}"></div>
+      <div class="scrim"></div>
+      <div class="hero-room-label">TrueImage</div>
+      <div class="hero-status">${heroStatusText(room)}</div>
+    </div>`;
+}
+
+function renderLightingSlider(room) {
+  return `<div class="light-list">${room.lighting.map((l, i) => {
+    if (l.type === "switch") {
+      return `
+        <div class="switch-row">
+          <div><div class="light-row-name">${l.name}</div><div class="light-row-sub">${l.sub}</div></div>
+          <button class="switch-btn ${l.on ? "on" : ""}" data-switch="${i}">${l.on ? "ON" : "OFF"}</button>
+        </div>`;
+    }
+    return `
+      <div class="light-row">
+        <div class="light-row-top">
+          <div><div class="light-row-name">${l.name}</div><div class="light-row-sub">${l.sub}</div></div>
+          <div style="display:flex; align-items:center; gap:10px">
+            ${l.color ? `<button class="color-swatch-btn" style="background:${hslToHex(l.hue, l.sat)}" data-color-open="${i}" title="Color"></button>` : ""}
+            <div class="light-row-pct" data-brightness-label="${i}">${l.brightness}%</div>
+          </div>
+        </div>
+        <div class="slider-track" data-slider="${i}">
+          <div class="slider-fill" style="width:${l.brightness}%"></div>
+          <div class="slider-thumb" style="left:${l.brightness}%"></div>
+        </div>
+      </div>`;
+  }).join("")}</div>`;
+}
+
+// RGB color wheel — deeper sub-screen for color-capable fixtures, matching real
+// Savant's color wheel / WRGB sub-screen below the Sliders dock.
+function hslToHex(h, s) {
+  s = s / 100;
+  const l = 0.5;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  let r, g, b;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+
+function wheelPos(hue, sat, size) {
+  const maxR = size / 2 - 11;
+  const rad = hue * Math.PI / 180;
+  const dist = (sat / 100) * maxR;
+  return { x: size / 2 + Math.cos(rad) * dist, y: size / 2 + Math.sin(rad) * dist };
+}
+
+function renderWhitesList(room, i) {
+  const l = room.lighting[i];
+  return `<div class="light-list">${WHITE_PRESETS.map(w => `
+    <div class="switch-row" data-white="${i}:${w.name}" style="cursor:pointer">
+      <div style="display:flex; align-items:center; gap:12px">
+        <span style="width:20px; height:20px; border-radius:50%; background:${w.hex}; border:1px solid var(--hairline); flex-shrink:0"></span>
+        <div class="light-row-name">${w.name}</div>
+      </div>
+      <div class="light-row-pct" style="display:flex; align-items:center; gap:8px">
+        ${w.k}K ${l.selectedWhite === w.name ? ico("check", "i14") : ""}
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+function renderColorWheel(room, i) {
+  const l = room.lighting[i];
+  const dock = `
+    <div class="subnav">
+      <button class="subnav-btn ${colorSubView === "wheel" ? "active" : ""}" data-colorview="wheel" title="Color">${ico("circle", "i18")}</button>
+      <button class="subnav-btn ${colorSubView === "white" ? "active" : ""}" data-colorview="white" title="White">${ico("sun", "i18")}</button>
+    </div>`;
+  if (colorSubView === "white") {
+    return `
+      <button class="back-link" data-color-back>${ico("chevron-left", "i16")} ${l.name}</button>
+      ${dock}
+      ${renderWhitesList(room, i)}`;
+  }
+  const pos = wheelPos(l.hue, l.sat, 200);
+  return `
+    <button class="back-link" data-color-back>${ico("chevron-left", "i16")} ${l.name}</button>
+    ${dock}
+    <div class="color-wheel" data-wheel>
+      <div class="color-wheel-cursor" id="wheelCursor" style="left:${pos.x}px; top:${pos.y}px; background:${hslToHex(l.hue, l.sat)}"></div>
+    </div>
+    <div class="color-hex" id="colorHex">${hslToHex(l.hue, l.sat)}</div>
+    <div class="light-row" style="border-bottom:none; margin-top:24px">
+      <div class="light-row-top">
+        <div class="light-row-name">Brightness</div>
+        <div class="light-row-pct" data-brightness-label="${i}">${l.brightness}%</div>
+      </div>
+      <div class="slider-track" data-slider="${i}">
+        <div class="slider-fill" style="width:${l.brightness}%"></div>
+        <div class="slider-thumb" style="left:${l.brightness}%"></div>
+      </div>
+    </div>`;
+}
+
+function renderLightingScenes(room) {
+  const bg = room.photoImg ? `url('${room.photoImg}'), ${room.photo}` : room.photo;
+  const deviceCount = room.lighting.length;
+  const sub = `${deviceCount} device${deviceCount !== 1 ? "s" : ""}`;
+  const card = (name, key, extraStyle = "") => `
+    <button class="scene-card ${key === room.activeScene ? "active" : ""}" data-scene="${key}">
+      <div class="scene-photo" style="background-image:${bg};${extraStyle}"></div>
+      <div class="scene-scrim"></div>
+      <div class="scene-card-body">
+        <div class="scene-card-name">${name}</div>
+        <div class="scene-card-sub">${sub}</div>
+      </div>
+    </button>`;
+  return `<div class="scene-list">
+    ${room.scenes.map(s => card(s, s)).join("")}
+    ${card("All Off", "__off", "filter:grayscale(1)")}
+  </div>`;
+}
+
+function renderLightingGlobal(room) {
+  const levels = [["Bright", 100], ["Mid", 60], ["Dim", 30], ["Off", 0]];
+  return `<div class="global-list">${levels.map(([label, pct]) => `
+    <button class="global-btn" data-global="${pct}">${label.toUpperCase()}</button>
+  `).join("")}</div>`;
+}
+
+function renderLighting(room) {
+  if (colorWheelIndex !== null) return renderColorWheel(room, colorWheelIndex);
+  const subnav = `
+    <div class="subnav">
+      <button class="subnav-btn ${lightingView === "slider" ? "active" : ""}" data-view="slider" title="Sliders">${ico("sliders-horizontal", "i18")}</button>
+      <button class="subnav-btn ${lightingView === "scenes" ? "active" : ""}" data-view="scenes" title="Scenes">${ico("image", "i18")}</button>
+      <button class="subnav-btn ${lightingView === "global" ? "active" : ""}" data-view="global" title="Global">${ico("sun", "i18")}</button>
+    </div>`;
+  let body;
+  if (lightingView === "scenes") body = renderLightingScenes(room);
+  else if (lightingView === "global") body = renderLightingGlobal(room);
+  else body = renderLightingSlider(room);
+  return subnav + body;
+}
+
+function renderClimate(room) {
+  return `
+    <div class="panel climate-face">
+      <div class="climate-temp">${room.climate.temp}°</div>
+      <div class="climate-mode-badge">${room.climate.mode.toUpperCase()}</div>
+      <div class="climate-target-row">
+        <button class="stepper" id="tempDown">−</button>
+        <div class="climate-target-label" id="tempTarget">TARGET ${room.climate.target}°</div>
+        <button class="stepper" id="tempUp">+</button>
+      </div>
+      <div class="climate-row-label">Fan</div>
+      <div class="climate-tabs">
+        <button class="climate-tab-btn ${room.climate.fan === "Auto" ? "active" : ""}" data-fan="Auto">AUTO</button>
+        <button class="climate-tab-btn ${room.climate.fan === "On" ? "active" : ""}" data-fan="On">ON</button>
+      </div>
+      <div class="climate-row-label">Humidity — <span data-humidity-label>${room.climate.humidity}%</span></div>
+      <div class="slider-track" data-humidity style="width:220px; margin:0 auto">
+        <div class="slider-fill" style="width:${room.climate.humidity}%"></div>
+        <div class="slider-thumb" style="left:${room.climate.humidity}%"></div>
+      </div>
+    </div>`;
+}
+
+function renderFavoritesGrid(list, activeName, attr) {
+  return `<div class="favorites-grid">${list.map(f => `
+    <button class="favorite-tile ${f === activeName ? "active" : ""}" data-${attr}="${f}">${f}</button>
+  `).join("")}</div>`;
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = String(Math.floor(s % 60)).padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
+function renderMediaNowPlaying(room) {
+  const m = room.media;
+  return `
+    <div class="panel media-panel">
+      <div class="media-name">${m.name}</div>
+      <div class="music-art">${ico("music", "i28")}</div>
+      <div class="music-track-title">${m.track}</div>
+      ${m.artist ? `<div class="media-artist">${m.artist}</div>` : `<div class="media-artist">&nbsp;</div>`}
+      <div class="music-scrub-row">
+        <span class="music-time" data-elapsed-label>${fmtTime(m.elapsed)}</span>
+        <div class="slider-track" style="flex:1" data-scrub>
+          <div class="slider-fill" style="width:${m.duration ? (m.elapsed / m.duration) * 100 : 0}%"></div>
+          <div class="slider-thumb" style="left:${m.duration ? (m.elapsed / m.duration) * 100 : 0}%"></div>
+        </div>
+        <span class="music-time right">${fmtTime(m.duration)}</span>
+      </div>
+      <div class="music-transport">
+        <button class="music-btn-sm ${m.shuffle ? "active" : ""}" data-shuffle>${ico("shuffle", "i18")}</button>
+        <button class="music-btn-sm" id="prevBtn">${ico("skip-back", "i20")}</button>
+        <button class="media-btn-lg" id="playBtn">${ico(m.playing ? "pause" : "play", "i20")}</button>
+        <button class="music-btn-sm" id="nextBtn">${ico("skip-forward", "i20")}</button>
+        <button class="music-btn-sm ${m.repeat ? "active" : ""}" data-repeat>${ico("repeat", "i18")}</button>
+      </div>
+      <div class="media-vol-row">
+        <div style="color:var(--text-faint)">${ico("volume-1", "i16")}</div>
+        <div class="slider-track" style="flex:1" data-volume>
+          <div class="slider-fill" style="width:${m.volume}%"></div>
+          <div class="slider-thumb" style="left:${m.volume}%"></div>
+        </div>
+      </div>
+      <div class="music-source-pill">${m.source.toUpperCase()}</div>
+    </div>`;
+}
+
+function renderMedia(room) {
+  const subnav = `
+    <div class="subnav">
+      <button class="subnav-btn ${mediaView === "now" ? "active" : ""}" data-mediaview="now" title="Now Playing">${ico("play-circle", "i18")}</button>
+      <button class="subnav-btn ${mediaView === "favorites" ? "active" : ""}" data-mediaview="favorites" title="Favorites">${ico("star", "i18")}</button>
+    </div>`;
+  const body = mediaView === "favorites"
+    ? renderFavoritesGrid(room.media.favorites, room.media.track, "favorite")
+    : renderMediaNowPlaying(room);
+  return subnav + body;
+}
+
+// Shades — position sliders, same list+slider pattern as Lighting's Sliders
+// screen rather than the Apple TV app's horizontal carousel (that carousel is a
+// 10-foot-UI convention; our phone/tablet screens are lists everywhere else).
+function renderShades(room) {
+  return `<div class="light-list">${room.shades.map((s, i) => `
+    <div class="light-row">
+      <div class="light-row-top">
+        <div><div class="light-row-name">${s.name}</div></div>
+        <div class="light-row-pct" data-shade-label="${i}">${s.position}%</div>
+      </div>
+      <div class="slider-track" data-shade-slider="${i}">
+        <div class="slider-fill" style="width:${s.position}%"></div>
+        <div class="slider-thumb" style="left:${s.position}%"></div>
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+function renderSecurityArm() {
+  const states = [["stay", "Stay"], ["disarmed", "Disarmed"], ["away", "Away"]];
+  const label = armState === "disarmed" ? "READY TO ARM" : `ARMED · ${armState.toUpperCase()}`;
+  return `
+    <div class="arm-row">
+      ${states.map(([id, name]) => `
+        <button class="arm-shield ${armState === id ? "active" : ""}" data-arm="${id}">
+          ${ico("shield", "i24")}<div class="label">${name.toUpperCase()}</div>
+        </button>`).join("")}
+    </div>
+    <div class="arm-status-text">${label}</div>
+    <div class="quick-grid">
+      <button class="quick-btn" data-quick="lock">Lock Doors</button>
+      <button class="quick-btn" data-quick="unlock">Unlock Front Door</button>
+      <button class="quick-btn" data-quick="porch">Turn On Porch Lights</button>
+      <button class="quick-btn" data-quick="entry">Open Door Entry</button>
+    </div>`;
+}
+
+// Whole-home Security Status — real Savant groups every room's sensors under one
+// screen ("Main House 4 Faults / Foyer 1 Fault"), not a per-room filtered list.
+function renderSecurityStatusAll() {
+  const filterTabs = [["all", "All"], ["ready", "Ready"], ["notready", "Not Ready"]];
+  let anyFaults = false;
+  const groups = ROOM_ORDER.map(id => {
+    const room = ROOMS[id];
+    const items = room.security.filter(s => {
+      if (securityFilter === "ready") return !isFault(s);
+      if (securityFilter === "notready") return isFault(s);
+      return true;
+    });
+    const faultCount = room.security.filter(isFault).length;
+    if (faultCount > 0) anyFaults = true;
+    return { room, items, faultCount };
+  }).filter(g => g.items.length > 0);
+
+  return `
+    <div class="security-filter-tabs">
+      ${filterTabs.map(([id, label]) => `<button class="security-filter-tab ${securityFilter === id ? "active" : ""}" data-secfilter="${id}">${label}</button>`).join("")}
+    </div>
+    ${groups.map(g => `
+      <div class="security-group">
+        <div class="security-group-header">
+          <span>${g.room.name}</span>
+          ${g.faultCount > 0 ? `<span class="security-fault-count">${g.faultCount} Fault${g.faultCount > 1 ? "s" : ""}</span>` : ""}
+        </div>
+        <div class="security-list">
+          ${g.items.map(s => `
+            <div class="security-row">
+              <div style="display:flex; align-items:center; gap:10px">
+                <span class="security-dot" style="background:${isFault(s) ? "#FF9F0A" : "var(--on)"}"></span>
+                <div class="light-row-name">${s.name}</div>
+              </div>
+              <div class="badge ${isFault(s) ? "fault" : "ok"}">${s.status}</div>
+            </div>`).join("")}
+        </div>
+      </div>`).join("")}
+    ${anyFaults ? `<button class="bypass-btn" data-bypass>Bypass All Faults</button>` : ""}`;
+}
+
+function renderSecurityCameras() {
+  if (securityCameraFullscreen !== null) {
+    return `
+      <div class="video-fullscreen-wrap">
+        <div class="video-tile-bg"></div>
+        <button class="video-fullscreen-close" data-camera-close>${ico("minimize-2", "i16")}</button>
+        <div class="video-fullscreen-name">${CAMERAS[securityCameraFullscreen]}</div>
+      </div>`;
+  }
+  return `<div class="camera-grid">${CAMERAS.map((name, i) => `
+    <div class="camera-tile" data-camera="${i}">
+      <div class="camera-tile-live">LIVE</div>
+      <div class="camera-tile-bg"></div>
+      <div class="camera-tile-name">${name}</div>
+    </div>`).join("")}</div>`;
+}
+
+function renderSecurityContent() {
+  const content = document.getElementById("content");
+  const subnav = `
+    <div class="subnav">
+      <button class="subnav-btn ${securityView === "arm" ? "active" : ""}" data-secview="arm" title="Arm">${ico("shield", "i18")}</button>
+      <button class="subnav-btn ${securityView === "status" ? "active" : ""}" data-secview="status" title="Status">${ico("list-checks", "i18")}</button>
+      <button class="subnav-btn ${securityView === "cameras" ? "active" : ""}" data-secview="cameras" title="Cameras">${ico("camera", "i18")}</button>
+    </div>`;
+  let body;
+  if (securityView === "status") body = renderSecurityStatusAll();
+  else if (securityView === "cameras") body = renderSecurityCameras();
+  else body = renderSecurityArm();
+  content.innerHTML = `
+    <div class="header">
+      <h1>Security</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Home security</div></div>
+    </div>
+    ${subnav}
+    ${body}
+  `;
+  updateClock();
+  icons();
+
+  document.querySelectorAll("[data-secview]").forEach(el => {
+    el.addEventListener("click", () => { securityView = el.dataset.secview; securityCameraFullscreen = null; renderSecurityContent(); });
+  });
+  document.querySelectorAll("[data-arm]").forEach(el => {
+    el.addEventListener("click", () => { armState = el.dataset.arm; renderSecurityContent(); });
+  });
+  document.querySelectorAll("[data-secfilter]").forEach(el => {
+    el.addEventListener("click", () => { securityFilter = el.dataset.secfilter; renderSecurityContent(); });
+  });
+  document.querySelectorAll("[data-camera]").forEach(el => {
+    el.addEventListener("click", () => { securityCameraFullscreen = +el.dataset.camera; renderSecurityContent(); });
+  });
+  const camClose = document.querySelector("[data-camera-close]");
+  if (camClose) camClose.addEventListener("click", () => { securityCameraFullscreen = null; renderSecurityContent(); });
+  const bypassBtn = document.querySelector("[data-bypass]");
+  if (bypassBtn) bypassBtn.addEventListener("click", () => {
+    ROOM_ORDER.forEach(id => { ROOMS[id].security.forEach(s => { if (isFault(s)) s.status = "Clear"; }); });
+    renderSecurityContent();
+  });
+}
+
+function renderVideoTile(name, i) {
+  const selected = videoSelectedTile === i;
+  const audioActive = videoAudioTile === i;
+  return `
+    <div class="video-tile ${selected ? "selected" : ""}" style="grid-area:t${i}" data-tile="${i}">
+      <div class="video-tile-bg"></div>
+      <button class="video-tile-audio ${audioActive ? "active" : ""}" data-audio-tile="${i}" title="Set as audio source">${ico("volume-2", "i14")}</button>
+      <div class="video-tile-name">${name}</div>
+    </div>`;
+}
+
+function renderVideoTransport() {
+  return `
+    <div class="video-transport">
+      <button>${ico("rewind", "i18")}</button>
+      <button>${ico("play", "i18")}</button>
+      <button>${ico("fast-forward", "i18")}</button>
+      <button>${ico("list", "i18")}</button>
+    </div>`;
+}
+
+function renderVideoRoomRow() {
+  return `<div class="video-room-row">
+    ${ROOM_ORDER.map(id => `<button class="video-room-chip ${videoRoom === id ? "active" : ""}" data-videoroom="${id}">${ROOMS[id].name}</button>`).join("")}
+  </div>`;
+}
+
+function renderVideoCanvas() {
+  const layout = VIDEO_LAYOUTS[videoLayoutIdx];
+
+  if (videoFullscreenTile !== null) {
+    return `
+      ${renderVideoRoomRow()}
+      <div class="video-fullscreen-wrap">
+        <div class="video-tile-bg"></div>
+        <button class="video-fullscreen-close" data-fullscreen-close>${ico("minimize-2", "i16")}</button>
+        <div class="video-fullscreen-name">${layout.sources[videoFullscreenTile]}</div>
+      </div>
+      ${renderVideoTransport()}`;
+  }
+
+  let canvasHtml;
+  if (layout.pip) {
+    canvasHtml = `
+      <div class="video-canvas" style="display:block">
+        <div class="video-tile video-pip-main ${videoSelectedTile === 0 ? "selected" : ""}" data-tile="0">
+          <div class="video-tile-bg"></div>
+          <button class="video-tile-audio ${videoAudioTile === 0 ? "active" : ""}" data-audio-tile="0" title="Set as audio source">${ico("volume-2", "i14")}</button>
+          <div class="video-tile-name">${layout.sources[0]}</div>
+        </div>
+        <div class="video-tile video-pip-corner ${videoSelectedTile === 1 ? "selected" : ""}" data-tile="1">
+          <div class="video-tile-bg"></div>
+          <button class="video-tile-audio ${videoAudioTile === 1 ? "active" : ""}" data-audio-tile="1" title="Set as audio source">${ico("volume-2", "i14")}</button>
+          <div class="video-tile-name">${layout.sources[1]}</div>
+        </div>
+      </div>`;
+  } else {
+    canvasHtml = `
+      <div class="video-canvas" style="${layout.css}">
+        ${layout.sources.map((name, i) => renderVideoTile(name, i)).join("")}
+      </div>`;
+  }
+
+  return `
+    ${renderVideoRoomRow()}
+    ${canvasHtml}
+    ${videoSelectedTile !== null ? renderVideoTransport() : ""}`;
+}
+
+function renderVideoLayouts() {
+  return `<div class="layout-list">${VIDEO_LAYOUTS.map((layout, i) => {
+    const preview = layout.pip
+      ? `<div class="layout-preview"><div style="width:100%;height:100%"></div><div class="pip-corner"></div></div>`
+      : `<div class="layout-preview" style="${layout.css}">${layout.sources.map((_, si) => `<div style="grid-area:t${si}"></div>`).join("")}</div>`;
+    return `
+      <button class="layout-row ${i === videoLayoutIdx ? "active" : ""}" data-layout="${i}">
+        ${preview}
+        <div class="layout-row-name">${layout.name}</div>
+      </button>`;
+  }).join("")}</div>`;
+}
+
+function renderVideoFavorites() {
+  const layout = VIDEO_LAYOUTS[videoLayoutIdx];
+  const activeIdx = videoSelectedTile !== null ? videoSelectedTile : 0;
+  return renderFavoritesGrid(FAVORITE_CHANNELS, layout.sources[activeIdx], "video-favorite");
+}
+
+function renderVideoContent() {
+  const content = document.getElementById("content");
+  const subnav = `
+    <div class="subnav">
+      <button class="subnav-btn ${videoView === "canvas" ? "active" : ""}" data-videoview="canvas" title="Canvas">${ico("tv", "i18")}</button>
+      <button class="subnav-btn ${videoView === "layouts" ? "active" : ""}" data-videoview="layouts" title="Layouts">${ico("layout-grid", "i18")}</button>
+      <button class="subnav-btn ${videoView === "favorites" ? "active" : ""}" data-videoview="favorites" title="Favorites">${ico("star", "i18")}</button>
+    </div>`;
+  let body;
+  if (videoView === "layouts") body = renderVideoLayouts();
+  else if (videoView === "favorites") body = renderVideoFavorites();
+  else body = renderVideoCanvas();
+
+  content.innerHTML = `
+    <div class="header">
+      <h1>Video</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Multi-source tiling</div></div>
+    </div>
+    <div class="video-phone-note">
+      <div class="section-label-sm">Video Tiling</div>
+      <div style="color:var(--text-dim); font-size:13.5px; line-height:1.5;">
+        Video Tiling is an iPad and larger-display feature — multiple live sources composed
+        on one screen. On phone, control one source at a time from each room's Media tab.
+      </div>
+    </div>
+    <div class="video-tablet-only">
+      ${subnav}
+      ${body}
+    </div>
+  `;
+  updateClock();
+  icons();
+
+  document.querySelectorAll("[data-videoroom]").forEach(el => {
+    el.addEventListener("click", () => { videoRoom = el.dataset.videoroom; renderVideoContent(); });
+  });
+  document.querySelectorAll("[data-videoview]").forEach(el => {
+    el.addEventListener("click", () => { videoView = el.dataset.videoview; videoSelectedTile = null; renderVideoContent(); });
+  });
+  document.querySelectorAll("[data-layout]").forEach(el => {
+    el.addEventListener("click", () => {
+      videoLayoutIdx = +el.dataset.layout;
+      videoAudioTile = 0;
+      videoSelectedTile = null;
+      videoFullscreenTile = null;
+      videoView = "canvas";
+      renderVideoContent();
+    });
+  });
+  document.querySelectorAll("[data-tile]").forEach(el => {
+    el.addEventListener("click", () => {
+      const i = +el.dataset.tile;
+      videoSelectedTile = videoSelectedTile === i ? null : i;
+      renderVideoContent();
+    });
+    el.addEventListener("dblclick", () => {
+      videoFullscreenTile = +el.dataset.tile;
+      renderVideoContent();
+    });
+  });
+  document.querySelectorAll("[data-audio-tile]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      videoAudioTile = +el.dataset.audioTile;
+      renderVideoContent();
+    });
+  });
+  const closeBtn = document.querySelector("[data-fullscreen-close]");
+  if (closeBtn) closeBtn.addEventListener("click", () => { videoFullscreenTile = null; renderVideoContent(); });
+  document.querySelectorAll("[data-video-favorite]").forEach(el => {
+    el.addEventListener("click", () => {
+      // Simplified vs. real Savant's drag-to-assign: applies the pick to the
+      // selected tile, or the first source if none is selected.
+      const layout = VIDEO_LAYOUTS[videoLayoutIdx];
+      const idx = videoSelectedTile !== null ? videoSelectedTile : 0;
+      layout.sources[idx] = el.dataset.videoFavorite;
+      videoView = "canvas";
+      renderVideoContent();
+    });
+  });
+}
+
+function renderPoolSpaDial() {
+  const zone = POOLSPA[poolSpaZone];
+  return `
+    <div class="panel climate-face">
+      <div class="climate-temp">${zone.temp}°</div>
+      <div class="climate-mode-badge">${poolSpaZone.toUpperCase()}</div>
+      <div class="climate-target-row">
+        <button class="stepper" data-pooltarget="down">−</button>
+        <div class="climate-target-label" id="poolTargetLabel">TARGET ${zone.target}°</div>
+        <button class="stepper" data-pooltarget="up">+</button>
+      </div>
+    </div>`;
+}
+
+function renderPoolSpaControls() {
+  return `<div class="light-list">${POOLSPA.controls.map((c, i) => `
+    <div class="switch-row">
+      <div class="light-row-name">${c.name}</div>
+      <button class="switch-btn ${c.on ? "on" : ""}" data-poolcontrol="${i}">${c.on ? "ON" : "OFF"}</button>
+    </div>`).join("")}</div>`;
+}
+
+function renderPoolSpaContent() {
+  const content = document.getElementById("content");
+  const subnav = `
+    <div class="subnav">
+      <button class="subnav-btn ${poolSpaView === "dial" ? "active" : ""}" data-poolview="dial" title="Temperature">${ico("thermometer", "i18")}</button>
+      <button class="subnav-btn ${poolSpaView === "controls" ? "active" : ""}" data-poolview="controls" title="Controls">${ico("sliders-horizontal", "i18")}</button>
+    </div>`;
+  const zoneToggle = `
+    <div class="climate-tabs">
+      <button class="climate-tab-btn ${poolSpaZone === "pool" ? "active" : ""}" data-poolzone="pool">POOL</button>
+      <button class="climate-tab-btn ${poolSpaZone === "spa" ? "active" : ""}" data-poolzone="spa">SPA</button>
+    </div>`;
+  const body = poolSpaView === "controls" ? renderPoolSpaControls() : `${zoneToggle}${renderPoolSpaDial()}`;
+  content.innerHTML = `
+    <div class="header">
+      <h1>Pool &amp; Spa</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Pool &amp; spa control</div></div>
+    </div>
+    ${subnav}
+    ${body}
+  `;
+  updateClock();
+  icons();
+
+  document.querySelectorAll("[data-poolview]").forEach(el => {
+    el.addEventListener("click", () => { poolSpaView = el.dataset.poolview; renderPoolSpaContent(); });
+  });
+  document.querySelectorAll("[data-poolzone]").forEach(el => {
+    el.addEventListener("click", () => { poolSpaZone = el.dataset.poolzone; renderPoolSpaContent(); });
+  });
+  document.querySelectorAll("[data-pooltarget]").forEach(el => {
+    el.addEventListener("click", () => {
+      const zone = POOLSPA[poolSpaZone];
+      zone.target += el.dataset.pooltarget === "up" ? 1 : -1;
+      renderPoolSpaContent();
+    });
+  });
+  document.querySelectorAll("[data-poolcontrol]").forEach(el => {
+    el.addEventListener("click", () => {
+      const c = POOLSPA.controls[+el.dataset.poolcontrol];
+      c.on = !c.on;
+      renderPoolSpaContent();
+    });
+  });
+}
+
+function renderMusicContent() {
+  const content = document.getElementById("content");
+  const activeRooms = ROOM_ORDER.filter(id => ROOMS[id].media.playing);
+  const rows = ROOM_ORDER.map(id => {
+    const room = ROOMS[id];
+    const m = room.media;
+    return `
+      <div class="switch-row">
+        <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
+          <div class="light-row-name">${room.name}</div>
+          <div style="font-size:12px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${m.playing ? `${m.track} — ${m.artist}` : "Not playing"}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:14px; flex-shrink:0">
+          <div class="slider-track" data-musicvol="${id}" style="width:90px">
+            <div class="slider-fill" style="width:${m.volume}%"></div>
+            <div class="slider-thumb" style="left:${m.volume}%"></div>
+          </div>
+          <button class="stepper" data-musicplay="${id}" title="${m.playing ? "Pause" : "Play"}">${ico(m.playing ? "pause" : "play", "i16")}</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  content.innerHTML = `
+    <div class="header">
+      <h1>Music</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">${activeRooms.length} room${activeRooms.length === 1 ? "" : "s"} playing</div></div>
+    </div>
+    <div class="kv-section">${rows}</div>
+  `;
+  updateClock();
+  icons();
+
+  document.querySelectorAll("[data-musicplay]").forEach(el => {
+    el.addEventListener("click", () => {
+      const m = ROOMS[el.dataset.musicplay].media;
+      m.playing = !m.playing;
+      renderMusicContent();
+    });
+  });
+  document.querySelectorAll("[data-musicvol]").forEach(track => {
+    const id = track.dataset.musicvol;
+    const m = ROOMS[id].media;
+    let dragging = false;
+    const fill = track.querySelector(".slider-fill");
+    const thumb = track.querySelector(".slider-thumb");
+    function setFromEvent(clientX) {
+      const rect = track.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+      m.volume = pct;
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+    }
+    track.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
+    track.addEventListener("pointerup", () => dragging = false);
+  });
+}
+
+function renderEntryContent() {
+  const content = document.getElementById("content");
+  const frontDoorPanel = entryCameraFullscreen
+    ? `
+      <div class="video-fullscreen-wrap">
+        <div class="video-tile-bg"></div>
+        <button class="video-fullscreen-close" data-entry-camera-close>${ico("minimize-2", "i16")}</button>
+        <div class="video-fullscreen-name">Front Door</div>
+      </div>`
+    : `
+      <div class="camera-grid" style="grid-template-columns:1fr">
+        <div class="camera-tile" style="aspect-ratio:16/9" data-entry-camera>
+          <div class="camera-tile-live">LIVE</div>
+          <div class="camera-tile-bg"></div>
+          <div class="camera-tile-name">Front Door</div>
+        </div>
+      </div>`;
+
+  content.innerHTML = `
+    <div class="header">
+      <h1>Entry</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Doors &amp; garage</div></div>
+    </div>
+    <div class="section-label-sm">Door Locks</div>
+    ${frontDoorPanel}
+    <div class="kv-section" style="margin-top:10px">
+      ${DOORLOCKS.map((d, i) => `
+        <div class="garage-row">
+          <div class="garage-row-top">
+            <div class="kv-name">${d.name}</div>
+            <div class="toggle-pair" style="width:150px">
+              <button class="toggle-pair-btn ${d.locked ? "active" : ""}" data-lock="${i}:lock">LOCK</button>
+              <button class="toggle-pair-btn ${!d.locked ? "active" : ""}" data-lock="${i}:unlock">UNLOCKED</button>
+            </div>
+          </div>
+          <div class="garage-status">The ${d.name.toLowerCase()} is ${d.locked ? "locked" : "unlocked"}.</div>
+        </div>`).join("")}
+    </div>
+    <div class="section-label-sm" style="margin-top:24px">Garage</div>
+    <div class="kv-section">
+      ${GARAGE.map((g, i) => `
+        <div class="garage-row">
+          <div class="garage-row-top">
+            <div class="kv-name">${g.name}</div>
+            <div class="toggle-pair" style="width:150px">
+              <button class="toggle-pair-btn ${!g.open ? "active" : ""}" data-garage="${i}:close">CLOSE</button>
+              <button class="toggle-pair-btn ${g.open ? "active" : ""}" data-garage="${i}:open">OPEN</button>
+            </div>
+          </div>
+          <div class="garage-status">${g.name} is ${g.open ? "open" : "closed"}.</div>
+        </div>`).join("")}
+    </div>
+    <div class="quick-grid" style="margin-top:14px">
+      <button class="quick-btn" data-quick="lights">Front Lights</button>
+      <button class="quick-btn" data-quick="disarm">Disarm</button>
+      <button class="quick-btn" data-quick="mute">Mute Chime</button>
+    </div>
+  `;
+  updateClock();
+  icons();
+
+  document.querySelectorAll("[data-lock]").forEach(el => {
+    el.addEventListener("click", () => {
+      const [idx, action] = el.dataset.lock.split(":");
+      DOORLOCKS[+idx].locked = action === "lock";
+      renderEntryContent();
+    });
+  });
+  document.querySelectorAll("[data-garage]").forEach(el => {
+    el.addEventListener("click", () => {
+      const [idx, action] = el.dataset.garage.split(":");
+      GARAGE[+idx].open = action === "open";
+      renderEntryContent();
+    });
+  });
+  const camTile = document.querySelector("[data-entry-camera]");
+  if (camTile) camTile.addEventListener("click", () => { entryCameraFullscreen = true; renderEntryContent(); });
+  const camClose = document.querySelector("[data-entry-camera-close]");
+  if (camClose) camClose.addEventListener("click", () => { entryCameraFullscreen = false; renderEntryContent(); });
+}
+
+function renderAppleTVContent() {
+  const content = document.getElementById("content");
+  const room = ROOMS.living;
+  const services = [
+    ["lighting", "Lighting", "sliders-horizontal"],
+    ["climate", "Climate", "thermometer"],
+    ["media", "Media", "music"],
+    ["security", "Security", "shield"],
+    ["energy", "Energy", "zap"],
+  ];
+  content.innerHTML = `
+    <div class="header">
+      <h1>Apple TV</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">10-foot UI reference</div></div>
+    </div>
+    <div class="notif-desc" style="margin-bottom:18px; max-width:520px">
+      Savant's Apple TV app uses a different navigation model entirely — horizontal carousels
+      with a focused center card, driven by a remote D-pad, not touch. This is a visual reference
+      for that pattern, not every screen rebuilt in carousel form.
+    </div>
+    <div class="tv-frame">
+      <div class="tv-row-label">Scenes</div>
+      <div class="tv-carousel">
+        ${room.scenes.map((s, i) => `
+          <div class="tv-card ${tvFocused.row === "scenes" && tvFocused.index === i ? "focused" : ""}" data-tv="scenes:${i}">
+            <div class="tv-card-bg"></div>
+            <div class="tv-card-name">${s}</div>
+          </div>`).join("")}
+      </div>
+      <div class="tv-row-label">Services</div>
+      <div class="tv-carousel">
+        ${services.map(([id, name, icon], i) => `
+          <div class="tv-card-icon ${tvFocused.row === "services" && tvFocused.index === i ? "focused" : ""}" data-tv="services:${i}" title="${name}">
+            ${ico(icon, "i24")}
+          </div>`).join("")}
+      </div>
+      <div class="tv-row-label">Favorites</div>
+      <div class="tv-carousel">
+        ${FAVORITE_CHANNELS.map((c, i) => `
+          <div class="tv-card ${tvFocused.row === "favorites" && tvFocused.index === i ? "focused" : ""}" data-tv="favorites:${i}" style="height:64px">
+            <div class="tv-card-bg"></div>
+            <div class="tv-card-name">${c}</div>
+          </div>`).join("")}
+      </div>
+    </div>
+  `;
+  updateClock();
+  icons();
+  document.querySelectorAll("[data-tv]").forEach(el => {
+    el.addEventListener("click", () => {
+      const [row, idx] = el.dataset.tv.split(":");
+      tvFocused = { row, index: +idx };
+      renderAppleTVContent();
+    });
+  });
+}
+
+function renderSettingsContent() {
+  const content = document.getElementById("content");
+  content.innerHTML = `
+    <div class="header">
+      <h1>Settings</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Notifications, users &amp; about</div></div>
+    </div>
+    <div class="section-label-sm">Notifications</div>
+    <div class="kv-section">
+      ${NOTIFICATIONS.map((n, i) => `
+        <div class="notif-row">
+          <div><div class="notif-name">${n.name}</div><div class="notif-desc">${n.desc}</div></div>
+          <button class="notif-check ${n.on ? "on" : ""}" data-notif="${i}">${ico("check", "i14")}</button>
+        </div>`).join("")}
+    </div>
+    <div class="section-label-sm" style="margin-top:24px">Users</div>
+    <div class="kv-section">
+      ${USERS.map(u => `
+        <div class="kv-row">
+          <div class="kv-left"><div class="kv-icon">${ico("user", "i18")}</div><div class="kv-name">${u.name}</div></div>
+          <div class="kv-value">${u.role} <span class="kv-chevron">›</span></div>
+        </div>`).join("")}
+    </div>
+    <div class="section-label-sm" style="margin-top:24px">About</div>
+    <div class="kv-section">
+      <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("info", "i18")}</div><div class="kv-name">Version</div></div><div class="kv-value">2026.8.3</div></div>
+      <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("store", "i18")}</div><div class="kv-name">Home Store</div></div><div class="kv-value linked">Browse <span class="kv-chevron">›</span></div></div>
+    </div>
+  `;
+  updateClock();
+  icons();
+  document.querySelectorAll("[data-notif]").forEach(el => {
+    el.addEventListener("click", () => { NOTIFICATIONS[+el.dataset.notif].on = !NOTIFICATIONS[+el.dataset.notif].on; renderSettingsContent(); });
+  });
+}
+
+function renderContent() {
+  if (currentRoom === "power") { renderPowerContent(); return; }
+  if (currentRoom === "security") { renderSecurityContent(); return; }
+  if (currentRoom === "video") { renderVideoContent(); return; }
+  if (currentRoom === "poolspa") { renderPoolSpaContent(); return; }
+  if (currentRoom === "music") { renderMusicContent(); return; }
+  if (currentRoom === "entry") { renderEntryContent(); return; }
+  if (currentRoom === "appletv") { renderAppleTVContent(); return; }
+  if (currentRoom === "settings") { renderSettingsContent(); return; }
+  const room = ROOMS[currentRoom];
+  const content = document.getElementById("content");
+
+  const tabs = ["lighting", "climate", "media", "shades"];
+  const tabLabels = { lighting: "Lighting", climate: "Climate", media: "Media", shades: "Shades" };
+
+  let serviceBody;
+  if (currentService === "climate") serviceBody = renderClimate(room);
+  else if (currentService === "media") serviceBody = renderMedia(room);
+  else if (currentService === "shades") serviceBody = renderShades(room);
+  else serviceBody = renderLighting(room);
+
+  content.innerHTML = `
+    <div class="header">
+      <h1>${room.name}</h1>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">${room.outdoor}</div></div>
+    </div>
+
+    ${renderHero(room)}
+
+    <div class="service-tabs">
+      ${tabs.map(t => `<button class="service-tab ${t === currentService ? "active" : ""}" data-service="${t}">${tabLabels[t]}</button>`).join("")}
+    </div>
+
+    ${serviceBody}
+  `;
+
+  updateClock();
+  icons();
+  wireInteractions(room);
+}
+
+function wireInteractions(room) {
+  document.querySelectorAll("[data-service]").forEach(el => {
+    el.addEventListener("click", () => { currentService = el.dataset.service; renderContent(); });
+  });
+
+  document.querySelectorAll("[data-view]").forEach(el => {
+    el.addEventListener("click", () => { lightingView = el.dataset.view; renderContent(); });
+  });
+
+  document.querySelectorAll("[data-color-open]").forEach(el => {
+    el.addEventListener("click", e => { e.stopPropagation(); colorWheelIndex = +el.dataset.colorOpen; colorSubView = "wheel"; renderContent(); });
+  });
+  document.querySelectorAll("[data-color-back]").forEach(el => {
+    el.addEventListener("click", () => { colorWheelIndex = null; renderContent(); });
+  });
+  document.querySelectorAll("[data-colorview]").forEach(el => {
+    el.addEventListener("click", () => { colorSubView = el.dataset.colorview; renderContent(); });
+  });
+  document.querySelectorAll("[data-white]").forEach(el => {
+    el.addEventListener("click", () => {
+      const [idx, name] = el.dataset.white.split(":");
+      room.lighting[+idx].selectedWhite = name;
+      renderContent();
+    });
+  });
+  document.querySelectorAll("[data-wheel]").forEach(wheel => {
+    const i = colorWheelIndex;
+    let dragging = false;
+    const cursor = document.getElementById("wheelCursor");
+    const hexLabel = document.getElementById("colorHex");
+    function setFromEvent(clientX, clientY) {
+      const rect = wheel.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = clientX - cx, dy = clientY - cy;
+      const maxR = rect.width / 2 - 11;
+      const dist = Math.min(Math.sqrt(dx * dx + dy * dy), maxR);
+      const angle = Math.atan2(dy, dx);
+      const hue = Math.round((angle * 180 / Math.PI + 360) % 360);
+      const sat = Math.round((dist / maxR) * 100);
+      room.lighting[i].hue = hue;
+      room.lighting[i].sat = sat;
+      const hex = hslToHex(hue, sat);
+      cursor.style.left = (rect.width / 2 + Math.cos(angle) * dist) + "px";
+      cursor.style.top = (rect.height / 2 + Math.sin(angle) * dist) + "px";
+      cursor.style.background = hex;
+      if (hexLabel) hexLabel.textContent = hex;
+    }
+    wheel.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX, e.clientY); wheel.setPointerCapture(e.pointerId); });
+    wheel.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX, e.clientY); });
+    wheel.addEventListener("pointerup", () => { dragging = false; haSyncLight(room.lighting[i]); });
+    wheel.addEventListener("pointercancel", () => dragging = false);
+  });
+
+  document.querySelectorAll("[data-mediaview]").forEach(el => {
+    el.addEventListener("click", () => { mediaView = el.dataset.mediaview; renderContent(); });
+  });
+
+  document.querySelectorAll("[data-favorite]").forEach(el => {
+    el.addEventListener("click", () => { room.media.track = el.dataset.favorite; room.media.playing = true; renderContent(); });
+  });
+
+  document.querySelectorAll("[data-scene]").forEach(el => {
+    el.addEventListener("click", () => {
+      if (el.dataset.scene === "__off") {
+        room.lighting.forEach(l => { l.on = false; if (l.type === "dim") l.brightness = 0; });
+        room.activeScene = "";
+      } else {
+        room.activeScene = el.dataset.scene;
+      }
+      renderContent();
+    });
+  });
+
+  document.querySelectorAll("[data-global]").forEach(el => {
+    el.addEventListener("click", () => {
+      const pct = +el.dataset.global;
+      room.lighting.forEach(l => {
+        if (l.type === "dim") { l.brightness = pct; l.on = pct > 0; }
+        else { l.on = pct > 0; }
+        haSyncLight(l);
+      });
+      renderContent();
+    });
+  });
+
+  document.querySelectorAll("[data-switch]").forEach(el => {
+    el.addEventListener("click", () => {
+      const i = +el.dataset.switch;
+      room.lighting[i].on = !room.lighting[i].on;
+      haSyncLight(room.lighting[i]);
+      renderContent();
+    });
+  });
+
+  document.querySelectorAll("[data-slider]").forEach(track => {
+    const i = +track.dataset.slider;
+    let dragging = false;
+    const fill = track.querySelector(".slider-fill");
+    const thumb = track.querySelector(".slider-thumb");
+    const label = document.querySelector(`[data-brightness-label="${i}"]`);
+    const hero = document.querySelector(".hero");
+
+    function setFromEvent(clientX) {
+      const rect = track.getBoundingClientRect();
+      let pct = Math.round(((clientX - rect.left) / rect.width) * 100);
+      pct = Math.max(0, Math.min(100, pct));
+      room.lighting[i].brightness = pct;
+      room.lighting[i].on = pct > 0;
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+      if (label) label.textContent = pct + "%";
+      const glow = avgBrightness(room) / 100;
+      const glowEl = document.querySelector(".hero .glow");
+      if (glowEl) glowEl.style.opacity = glow;
+      if (hero) hero.style.filter = `brightness(${0.82 + glow * 0.3})`;
+      const statusEl = document.querySelector(".hero-status");
+      if (statusEl) statusEl.textContent = heroStatusText(room);
+    }
+    track.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
+    track.addEventListener("pointerup", () => { dragging = false; haSyncLight(room.lighting[i]); });
+    track.addEventListener("pointercancel", () => dragging = false);
+  });
+
+  document.querySelectorAll("[data-shade-slider]").forEach(track => {
+    const i = +track.dataset.shadeSlider;
+    let dragging = false;
+    const fill = track.querySelector(".slider-fill");
+    const thumb = track.querySelector(".slider-thumb");
+    const label = document.querySelector(`[data-shade-label="${i}"]`);
+    function setFromEvent(clientX) {
+      const rect = track.getBoundingClientRect();
+      let pct = Math.round(((clientX - rect.left) / rect.width) * 100);
+      pct = Math.max(0, Math.min(100, pct));
+      room.shades[i].position = pct;
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+      if (label) label.textContent = pct + "%";
+    }
+    track.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
+    track.addEventListener("pointerup", () => dragging = false);
+    track.addEventListener("pointercancel", () => dragging = false);
+  });
+
+  const scrubTrack = document.querySelector("[data-scrub]");
+  if (scrubTrack) {
+    let dragging = false;
+    const fill = scrubTrack.querySelector(".slider-fill");
+    const thumb = scrubTrack.querySelector(".slider-thumb");
+    const label = document.querySelector("[data-elapsed-label]");
+    function setFromEvent(clientX) {
+      const rect = scrubTrack.getBoundingClientRect();
+      let pct = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+      room.media.elapsed = Math.round((pct / 100) * room.media.duration);
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+      if (label) label.textContent = fmtTime(room.media.elapsed);
+    }
+    scrubTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); scrubTrack.setPointerCapture(e.pointerId); });
+    scrubTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
+    scrubTrack.addEventListener("pointerup", () => dragging = false);
+  }
+
+  const shuffleBtn = document.querySelector("[data-shuffle]");
+  if (shuffleBtn) shuffleBtn.addEventListener("click", () => { room.media.shuffle = !room.media.shuffle; renderContent(); });
+  const repeatBtn = document.querySelector("[data-repeat]");
+  if (repeatBtn) repeatBtn.addEventListener("click", () => { room.media.repeat = !room.media.repeat; renderContent(); });
+
+  const volTrack = document.querySelector("[data-volume]");
+  if (volTrack) {
+    let dragging = false;
+    const fill = volTrack.querySelector(".slider-fill");
+    const thumb = volTrack.querySelector(".slider-thumb");
+    function setFromEvent(clientX) {
+      const rect = volTrack.getBoundingClientRect();
+      let pct = Math.round(((clientX - rect.left) / rect.width) * 100);
+      pct = Math.max(0, Math.min(100, pct));
+      room.media.volume = pct;
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+    }
+    volTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); volTrack.setPointerCapture(e.pointerId); });
+    volTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
+    volTrack.addEventListener("pointerup", () => dragging = false);
+  }
+
+  const playBtn = document.getElementById("playBtn");
+  if (playBtn) playBtn.addEventListener("click", () => {
+    room.media.playing = !room.media.playing;
+    playBtn.innerHTML = ico(room.media.playing ? "pause" : "play", "i20");
+    icons();
+  });
+
+  const up = document.getElementById("tempUp");
+  const down = document.getElementById("tempDown");
+  if (up && down) {
+    const label = document.getElementById("tempTarget");
+    up.addEventListener("click", () => { room.climate.target++; label.textContent = `TARGET ${room.climate.target}°`; });
+    down.addEventListener("click", () => { room.climate.target--; label.textContent = `TARGET ${room.climate.target}°`; });
+  }
+
+  document.querySelectorAll("[data-fan]").forEach(el => {
+    el.addEventListener("click", () => { room.climate.fan = el.dataset.fan; renderContent(); });
+  });
+
+  const humidityTrack = document.querySelector("[data-humidity]");
+  if (humidityTrack) {
+    let dragging = false;
+    const fill = humidityTrack.querySelector(".slider-fill");
+    const thumb = humidityTrack.querySelector(".slider-thumb");
+    const label = document.querySelector("[data-humidity-label]");
+    function setFromEvent(clientX) {
+      const rect = humidityTrack.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+      room.climate.humidity = pct;
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+      if (label) label.textContent = pct + "%";
+    }
+    humidityTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); humidityTrack.setPointerCapture(e.pointerId); });
+    humidityTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
+    humidityTrack.addEventListener("pointerup", () => dragging = false);
+  }
+}
+
+function updateClock() {
+  const el = document.getElementById("clock");
+  if (!el) return;
+  const now = new Date();
+  let h = now.getHours(); const m = now.getMinutes();
+  const ampm = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+  el.textContent = `${h}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+function render() { renderRail(); renderContent(); }
+
+// --- Live HA data wiring (2026-08-05 MVP) ---
+// Populates ROOMS[...].lighting from real entities per rooms.config.js,
+// keeps them in sync via state_changed subscription, and pushes toggle/
+// slider interactions back to HA as real service calls. Everything below
+// lives in this same script tag (not a separate file) because ROOMS/
+// ROOM_ORDER/render are declared with const/let/function here and are not
+// visible to a separately-loaded <script src> file — const/let globals
+// don't attach to window the way function declarations do.
+
+function haStateToLightItem(entityId, state) {
+  const attrs = state.attributes || {};
+  const brightnessPct = attrs.brightness != null ? Math.round((attrs.brightness / 255) * 100) : 0;
+  const hasColor = (attrs.supported_color_modes || []).some(m => ["rgb", "hs", "xy"].includes(m));
+  let hue, sat;
+  if (attrs.hs_color) { hue = Math.round(attrs.hs_color[0]); sat = Math.round(attrs.hs_color[1]); }
+  return {
+    name: attrs.friendly_name || entityId,
+    sub: "Home Assistant",
+    type: "dim",
+    on: state.state === "on",
+    brightness: brightnessPct,
+    color: hasColor,
+    hue, sat,
+    entityId,
+  };
+}
+
+function haSyncLight(lightItem) {
+  if (!lightItem.entityId || !window.haClient || !window.haClient.connected) return;
+  if (lightItem.on) {
+    const data = { brightness_pct: lightItem.brightness || 100 };
+    if (lightItem.color && lightItem.hue != null && lightItem.sat != null) {
+      data.hs_color = [lightItem.hue, lightItem.sat];
+    }
+    window.haClient.callService("light", "turn_on", lightItem.entityId, data).catch(console.error);
+  } else {
+    window.haClient.callService("light", "turn_off", lightItem.entityId).catch(console.error);
+  }
+}
+
+async function initLiveData() {
+  const { url, token } = HAConfig.get();
+  const client = new HAClient(url, token);
+  window.haClient = client;
+
+  client.onConnectionChange((isConnected) => {
+    const dot = document.querySelector(".footer .dot");
+    const label = document.querySelector(".footer div");
+    if (dot) dot.style.background = isConnected ? "" : "#FF6B6B";
+    if (label) label.lastChild.textContent = isConnected ? "All systems normal" : "Disconnected — reconnecting...";
+  });
+
+  // entity_id -> { roomId, index } so state_changed updates land in the right place
+  const entityLocations = new Map();
+  for (const roomId of Object.keys(ROOM_ENTITY_MAP)) {
+    if (!ROOMS[roomId]) continue;
+    const entityIds = ROOM_ENTITY_MAP[roomId].lighting || [];
+    ROOMS[roomId].lighting = entityIds.map((id, i) => {
+      entityLocations.set(id, { roomId, index: i });
+      return { name: id, sub: "", type: "dim", on: false, brightness: 0, color: false, entityId: id };
+    });
+  }
+
+  try {
+    await client.connect();
+    const states = await client.getStates();
+    const stateById = new Map(states.map(s => [s.entity_id, s]));
+
+    for (const [entityId, loc] of entityLocations) {
+      const state = stateById.get(entityId);
+      if (state) ROOMS[loc.roomId].lighting[loc.index] = haStateToLightItem(entityId, state);
+    }
+
+    client.onStateChanged((entityId, newState) => {
+      const loc = entityLocations.get(entityId);
+      if (!loc || !newState) return;
+      ROOMS[loc.roomId].lighting[loc.index] = haStateToLightItem(entityId, newState);
+      if (currentRoom === loc.roomId) renderContent();
+    });
+  } catch (err) {
+    console.error("HA connection failed:", err);
+    const label = document.querySelector(".footer div");
+    if (label) label.lastChild.textContent = "Connection failed — check Settings";
+  }
+
+  render();
+}
+
+if (HAConfig.isConfigured()) {
+  initLiveData();
+} else {
+  showOnboarding(initLiveData);
+}
+
+setInterval(updateClock, 1000 * 15);
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(console.error);
+  });
+}
+</script>
+</body>
+</html>

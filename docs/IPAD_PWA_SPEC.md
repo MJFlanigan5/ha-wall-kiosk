@@ -4,7 +4,12 @@ The same Savant-styled control experience as the wall panel, but for iPad
 *and* phone — via a single PWA wrapping the existing HTML mockup, not a
 port of the Pi native app.
 
-**Status: not started, spec only.**
+**Status: MVP in progress (2026-08-05).** Phases 1-4 have a first pass —
+live HA WebSocket client, 3 rooms' lighting wired to real data and real
+service calls, PWA wrapper (manifest + service worker). Not yet tested on
+a real device, no responsive/phone pass, most screens still mock content.
+See [`pwa-app/README.md`](../pwa-app/README.md) for exactly what's
+verified vs. not.
 
 ## Phone comes with iPad, not as a separate build (2026-08-05)
 
