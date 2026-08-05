@@ -65,6 +65,11 @@ takes its place.
 
 If you're powering over PoE: connect Ethernet to a PoE switch/injector and
 skip the USB-C supply entirely. Otherwise use the official Pi 5 USB-C PSU.
+PoE delivers power *through* the Ethernet cable, so it's a package deal —
+this also means the Pi is wired, not Wi-Fi, whenever it's PoE-powered.
+That's a plus for a permanently wall-mounted device: no dropouts, and a
+stable IP for SSH (see below) rather than a Wi-Fi address that can
+change or lag.
 
 ### 2. Bootstrap onto the NVMe drive
 
@@ -119,6 +124,29 @@ a normal desktop in daily use.
 
 `01-pi-kiosk-prep.sh` also applies memory/performance tuning for the 2GB
 tier — see below.
+
+### Remote access (SSH)
+
+SSH is enabled during the Imager flash (step 2, advanced options). For
+reliable scripted/automated access afterward — running setup scripts
+remotely, checking logs, having Claude run commands directly — set up
+key-based auth instead of relying on password login each time:
+
+```bash
+# from your Mac, one-time:
+ssh-copy-id mike@<pi-hostname-or-ip>
+```
+
+If `ssh-copy-id` isn't available, the manual equivalent: copy the contents
+of `~/.ssh/id_ed25519.pub` (or generate one first with `ssh-keygen -t
+ed25519` if you don't have a key yet) into the Pi's
+`~/.ssh/authorized_keys`.
+
+Since this Pi is PoE-powered, it's on wired Ethernet with a stable IP (see
+the hardware note above) — check your router/PoE switch's client list or
+`ping <hostname>.local` to find it rather than guessing. No dedicated MCP
+server or special tooling needed beyond plain SSH — it's a normal Linux
+box once it's on the network.
 
 ### Performance tuning (2GB Pi 5)
 
