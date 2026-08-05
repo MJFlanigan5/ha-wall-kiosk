@@ -45,12 +45,12 @@ echo "==> Disabling boot splash animation (minor boot-time saving)"
 sudo raspi-config nonint disable_splash 1 || true
 
 echo "==> Installing zram-tools for compressed RAM swap"
-# On a 2GB board running an Electron/Chromium kiosk, zram gives real extra
-# headroom under memory pressure without the wear/slowness of swapping to
-# disk. Compressed RAM swap is much faster than even NVMe swap.
+# On a 2GB board, zram gives real extra headroom under memory pressure
+# without the wear/slowness of swapping to disk. Compressed RAM swap is
+# much faster than even NVMe swap.
 sudo apt install -y zram-tools
 echo "ALGO=zstd" | sudo tee /etc/default/zramswap > /dev/null
 echo "PERCENT=50" | sudo tee -a /etc/default/zramswap > /dev/null
 sudo systemctl restart zramswap.service || true
 
-echo "==> Done. Reboot recommended before installing touchkio: sudo reboot"
+echo "==> Done. Reboot recommended before running the native app: sudo reboot"

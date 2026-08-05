@@ -1,12 +1,11 @@
 # Native App Spec
 
-Replacing the browser-based kiosk (touchkio or a custom Chromium/WPE
-wrapper) with a real native app — no browser engine at all, the same
-approach Savant/Control4/Crestron actually use on their own touch panels.
+A real native app — no browser engine at all, the same approach
+Savant/Control4/Crestron actually use on their own touch panels. This is
+the kiosk software for this project; there's no browser-based fallback
+(touchkio or otherwise) in the plan.
 
-**Status: MVP phase (1 + 2) in progress**, building for personal use
-regardless of whether the browser-based kiosk turns out to need it —
-Mike's choice, not a performance-driven trigger anymore. Phases 3+ remain
+**Status: MVP phase (1 + 2) in progress.** Phases 3+ remain
 deferred/incremental — add screens as needed rather than porting
 everything up front.
 
@@ -24,8 +23,9 @@ The gap being filled is specifically between "raw HA with YAML dashboards"
 and "Savant with a dealer contract" — not between HA and other DIY
 platforms. That's what turns this from a personal project into something
 worth positioning publicly once the native app is actually finished
-end-to-end (see "When to actually start this" below) — a genuinely native,
-pro-level touch panel experience without the dealer relationship gate.
+end-to-end (live HA data, several real screens, at least one write action
+proven — see the phase table below) — a genuinely native, pro-level touch
+panel experience without the dealer relationship gate.
 
 ## Design principle: config-driven, not hardcoded to one home
 
@@ -162,18 +162,6 @@ This is a real software project, not a config swap. Given the number of
 screens already designed in the HTML mockup (area cards, quick actions,
 camera feeds, room details, and whatever else "the whole thing" ends up
 covering), this is realistically **weeks of part-time work**, not a
-weekend. Treat it as its own project with its own plan when it's actually
-started — don't back into it opportunistically off of a performance worry
-that turns out to be unfounded once the browser-based setup is actually
-running.
-
-## When to actually start this
-
-Only after:
-1. The browser-based kiosk (touchkio, or the lighter custom wrapper) is
-   running on the real hardware, and
-2. It's demonstrated to actually be a problem in practice — not a
-   theoretical 2GB concern, but an observed one.
-
-If the browser-based approach works fine, this spec stays exactly what it
-is: a spec, not a build.
+weekend. Treat it as its own project with its own plan — add screens
+incrementally as the MVP proves the architecture works, don't try to port
+everything before using it for real.

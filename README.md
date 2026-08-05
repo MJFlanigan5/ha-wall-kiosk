@@ -1,7 +1,8 @@
 # HA Wall Kiosk
 
 A wall-mounted Home Assistant control panel: Raspberry Pi 5 + official 10.1"
-Touch Display 2 (portrait), running [touchkio](https://github.com/leukipp/touchkio)
+Touch Display 2 (portrait), running a from-scratch native app (PySide6 +
+QML, no browser engine — see [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md))
 in kiosk mode, in a 3D-printed arm-locking flush mount.
 
 This repo has both halves of the build: the physical mount (`hardware/`) and
@@ -17,6 +18,10 @@ have a 4GB/8GB board, it'll just have more headroom to spare.
 
 ## Status / what's left
 
+This runs our own native app end to end — no browser, no touchkio, no
+third-party kiosk wrapper. See [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md)
+for the full architecture and phase breakdown.
+
 **Physical (blocking everything else):**
 1. Finish the mount — right side printed and working; left side needs a
    fix where the wall stud leaves zero cavity clearance for the arm-lock
@@ -25,24 +30,17 @@ have a 4GB/8GB board, it'll just have more headroom to spare.
 2. Assemble Pi 5 + POE HAT + NVMe SSD + Touch Display 2
 3. Bootstrap NVMe boot (temporary SD card pass, see below)
 
-**Software (scripts already written, just need to run on real hardware):**
+**Software (native app — see [`native-app/README.md`](native-app/README.md) for setup/run):**
 4. `scripts/01-pi-kiosk-prep.sh` — 2GB tuning, zram, autologin
-5. `scripts/02-install-touchkio.sh` — get touchkio actually showing the
-   live HA dashboard on the screen
+5. Verify the native app's HA WebSocket client against real data — untested
+   against a live instance so far, only a stub-client smoke test
+6. Port remaining screens one at a time
+7. Wire service calls (write actions)
+8. Full-screen kiosk launch on boot (systemd service, display session
+   config) — not finalized yet
+9. Hardware/perf testing on the real Pi
 
-**Decision gate (not yet reached):**
-6. Confirm touchkio actually runs fine on the 2GB Pi in practice. If yes —
-   done, nothing else to build, the native app stays a spec. If it
-   genuinely struggles — that's what unlocks native app work below.
-
-**Conditional on step 6 tripping (currently just an untested MVP skeleton):**
-7. Verify the native app's HA WebSocket client against real data (see
-   `native-app/README.md` — untested against a live instance so far)
-8. Port remaining screens one at a time
-9. Wire service calls (write actions)
-10. Hardware/perf testing on the real Pi
-
-Full phase breakdown and time estimates for 7-10: [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md).
+Full phase breakdown and time estimates: [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md).
 
 ## Hardware
 
@@ -147,9 +145,10 @@ This disables screen blanking (critical — a kiosk display can't be allowed
 to sleep), enables desktop autologin (so it boots straight into the kiosk
 session with no login prompt), and updates packages.
 
-**Why Desktop, not Lite:** touchkio is an Electron app; it needs a
-Wayland/labwc compositor running underneath it even though you'll never see
-a normal desktop in daily use.
+**Why Desktop, not Lite:** the native app (PySide6 + QML) still needs a
+Wayland/labwc compositor underneath it for GPU-accelerated rendering, even
+though you'll never see a normal desktop in daily use. Exact display-session
+config for launching it full-screen on boot isn't finalized yet.
 
 `01-pi-kiosk-prep.sh` also applies memory/performance tuning for the 2GB
 tier — see below.
@@ -197,9 +196,9 @@ done once you can see the screen and verify):
 - **Skip the desktop panel/taskbar in the kiosk session.** A full labwc
   desktop session normally starts a taskbar, wallpaper, and other chrome
   you'll never see behind a fullscreen kiosk window — that's RAM and CPU
-  spent on nothing. Once touchkio is confirmed working (step 5), edit
-  `~/.config/labwc/autostart` and comment out the lines that launch the
-  panel/wallpaper apps, leaving only what starts `touchkio`. Reboot and
+  spent on nothing. Once the native app is confirmed launching correctly,
+  edit `~/.config/labwc/autostart` and comment out the lines that launch
+  the panel/wallpaper apps, leaving only what starts the app. Reboot and
   confirm the kiosk still launches correctly before considering this done.
 - **CPU governor to `performance`** (optional) — trades a little power/heat
   for more consistent UI responsiveness, reasonable given the HAT's active
@@ -209,79 +208,28 @@ done once you can see the screen and verify):
   echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
   ```
 
-### 4. Install touchkio
+### 4. Run the native app
 
-After the reboot:
+Setup and run instructions live in
+[`native-app/README.md`](native-app/README.md) — venv, `requirements.txt`,
+`config.yaml` (your HA URL + long-lived access token), then `python main.py`.
 
-```bash
-cd ha-wall-kiosk/scripts
-bash 02-install-touchkio.sh http://homeassistant.local:8123
-```
-
-Replace the URL with your actual Home Assistant instance's address. This
-runs touchkio's official installer, writes your HA URL into
-`~/.config/touchkio/Arguments.json`, and starts it as a systemd user
-service that launches automatically on every boot.
-
-### 5. Verify
-
-```bash
-systemctl --user status touchkio.service
-```
-
-The display should be showing your Home Assistant dashboard in kiosk mode
-within a few seconds of boot. Logs live at `~/.config/touchkio/logs/main.log`.
-
-## Configuration reference
-
-Full options: `~/.config/touchkio/Arguments.json`. Key ones:
-
-| Key | Default we set | Notes |
-|---|---|---|
-| `web_url` | your HA URL | can be a list — touchkio supports swiping between multiple pages |
-| `web_theme` | `dark` | matches the Savant-style dark dashboard this panel is meant to run |
-| `web_zoom` | `1.0` | touchkio's own default is `1.25`; adjust to taste once you see it on the real screen |
-| `web_widget` | `true` | sidebar quick-access widget |
-
-Edit the file directly and `systemctl --user restart touchkio.service` to
-apply changes.
-
-### Optional: MQTT device sensors
-
-touchkio can publish its own device sensors (battery, temperature, CPU,
-memory, screen state) back into Home Assistant via MQTT discovery, and
-accept remote commands (brightness, reboot, screenshot). Add to
-`Arguments.json`:
-
-```json
-{
-  "mqtt_url": "mqtt://homeassistant.local:1883",
-  "mqtt_user": "kiosk",
-  "mqtt_password": "REPLACE_ME"
-}
-```
-
-Don't commit real MQTT credentials to this repo — keep them local to the
-Pi's config file only.
+There's no systemd service or full-screen-on-boot config yet (see "Status /
+what's left" above) — for now, run it manually over SSH or with a
+keyboard/mouse attached to confirm it launches and connects.
 
 ## Troubleshooting
 
-- **2GB RAM headroom:** this is the low-end Pi 5 tier. Electron/Chromium is
-  memory-hungry. Our dashboard is intentionally animation-free with at most
-  4 camera feeds, which should be fine — but if things feel sluggish, check
-  `free -h` and consider trimming concurrent camera cards before assuming
-  it's a touchkio problem.
+- **2GB RAM headroom:** this is the low-end Pi 5 tier. Check `free -h` if
+  things feel sluggish — the native app's baseline footprint should be tens
+  of MB (no browser engine), so persistent memory pressure likely points at
+  the dashboard content itself (too many live camera feeds, etc.) rather
+  than the app shell.
 - **Blank/black screen on boot:** confirm both the DSI ribbon and GPIO power
   cable are fully seated. Check `dmesg | grep -i dsi` for detection errors.
 - **Screen sleeps after a few minutes:** re-run `sudo raspi-config` →
   Display Options → Screen Blanking → Disable, if the nonint script call in
   `01-pi-kiosk-prep.sh` didn't stick on your OS version.
-- **touchkio doesn't start on boot:** `systemctl --user status
-  touchkio.service` — if the user service isn't running at boot, confirm
-  desktop autologin is actually enabled (`sudo raspi-config` → System
-  Options → Boot / Auto Login → Desktop Autologin).
-- **Updating touchkio:**
-  `bash <(wget -qO- https://raw.githubusercontent.com/leukipp/touchkio/main/install.sh) update`
 
 ## Dashboard-side performance constraints
 
@@ -298,16 +246,6 @@ struggling here. When building the actual dashboard this panel displays:
   especially anything that polls or re-renders often
 - Keep DOM complexity reasonable per screen — this is a single full-time
   kiosk view, not a multi-tab desktop app
-
-## Going native (deferred)
-
-Browser-based (touchkio, or a lighter custom Chromium/WPE wrapper) is the
-practical path for now — it keeps the entire dashboard as the HTML/CSS
-already built. A real native app (PySide6 + QML, no browser engine at all
-— the same approach Savant/Control4/Crestron actually use) is spec'd out
-in [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md) for later, but
-deliberately **not started** — only worth it if the browser-based setup
-turns out to actually struggle in practice, not as a preemptive rewrite.
 
 ## Design background
 
