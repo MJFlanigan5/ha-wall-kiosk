@@ -255,6 +255,13 @@ different constraints — the Pi's memory ceiling is why that one went
 native/no-browser, and iPads don't have that ceiling). See
 [`docs/IPAD_PWA_SPEC.md`](docs/IPAD_PWA_SPEC.md).
 
+## Notifications & interrupt events (not started, spec only)
+
+How doorbell rings, finished timers, and alarm triggers actually reach and
+render on both apps — different problem on the wall panel (already
+connected, no push infra needed) vs. iPad (needs real Web Push since a PWA
+can be backgrounded). See [`docs/NOTIFICATIONS_SPEC.md`](docs/NOTIFICATIONS_SPEC.md).
+
 ## Design background
 
 This mount and kiosk pairs with the Savant-inspired Home Assistant dashboard
