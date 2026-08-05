@@ -20,15 +20,24 @@ content.
 ## Ambient Mode (v2, updated 2026-08-05)
 
 After 90 seconds of no touch, the app drops into a full-screen idle view —
-clock, date, and a status card per wired room (icon, room name, "N of M
-lights on" as the live headline value), styled after Loxone's Favorites
-card pattern but merged directly into the ambient/idle view rather than a
-separate screen, and in our own dark palette rather than Loxone's. Tapping
-a card toggles that room's lights; tapping anywhere else wakes back to
-whatever screen was showing before. See
+clock, date, and status cards: one per wired room (icon, name, "N of M
+lights on"), a Music card (whichever room's assigned player is actively
+playing, if any), and a Home Power card (real Tesla Powerwall load sensor,
+`sensor.my_home_load_power` — confirmed to exist live before adding it,
+not fabricated). Styled after Loxone's Favorites card pattern but merged
+directly into the ambient/idle view rather than a separate screen, in our
+own dark palette rather than Loxone's. Tapping a room card toggles its
+lights; Music/Power cards are read-only for now. Tapping anywhere else
+wakes back to whatever screen was showing before. See
 [`docs/UI_MODES_SPEC.md`](../docs/UI_MODES_SPEC.md) for the full design
 reasoning. Not tested on a real device yet, same caveat as everything else
 below.
+
+**Service worker fixed (2026-08-05):** it was shipping cache-first with a
+cache name that never got bumped across any of tonight's pushes — every
+push after the first was silently invisible on reload. Rewritten to
+network-first (cache is now just an offline fallback), so a reload always
+gets the latest code when online.
 
 ## Admin Mode (added 2026-08-05)
 

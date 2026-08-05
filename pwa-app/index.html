@@ -2573,6 +2573,11 @@ let entityLocations = new Map();
 let mediaEntityLocations = new Map();
 let AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
 
+// Whole-home power card for Ambient Mode — real Tesla Powerwall entity,
+// confirmed to exist via live search before adding this (not fabricated).
+const AMBIENT_POWER_ENTITY = "sensor.my_home_load_power";
+let ambientPowerState = null;
+
 // --- Admin Mode config layer (2026-08-05) ---
 // rooms.config.js's ROOM_ENTITY_MAP is the shipped default. Admin Mode
 // changes persist as a localStorage override on top of it — the browser
@@ -2649,6 +2654,7 @@ async function initLiveData() {
       const state = stateById.get(entityId);
       if (state) ROOMS[roomId].media = haStateToMediaItem(entityId, state);
     }
+    ambientPowerState = stateById.get(AMBIENT_POWER_ENTITY) || null;
 
     client.onStateChanged((entityId, newState) => {
       if (!newState) return;
@@ -2662,6 +2668,11 @@ async function initLiveData() {
       if (mediaRoomId) {
         ROOMS[mediaRoomId].media = haStateToMediaItem(entityId, newState);
         if (currentRoom === mediaRoomId) renderContent();
+        return;
+      }
+      if (entityId === AMBIENT_POWER_ENTITY) {
+        ambientPowerState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
       }
     });
   } catch (err) {
@@ -2897,19 +2908,38 @@ function renderAmbientActions() {
   if (!el) return;
   // Loxone-style status cards (icon, location label, live value headline)
   // merged directly into Ambient Mode rather than a separate Favorites
-  // screen — see docs/UI_MODES_SPEC.md "Ambient Mode v2". Only real wired
-  // data (lighting) shown — no fabricated energy/presence/etc. cards.
-  el.innerHTML = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
+  // screen — see docs/UI_MODES_SPEC.md "Ambient Mode v2". Every card here
+  // is backed by real live data, no fabricated values.
+
+  const roomCards = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
     const r = ROOMS[id];
     const onCount = r.lighting.filter(l => l.on).length;
     const anyOn = onCount > 0;
-    const value = anyOn ? `${onCount} of ${r.lighting.length} on` : "All off";
+    const value = r.lighting.length ? (anyOn ? `${onCount} of ${r.lighting.length} on` : "All off") : "No lights";
     return `<button class="ambient-card ${anyOn ? "is-on" : ""}" data-ambient-room="${id}">
       ${ico("lightbulb", "ambient-card-icon")}
       <div class="ambient-card-label">${r.name}</div>
       <div class="ambient-card-value">${value}</div>
     </button>`;
-  }).join("");
+  });
+
+  // Music: whichever room's assigned media_player is actively playing, if any
+  const playingRoom = AMBIENT_ROOMS.map(id => ROOMS[id]).find(r => r && r.media && r.media.entityId && r.media.playing);
+  const musicCard = `<button class="ambient-card ${playingRoom ? "is-on" : ""}" style="cursor:default;">
+    ${ico("music", "ambient-card-icon")}
+    <div class="ambient-card-label">Music</div>
+    <div class="ambient-card-value">${playingRoom ? playingRoom.media.track : "Nothing playing"}</div>
+  </button>`;
+
+  // Power: real Tesla Powerwall load sensor, kW
+  const powerValue = ambientPowerState ? `${parseFloat(ambientPowerState.state).toFixed(2)} kW` : "—";
+  const powerCard = `<button class="ambient-card" style="cursor:default;">
+    ${ico("zap", "ambient-card-icon")}
+    <div class="ambient-card-label">Home Power</div>
+    <div class="ambient-card-value">${powerValue}</div>
+  </button>`;
+
+  el.innerHTML = roomCards.join("") + musicCard + powerCard;
   icons();
 
   el.querySelectorAll("[data-ambient-room]").forEach(btn => {

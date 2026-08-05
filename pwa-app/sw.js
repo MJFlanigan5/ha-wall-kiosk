@@ -1,7 +1,13 @@
-// Minimal service worker: caches the app shell so it launches instantly
-// and works offline for the UI itself (live HA data still needs a real
-// connection — this doesn't cache or fake entity state).
-const CACHE_NAME = "ha-wall-kiosk-pwa-v1";
+// Minimal service worker: caches the app shell for offline resilience,
+// but the app is under active daily development right now, so this uses
+// NETWORK-FIRST (not cache-first) for the app shell — every reload gets
+// the latest code when online, falling back to cache only if the network
+// genuinely fails. A prior cache-first version shipped earlier tonight
+// with a static, never-bumped CACHE_NAME, which meant every push since
+// the first one was silently invisible on reload — that's the bug this
+// rewrite fixes. Revisit cache-first once the app stops changing this
+// fast; for now, staleness is worse than the offline-resilience tradeoff.
+const CACHE_NAME = "ha-wall-kiosk-pwa-v2";
 const APP_SHELL = [
   "./index.html",
   "./config.js",
@@ -29,12 +35,15 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // App shell: cache-first. Everything else (including any future push to
-  // the HA REST API): network, not intercepted.
   const url = new URL(event.request.url);
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => cached || fetch(event.request))
-    );
-  }
+  if (url.origin !== self.location.origin) return;
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
+  );
 });
