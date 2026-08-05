@@ -8,10 +8,13 @@ import QtQuick.Layouts
 ApplicationWindow {
     id: root
     visible: true
-    // Matches the 10.1" Touch Display 2's native portrait resolution.
-    // Runs windowed at this size on a dev machine; full screen on the Pi.
-    width: 1200
-    height: 1920
+    // 1200x1920 is the 10.1" Touch Display 2's native portrait
+    // resolution. Dimensions swap for landscape per config.yaml's
+    // display.orientation -- pure software decision, not tied to how
+    // any particular physical panel is built. Runs windowed at this
+    // size on a dev machine; full screen on the Pi.
+    width: appConfig.isPortrait ? 1200 : 1920
+    height: appConfig.isPortrait ? 1920 : 1200
     title: "HA Wall Kiosk"
     color: Theme.base
 
@@ -56,7 +59,11 @@ ApplicationWindow {
 
             GridLayout {
                 width: root.width - 64
-                columns: 2
+                // Landscape gets an extra column -- the point of making
+                // orientation a config value instead of a hardcoded
+                // portrait assumption is that layouts actually adapt,
+                // not just the window's outer dimensions.
+                columns: appConfig.isPortrait ? 2 : 3
                 columnSpacing: 16
                 rowSpacing: 16
 

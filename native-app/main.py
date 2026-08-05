@@ -13,6 +13,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 import qasync
 
 from ha_client import HAClient, load_config
+from app_config import AppConfig
 
 
 def main():
@@ -23,10 +24,12 @@ def main():
 
     config = load_config()
     ha_client = HAClient(config)
+    app_config = AppConfig(config)
 
     engine = QQmlApplicationEngine()
     engine.addImportPath("qml")
     engine.rootContext().setContextProperty("haClient", ha_client)
+    engine.rootContext().setContextProperty("appConfig", app_config)
     engine.load("qml/Overview.qml")
 
     if not engine.rootObjects():

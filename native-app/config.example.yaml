@@ -17,3 +17,11 @@ display:
   # good default for a first run so nothing needs configuring just to see
   # something on screen.
   areas: []
+
+  # "portrait" or "landscape". This is one real advantage of custom
+  # software over a browser-based kiosk: orientation is a pure rendering
+  # decision, not tied to how the physical panel happens to be built.
+  # The 10.1" Touch Display 2 this project is built around is native
+  # portrait, but someone running this against a landscape-mounted panel
+  # just sets this and the window dimensions swap automatically.
+  orientation: "portrait"

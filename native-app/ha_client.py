@@ -34,10 +34,12 @@ def load_config(path="config.yaml"):
         raise ValueError(
             "No Home Assistant token found. Set it in config.yaml or the HA_TOKEN environment variable."
         )
+    display_cfg = cfg.get("display") or {}
     return {
         "url": cfg["home_assistant"]["url"],
         "token": token,
-        "areas_filter": (cfg.get("display") or {}).get("areas") or [],
+        "areas_filter": display_cfg.get("areas") or [],
+        "orientation": display_cfg.get("orientation") or "portrait",
     }
 
 
