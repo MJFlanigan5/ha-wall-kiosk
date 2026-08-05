@@ -583,6 +583,37 @@
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
   }
 
+  .admin-btn {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; padding: 2px;
+  }
+  .admin-overlay {
+    position: fixed; inset: 0; background: var(--base); z-index: 6000;
+    display: none; flex-direction: column; padding: 32px; overflow-y: auto;
+  }
+  .admin-overlay.visible { display: flex; }
+  .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .admin-header h2 { font-size: 20px; font-weight: 600; color: var(--text); }
+  .admin-close { background: none; border: none; color: var(--text-dim); cursor: pointer; }
+  .admin-room-block { margin-bottom: 28px; padding: 18px; border-radius: 12px; background: var(--base-raised); border: 1px solid var(--hairline); }
+  .admin-room-block h3 { font-size: 14px; color: var(--text); margin-bottom: 12px; }
+  .admin-entity-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; color: var(--text-dim);
+  }
+  .admin-entity-row:last-of-type { border-bottom: none; }
+  .admin-remove-btn { background: none; border: none; color: #FF6B6B; cursor: pointer; font-size: 16px; padding: 2px 8px; }
+  .admin-add-row { display: flex; gap: 8px; margin-top: 12px; }
+  .admin-add-select {
+    flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--hairline);
+    background: var(--base); color: var(--text); font-size: 13px;
+  }
+  .admin-add-btn {
+    padding: 8px 16px; border-radius: 8px; border: none; background: var(--on);
+    color: var(--base); font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  .admin-note { font-size: 12px; color: var(--text-dim); opacity: 0.7; margin-top: 4px; }
+
   @media (max-width: 1024px) { .content { padding: 26px 24px 16px; } .header h1 { font-size: 27px; } }
 
   @media (max-width: 640px) {
@@ -612,9 +643,30 @@
     <div class="content" id="content"></div>
     <div class="footer">
       <div><span class="dot"></span>All systems normal</div>
-      <div class="sync">last sync 2s ago</div>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div class="sync">last sync 2s ago</div>
+        <button class="admin-btn" id="adminOpenBtn" title="Admin"></button>
+      </div>
     </div>
     <nav class="mobile-rail" id="mobileRail"></nav>
+  </div>
+
+  <div class="admin-overlay" id="adminOverlay">
+    <div class="admin-header">
+      <h2>Admin — Rooms &amp; Entities</h2>
+      <button class="admin-close" id="adminCloseBtn"></button>
+    </div>
+    <div class="admin-note">
+      Changes save to this device only (not shared with other devices).
+      New rooms get a real Overview/Lighting screen right away; other
+      screens (climate, security, shades) show placeholder/no data until
+      those domains are wired — see docs/UI_MODES_SPEC.md.
+    </div>
+    <div class="admin-add-row" style="margin: 16px 0 24px;">
+      <input class="admin-add-select" id="adminNewRoomName" placeholder="New room name (e.g. Office)" />
+      <button class="admin-add-btn" id="adminNewRoomBtn">Add Room</button>
+    </div>
+    <div id="adminRoomList"></div>
   </div>
 
   <div class="ambient-overlay" id="ambientOverlay">
@@ -2403,6 +2455,9 @@ function wireInteractions(room) {
     room.media.playing = !room.media.playing;
     playBtn.innerHTML = ico(room.media.playing ? "pause" : "play", "i20");
     icons();
+    if (room.media.entityId && window.haClient && window.haClient.connected) {
+      window.haClient.callService("media_player", room.media.playing ? "media_play" : "media_pause", room.media.entityId).catch(console.error);
+    }
   });
 
   const up = document.getElementById("tempUp");
@@ -2488,6 +2543,85 @@ function haSyncLight(lightItem) {
   }
 }
 
+// Basic media_player wiring only (2026-08-05) — on/off + track name + play/
+// pause, via Admin Mode's room assignment. NOT the full MUSIC_SPEC.md
+// richness: no progress-bar interpolation (elapsed/duration left at 0, so
+// the scrubber won't move), no shuffle/repeat/volume service calls, no
+// supported_features gating. Those stay MUSIC_SPEC.md's dedicated scope —
+// this is deliberately the minimum that's honestly wireable in this pass.
+function haStateToMediaItem(entityId, state) {
+  const attrs = state.attributes || {};
+  return {
+    name: attrs.friendly_name || entityId,
+    track: attrs.media_title || "—",
+    artist: attrs.media_artist || "",
+    source: attrs.source || "",
+    playing: state.state === "playing",
+    volume: attrs.volume_level != null ? Math.round(attrs.volume_level * 100) : 0,
+    elapsed: 0, duration: 0, // not interpolated yet, see MUSIC_SPEC.md
+    shuffle: false, repeat: false, favorites: [],
+    entityId,
+  };
+}
+
+// entity_id -> { roomId, index } so state_changed updates land in the
+// right place. Script-level (not local to initLiveData) so Admin Mode's
+// add/remove flow can mutate it live without a full reconnect.
+let entityLocations = new Map();
+// entity_id -> roomId for the single media_player each room can have
+// (media is one object per room, not an array like lighting)
+let mediaEntityLocations = new Map();
+let AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
+
+// --- Admin Mode config layer (2026-08-05) ---
+// rooms.config.js's ROOM_ENTITY_MAP is the shipped default. Admin Mode
+// changes persist as a localStorage override on top of it — the browser
+// can't write back to the actual file on disk, and this also means each
+// device configures itself independently (same discipline as config.js's
+// HA URL/token). See docs/UI_MODES_SPEC.md "Admin Mode".
+const ROOM_OVERRIDE_KEY = "ha_room_entity_overrides";
+
+function getRoomEntityMap() {
+  const raw = localStorage.getItem(ROOM_OVERRIDE_KEY);
+  if (raw) {
+    try { return JSON.parse(raw); } catch (e) { console.error("Bad room override JSON, falling back to default", e); }
+  }
+  return JSON.parse(JSON.stringify(ROOM_ENTITY_MAP)); // deep copy of the default
+}
+
+function saveRoomEntityMap(map) {
+  localStorage.setItem(ROOM_OVERRIDE_KEY, JSON.stringify(map));
+}
+
+function populateRoomsFromMap(map, statesById) {
+  entityLocations = new Map();
+  mediaEntityLocations = new Map();
+  for (const roomId of Object.keys(map)) {
+    if (!ROOMS[roomId] && map[roomId].name) {
+      // room created via Admin Mode on a previous visit — recreate it from
+      // the saved name rather than silently dropping it on this reload
+      ROOMS[roomId] = defaultRoomShape(map[roomId].name);
+      if (!ROOM_ORDER.includes(roomId)) ROOM_ORDER.push(roomId);
+      if (!AMBIENT_ROOMS.includes(roomId)) AMBIENT_ROOMS.push(roomId);
+    }
+    if (!ROOMS[roomId]) continue;
+    const entityIds = map[roomId].lighting || [];
+    ROOMS[roomId].lighting = entityIds.map((id, i) => {
+      entityLocations.set(id, { roomId, index: i });
+      const state = statesById && statesById.get(id);
+      return state ? haStateToLightItem(id, state) : { name: id, sub: "", type: "dim", on: false, brightness: 0, color: false, entityId: id };
+    });
+
+    const mediaId = map[roomId].media_player;
+    if (mediaId) {
+      mediaEntityLocations.set(mediaId, roomId);
+      const mState = statesById && statesById.get(mediaId);
+      ROOMS[roomId].media = mState ? haStateToMediaItem(mediaId, mState) :
+        { name: mediaId, track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [], entityId: mediaId };
+    }
+  }
+}
+
 async function initLiveData() {
   const { url, token } = HAConfig.get();
   const client = new HAClient(url, token);
@@ -2500,16 +2634,7 @@ async function initLiveData() {
     if (label) label.lastChild.textContent = isConnected ? "All systems normal" : "Disconnected — reconnecting...";
   });
 
-  // entity_id -> { roomId, index } so state_changed updates land in the right place
-  const entityLocations = new Map();
-  for (const roomId of Object.keys(ROOM_ENTITY_MAP)) {
-    if (!ROOMS[roomId]) continue;
-    const entityIds = ROOM_ENTITY_MAP[roomId].lighting || [];
-    ROOMS[roomId].lighting = entityIds.map((id, i) => {
-      entityLocations.set(id, { roomId, index: i });
-      return { name: id, sub: "", type: "dim", on: false, brightness: 0, color: false, entityId: id };
-    });
-  }
+  populateRoomsFromMap(getRoomEntityMap());
 
   try {
     await client.connect();
@@ -2520,12 +2645,24 @@ async function initLiveData() {
       const state = stateById.get(entityId);
       if (state) ROOMS[loc.roomId].lighting[loc.index] = haStateToLightItem(entityId, state);
     }
+    for (const [entityId, roomId] of mediaEntityLocations) {
+      const state = stateById.get(entityId);
+      if (state) ROOMS[roomId].media = haStateToMediaItem(entityId, state);
+    }
 
     client.onStateChanged((entityId, newState) => {
+      if (!newState) return;
       const loc = entityLocations.get(entityId);
-      if (!loc || !newState) return;
-      ROOMS[loc.roomId].lighting[loc.index] = haStateToLightItem(entityId, newState);
-      if (currentRoom === loc.roomId) renderContent();
+      if (loc) {
+        ROOMS[loc.roomId].lighting[loc.index] = haStateToLightItem(entityId, newState);
+        if (currentRoom === loc.roomId) renderContent();
+        return;
+      }
+      const mediaRoomId = mediaEntityLocations.get(entityId);
+      if (mediaRoomId) {
+        ROOMS[mediaRoomId].media = haStateToMediaItem(entityId, newState);
+        if (currentRoom === mediaRoomId) renderContent();
+      }
     });
   } catch (err) {
     console.error("HA connection failed:", err);
@@ -2544,6 +2681,194 @@ if (HAConfig.isConfigured()) {
 
 setInterval(updateClock, 1000 * 15);
 
+// --- Admin Mode (2026-08-05) ---
+// On-device room/entity config, per docs/UI_MODES_SPEC.md "Admin Mode".
+// Scope: managing lighting entities for the existing curated rooms only —
+// adding whole new rooms (with their own photo/scenes/climate/etc.) isn't
+// supported here, that's a much bigger structure than this screen edits.
+
+async function openAdmin() {
+  document.getElementById("adminOverlay").classList.add("visible");
+  await renderAdminRoomList();
+}
+
+function closeAdmin() {
+  document.getElementById("adminOverlay").classList.remove("visible");
+}
+
+function slugifyRoomName(name) {
+  return "room_" + name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function defaultRoomShape(name) {
+  // Safe defaults so every other screen (climate/media/security/shades)
+  // renders without crashing on a brand-new room that only has lighting
+  // (and maybe a media player) actually wired.
+  return {
+    name,
+    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "", scenes: [], activeScene: "",
+    lighting: [],
+    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
+    media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
+    security: [], shades: [],
+  };
+}
+
+async function createNewRoom(name) {
+  if (!name || !name.trim()) return;
+  const roomId = slugifyRoomName(name);
+  if (ROOMS[roomId]) { alert("A room with that name already exists."); return; }
+  ROOMS[roomId] = defaultRoomShape(name.trim());
+  ROOM_ORDER.push(roomId);
+  AMBIENT_ROOMS.push(roomId);
+  const map = getRoomEntityMap();
+  // name is saved here (not just entity assignments) so the room survives
+  // a page reload — ROOMS/ROOM_ORDER are rebuilt fresh from the static
+  // mockup on every load, they don't know this room exists otherwise.
+  map[roomId] = { name: name.trim(), lighting: [] };
+  saveRoomEntityMap(map);
+  renderRail();
+  document.getElementById("adminNewRoomName").value = "";
+  await refreshAfterAdminChange(map);
+}
+
+async function renderAdminRoomList() {
+  const listEl = document.getElementById("adminRoomList");
+  const map = getRoomEntityMap();
+
+  // fresh live snapshot so "already assigned" and "available to add" are accurate
+  let allLights = [], allMediaPlayers = [];
+  if (window.haClient && window.haClient.connected) {
+    try {
+      const states = await window.haClient.getStates();
+      allLights = states.filter(s => s.entity_id.startsWith("light."));
+      allMediaPlayers = states.filter(s => s.entity_id.startsWith("media_player."));
+    } catch (e) { console.error(e); }
+  }
+  const assignedLightIds = new Set(Object.values(map).flatMap(r => r.lighting || []));
+  const availableLights = allLights.filter(s => !assignedLightIds.has(s.entity_id));
+  const assignedMediaIds = new Set(Object.values(map).map(r => r.media_player).filter(Boolean));
+  const availableMedia = allMediaPlayers.filter(s => !assignedMediaIds.has(s.entity_id));
+
+  listEl.innerHTML = Object.keys(map).filter(id => ROOMS[id]).map(roomId => {
+    const room = ROOMS[roomId];
+    const entityIds = map[roomId].lighting || [];
+    const rows = entityIds.map(id => {
+      const known = allLights.find(s => s.entity_id === id);
+      const label = known ? known.attributes.friendly_name || id : id;
+      return `<div class="admin-entity-row"><span>${label}</span><button class="admin-remove-btn" data-remove-room="${roomId}" data-remove-entity="${id}">×</button></div>`;
+    }).join("") || `<div class="admin-entity-row"><span style="opacity:0.5">No lighting assigned</span></div>`;
+
+    const lightOptions = availableLights.map(s =>
+      `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id}</option>`
+    ).join("");
+
+    const currentMediaId = map[roomId].media_player;
+    const currentMediaLabel = currentMediaId
+      ? (allMediaPlayers.find(s => s.entity_id === currentMediaId)?.attributes.friendly_name || currentMediaId)
+      : null;
+    const mediaOptions = availableMedia.map(s =>
+      `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id}</option>`
+    ).join("");
+
+    return `<div class="admin-room-block">
+      <h3>${room.name} — Lighting</h3>
+      ${rows}
+      <div class="admin-add-row">
+        <select class="admin-add-select" data-room="${roomId}" ${lightOptions ? "" : "disabled"}>
+          ${lightOptions || '<option>No unassigned lights available</option>'}
+        </select>
+        <button class="admin-add-btn" data-add-room="${roomId}" ${lightOptions ? "" : "disabled"}>Add</button>
+      </div>
+      <h3 style="margin-top:18px;">${room.name} — Music (basic only, see docs/MUSIC_SPEC.md)</h3>
+      ${currentMediaId
+        ? `<div class="admin-entity-row"><span>${currentMediaLabel}</span><button class="admin-remove-btn" data-remove-media-room="${roomId}">×</button></div>`
+        : `<div class="admin-add-row">
+             <select class="admin-add-select" data-media-room="${roomId}" ${mediaOptions ? "" : "disabled"}>
+               ${mediaOptions || '<option>No unassigned media players available</option>'}
+             </select>
+             <button class="admin-add-btn" data-add-media-room="${roomId}" ${mediaOptions ? "" : "disabled"}>Add</button>
+           </div>`
+      }
+    </div>`;
+  }).join("");
+
+  listEl.querySelectorAll("[data-remove-room]").forEach(btn => {
+    btn.addEventListener("click", () => removeEntityFromRoom(btn.dataset.removeRoom, btn.dataset.removeEntity));
+  });
+  listEl.querySelectorAll("[data-add-room]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const select = listEl.querySelector(`select[data-room="${btn.dataset.addRoom}"]`);
+      if (select && select.value) addEntityToRoom(btn.dataset.addRoom, select.value);
+    });
+  });
+  listEl.querySelectorAll("[data-remove-media-room]").forEach(btn => {
+    btn.addEventListener("click", () => removeMediaFromRoom(btn.dataset.removeMediaRoom));
+  });
+  listEl.querySelectorAll("[data-add-media-room]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const select = listEl.querySelector(`select[data-media-room="${btn.dataset.addMediaRoom}"]`);
+      if (select && select.value) addMediaToRoom(btn.dataset.addMediaRoom, select.value);
+    });
+  });
+}
+
+async function addEntityToRoom(roomId, entityId) {
+  const map = getRoomEntityMap();
+  if (!map[roomId]) map[roomId] = { lighting: [] };
+  if (!map[roomId].lighting) map[roomId].lighting = [];
+  if (!map[roomId].lighting.includes(entityId)) map[roomId].lighting.push(entityId);
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function removeEntityFromRoom(roomId, entityId) {
+  const map = getRoomEntityMap();
+  if (map[roomId]) map[roomId].lighting = (map[roomId].lighting || []).filter(id => id !== entityId);
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function addMediaToRoom(roomId, entityId) {
+  const map = getRoomEntityMap();
+  if (!map[roomId]) map[roomId] = { lighting: [] };
+  map[roomId].media_player = entityId;
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function removeMediaFromRoom(roomId) {
+  const map = getRoomEntityMap();
+  if (map[roomId]) delete map[roomId].media_player;
+  if (ROOMS[roomId]) ROOMS[roomId].media = defaultRoomShape("").media;
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function refreshAfterAdminChange(map) {
+  let statesById;
+  if (window.haClient && window.haClient.connected) {
+    try {
+      const states = await window.haClient.getStates();
+      statesById = new Map(states.map(s => [s.entity_id, s]));
+    } catch (e) { console.error(e); }
+  }
+  populateRoomsFromMap(map, statesById);
+  if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+  if (ROOM_ORDER.includes(currentRoom)) renderContent();
+  await renderAdminRoomList();
+}
+
+document.getElementById("adminOpenBtn").addEventListener("click", (e) => { e.stopPropagation(); openAdmin(); });
+document.getElementById("adminCloseBtn").addEventListener("click", () => closeAdmin());
+document.getElementById("adminNewRoomBtn").addEventListener("click", () => {
+  createNewRoom(document.getElementById("adminNewRoomName").value);
+});
+document.getElementById("adminOpenBtn").innerHTML = ico("settings", "i18");
+document.getElementById("adminCloseBtn").innerHTML = ico("x", "i22");
+icons();
+
 // --- Ambient Mode (2026-08-05) ---
 // Loxone-inspired idle/glanceable state: after a period of no touch, drop
 // the active room screen for a simple clock + curated quick actions. Any
@@ -2551,7 +2876,6 @@ setInterval(updateClock, 1000 * 15);
 // docs/UI_MODES_SPEC.md.
 
 const AMBIENT_IDLE_MS = 90 * 1000; // 90s of no interaction triggers ambient
-const AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.config.js
 
 let ambientTimer = null;
 

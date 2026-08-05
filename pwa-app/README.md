@@ -30,6 +30,31 @@ whatever screen was showing before. See
 reasoning. Not tested on a real device yet, same caveat as everything else
 below.
 
+## Admin Mode (added 2026-08-05)
+
+Gear icon in the footer opens an on-device config screen — no more
+hand-editing `rooms.config.js` to add a room or entity:
+
+- **Add a new room** (name only) — gets a real Overview/Lighting screen
+  immediately, using safe defaults for climate/media/security/shades so
+  other screens don't crash on missing data; those stay placeholder until
+  those domains are actually wired.
+- **Add/remove lighting entities** per room, picked from a live list of
+  your instance's `light.*` entities (already-assigned ones filtered out).
+- **Assign one music player per room** (`media_player.*` domain) — but
+  this is **basic wiring only**: on/off, track/artist name, and play/pause
+  work; volume, shuffle, repeat, and the progress bar do **not** — those
+  need the real interpolation/feature-gating work in
+  [`docs/MUSIC_SPEC.md`](../docs/MUSIC_SPEC.md), not done here.
+
+Changes save to `localStorage` on that device only — `rooms.config.js`
+stays the shipped default, Admin Mode changes are a per-device override on
+top of it (same pattern as the HA URL/token in `config.js`). A page reload
+correctly restores rooms created via Admin Mode (their name is saved, not
+just their entity assignments — this was a real bug caught and fixed
+before shipping: without it, a new room's lighting would still be saved,
+but the room itself would silently vanish from navigation on reload).
+
 ## Layout: landscape (iPad/wall panel) vs. portrait (phone)
 
 No new work needed here — the existing responsive breakpoint (rail nav
