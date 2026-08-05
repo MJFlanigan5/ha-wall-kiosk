@@ -10,6 +10,23 @@ Mike's choice, not a performance-driven trigger anymore. Phases 3+ remain
 deferred/incremental — add screens as needed rather than porting
 everything up front.
 
+## Why this matters (product thesis, not just technical)
+
+Not just "lighter than a browser kiosk." The sharper framing: this is the
+design language and outcomes of a $10k+ dealer-installed system (Savant,
+Control4, Crestron) running on infrastructure anyone can self-install. Home
+Assistant and Homey aren't just "the two systems this project happens to
+use" — they're the actual on-ramp: the DIY layer that already has real
+adoption and doesn't require a certified-installer relationship to get
+started.
+
+The gap being filled is specifically between "raw HA with YAML dashboards"
+and "Savant with a dealer contract" — not between HA and other DIY
+platforms. That's what turns this from a personal project into something
+worth positioning publicly once the native app is actually finished
+end-to-end (see "When to actually start this" below) — a genuinely native,
+pro-level touch panel experience without the dealer relationship gate.
+
 ## Design principle: config-driven, not hardcoded to one home
 
 This is meant for other people to actually run against their own Home

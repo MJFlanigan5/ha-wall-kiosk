@@ -15,6 +15,35 @@ choice here (see "Performance tuning" and "Dashboard-side performance
 constraints" below) is made assuming the cheapest Pi 5 you can buy — if you
 have a 4GB/8GB board, it'll just have more headroom to spare.
 
+## Status / what's left
+
+**Physical (blocking everything else):**
+1. Finish the mount — right side printed and working; left side needs a
+   fix where the wall stud leaves zero cavity clearance for the arm-lock
+   clamp (handled directly on the printed piece — drill/adhesive — not a
+   frame redesign)
+2. Assemble Pi 5 + POE HAT + NVMe SSD + Touch Display 2
+3. Bootstrap NVMe boot (temporary SD card pass, see below)
+
+**Software (scripts already written, just need to run on real hardware):**
+4. `scripts/01-pi-kiosk-prep.sh` — 2GB tuning, zram, autologin
+5. `scripts/02-install-touchkio.sh` — get touchkio actually showing the
+   live HA dashboard on the screen
+
+**Decision gate (not yet reached):**
+6. Confirm touchkio actually runs fine on the 2GB Pi in practice. If yes —
+   done, nothing else to build, the native app stays a spec. If it
+   genuinely struggles — that's what unlocks native app work below.
+
+**Conditional on step 6 tripping (currently just an untested MVP skeleton):**
+7. Verify the native app's HA WebSocket client against real data (see
+   `native-app/README.md` — untested against a live instance so far)
+8. Port remaining screens one at a time
+9. Wire service calls (write actions)
+10. Hardware/perf testing on the real Pi
+
+Full phase breakdown and time estimates for 7-10: [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md).
+
 ## Hardware
 
 | Part | Notes |
