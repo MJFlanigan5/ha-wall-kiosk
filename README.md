@@ -41,7 +41,8 @@ four corners.
 
 | File | Qty | Notes |
 |---|---|---|
-| `Frame_10.1in.stl` | 1 | Outer frame |
+| `Frame_10.1in_v2.stl` | 1 | Outer frame — **print this one**, see stud note below |
+| `Frame_10.1in.stl` | — | Original 4-corner arm-lock frame, kept for reference only |
 | `Cutting_Guide_10.1in.stl` | 1 | Drywall cutting template, same footprint as Frame |
 | `Screw_Support_A.stl` | 2 | Top-left & bottom-right corners |
 | `Screw_Support_B_mirrored.stl` | 2 | Top-right & bottom-left corners |
@@ -52,6 +53,16 @@ four corners.
 Print PETG, no supports needed except where noted on the original Printables
 page. Cut the wall opening using `Cutting_Guide_10.1in.stl` as a template —
 suits 10–15mm plasterboard.
+
+**Stud collision note:** if a wall stud sits directly behind one side of the
+frame with zero cavity clearance, the arm-lock clamp on that side has no wall
+cavity to reach into and can't be used. `Frame_10.1in_v2.stl` replaces the
+two arm-lock mounting bosses on the **left** side only (top and bottom) with
+straight 4.5mm clearance holes through the frame into the stud — sized for
+screws like SPAX Torx-head wood screws, driven directly into the stud. The
+right side is unchanged and still uses the original arm-lock clamp. The two
+left-side `Screw_Support`/`Clamping_Arm` pieces go unused if you print
+`_v2` — only reprint the Frame, the hardware pieces are unaffected.
 
 ## Software setup
 
