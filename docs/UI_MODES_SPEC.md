@@ -93,6 +93,35 @@ Kategorien (cross-room domain browsing) nav modes — legitimate patterns
 seen on the live demo, but lower priority than getting one good merged
 Ambient/Favorites view working first.
 
+## Admin Mode (not started — next up)
+
+Loxone's Wall Display folds first-setup *and* later config changes into
+the same device ("Admin Mode"), no separate portal. Real gap in our build
+right now: `rooms.config.js` is a hand-edited file — adding a room or
+entity, or changing what shows in Ambient Mode, means editing code and
+redeploying, not something doable on-device. That directly blocks the
+earlier "generic enough for anyone" goal too, not just convenience for us.
+
+**What it needs to actually work:**
+- An on-device screen to add/remove/reorder rooms and entities, browsing
+  HA's real Area/Entity registries (same live data `ha-client.js` already
+  pulls) rather than typing entity_ids by hand
+- Choose which rooms/entities appear as Ambient Mode status cards
+- Basic look/feel toggles (not a full theme editor — scope this small
+  first)
+
+**Real technical wrinkle:** a browser can't write back to `rooms.config.js`
+on disk. The static file becomes the *shipped default*, and Admin Mode
+changes get persisted to `localStorage` (same mechanism `config.js`
+already uses for the HA URL/token) — an override layer on top of the
+default, not a replacement for it. This also directly serves the
+"generic enough for anyone" goal from earlier: someone else's install
+would start from the same defaults and use Admin Mode to point at their
+own rooms, instead of hand-editing a JS file.
+
+Not built yet — real scope, not a quick add. Sequence after Ambient Mode
+v2 is confirmed working, not built in the same pass.
+
 ## Technical/status view (smaller scope, still after Ambient Mode v2)
 
 Expand the footer's existing connection-status dot/text into a real
