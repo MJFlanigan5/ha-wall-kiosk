@@ -262,6 +262,14 @@ render on both apps — different problem on the wall panel (already
 connected, no push infra needed) vs. iPad (needs real Web Push since a PWA
 can be backgrounded). See [`docs/NOTIFICATIONS_SPEC.md`](docs/NOTIFICATIONS_SPEC.md).
 
+## Music / media player control (not started, spec only)
+
+Controlling Music Assistant (Spotify, etc.) — a genuinely different entity
+shape than toggles/sensors: client-side progress interpolation, per-player
+feature gating, authenticated album art, and an open scope question on
+multi-room grouping and search/browse. See
+[`docs/MUSIC_SPEC.md`](docs/MUSIC_SPEC.md).
+
 ## Design background
 
 This mount and kiosk pairs with the Savant-inspired Home Assistant dashboard
