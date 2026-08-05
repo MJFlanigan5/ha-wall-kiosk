@@ -290,6 +290,7 @@
   .ring-center .label { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 0.4px; text-transform: uppercase; margin-top: 2px; }
 
   .section-label-sm { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; }
+  .section-empty { color: var(--text-dim); font-size: 13px; opacity: 0.7; padding: 8px 0; }
   .consumer-list { display: flex; flex-direction: column; }
   .consumer-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--hairline-soft); }
   .consumer-row:last-child { border-bottom: none; }
@@ -1537,19 +1538,18 @@ function renderLightingGlobal(room) {
   `).join("")}</div>`;
 }
 
+// Simplified 2026-08-05: dropped the sliders/scenes/global mode-switcher
+// (three tabs for one room's lighting was more navigation than any real
+// reference screen — Savant or Loxone — actually uses; see
+// docs/UI_MODES_SPEC.md). Scenes dropped entirely, not just hidden — real
+// HA scene entities aren't wired yet, activeScene/room.scenes are still
+// mockup data, and this app doesn't show fabricated data elsewhere. Global
+// presets kept (real service calls) as an inline row under the slider
+// list instead of a separate mode.
 function renderLighting(room) {
   if (colorWheelIndex !== null) return renderColorWheel(room, colorWheelIndex);
-  const subnav = `
-    <div class="subnav">
-      <button class="subnav-btn ${lightingView === "slider" ? "active" : ""}" data-view="slider" title="Sliders">${ico("sliders-horizontal", "i18")}</button>
-      <button class="subnav-btn ${lightingView === "scenes" ? "active" : ""}" data-view="scenes" title="Scenes">${ico("image", "i18")}</button>
-      <button class="subnav-btn ${lightingView === "global" ? "active" : ""}" data-view="global" title="Global">${ico("sun", "i18")}</button>
-    </div>`;
-  let body;
-  if (lightingView === "scenes") body = renderLightingScenes(room);
-  else if (lightingView === "global") body = renderLightingGlobal(room);
-  else body = renderLightingSlider(room);
-  return subnav + body;
+  if (!room.lighting.length) return `<div class="section-empty">No lighting assigned — add some in Admin Mode.</div>`;
+  return renderLightingSlider(room) + renderLightingGlobal(room);
 }
 
 function renderClimate(room) {
@@ -1621,16 +1621,12 @@ function renderMediaNowPlaying(room) {
     </div>`;
 }
 
+// Simplified 2026-08-05: dropped the Now Playing/Favorites mode-switcher.
+// The Favorites view showed a fabricated channel list (FAVORITE_CHANNELS,
+// leftover from the AppleTV/cable mockup, not real music data) — dropped
+// entirely rather than shown fake, same discipline as dropping Scenes.
 function renderMedia(room) {
-  const subnav = `
-    <div class="subnav">
-      <button class="subnav-btn ${mediaView === "now" ? "active" : ""}" data-mediaview="now" title="Now Playing">${ico("play-circle", "i18")}</button>
-      <button class="subnav-btn ${mediaView === "favorites" ? "active" : ""}" data-mediaview="favorites" title="Favorites">${ico("star", "i18")}</button>
-    </div>`;
-  const body = mediaView === "favorites"
-    ? renderFavoritesGrid(room.media.favorites, room.media.track, "favorite")
-    : renderMediaNowPlaying(room);
-  return subnav + body;
+  return renderMediaNowPlaying(room);
 }
 
 // Shades — position sliders, same list+slider pattern as Lighting's Sliders
@@ -2253,15 +2249,6 @@ function renderContent() {
   const room = ROOMS[currentRoom];
   const content = document.getElementById("content");
 
-  const tabs = ["lighting", "climate", "media", "shades"];
-  const tabLabels = { lighting: "Lighting", climate: "Climate", media: "Media", shades: "Shades" };
-
-  let serviceBody;
-  if (currentService === "climate") serviceBody = renderClimate(room);
-  else if (currentService === "media") serviceBody = renderMedia(room);
-  else if (currentService === "shades") serviceBody = renderShades(room);
-  else serviceBody = renderLighting(room);
-
   content.innerHTML = `
     <div class="header">
       <h1>${room.name}</h1>
@@ -2270,11 +2257,7 @@ function renderContent() {
 
     ${renderHero(room)}
 
-    <div class="service-tabs">
-      ${tabs.map(t => `<button class="service-tab ${t === currentService ? "active" : ""}" data-service="${t}">${tabLabels[t]}</button>`).join("")}
-    </div>
-
-    ${serviceBody}
+    ${renderRoomSections(room)}
   `;
 
   updateClock();
@@ -2282,15 +2265,20 @@ function renderContent() {
   wireInteractions(room);
 }
 
+// Single continuous scroll of real, wired sections — no tabs, matching
+// Loxone's actual room-screen structure (see docs/UI_MODES_SPEC.md).
+// Climate/Shades sections dropped entirely, not shown empty: no climate
+// entities exist in this HA instance yet (verified live, not assumed),
+// and shades were never wired. Only real domains get a section.
+function renderRoomSections(room) {
+  let sections = `<div class="section-label-sm" style="margin-top:24px">Lighting</div>${renderLighting(room)}`;
+  if (room.media && room.media.entityId) {
+    sections += `<div class="section-label-sm" style="margin-top:32px">Music</div>${renderMedia(room)}`;
+  }
+  return sections;
+}
+
 function wireInteractions(room) {
-  document.querySelectorAll("[data-service]").forEach(el => {
-    el.addEventListener("click", () => { currentService = el.dataset.service; renderContent(); });
-  });
-
-  document.querySelectorAll("[data-view]").forEach(el => {
-    el.addEventListener("click", () => { lightingView = el.dataset.view; renderContent(); });
-  });
-
   document.querySelectorAll("[data-color-open]").forEach(el => {
     el.addEventListener("click", e => { e.stopPropagation(); colorWheelIndex = +el.dataset.colorOpen; colorSubView = "wheel"; renderContent(); });
   });
@@ -2336,25 +2324,6 @@ function wireInteractions(room) {
     wheel.addEventListener("pointercancel", () => dragging = false);
   });
 
-  document.querySelectorAll("[data-mediaview]").forEach(el => {
-    el.addEventListener("click", () => { mediaView = el.dataset.mediaview; renderContent(); });
-  });
-
-  document.querySelectorAll("[data-favorite]").forEach(el => {
-    el.addEventListener("click", () => { room.media.track = el.dataset.favorite; room.media.playing = true; renderContent(); });
-  });
-
-  document.querySelectorAll("[data-scene]").forEach(el => {
-    el.addEventListener("click", () => {
-      if (el.dataset.scene === "__off") {
-        room.lighting.forEach(l => { l.on = false; if (l.type === "dim") l.brightness = 0; });
-        room.activeScene = "";
-      } else {
-        room.activeScene = el.dataset.scene;
-      }
-      renderContent();
-    });
-  });
 
   document.querySelectorAll("[data-global]").forEach(el => {
     el.addEventListener("click", () => {

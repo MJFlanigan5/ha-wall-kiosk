@@ -164,6 +164,69 @@ tap-the-fixture-in-the-photo. Keep the list-based control as the reliable
 baseline. Revisit photo-tap as a visual enhancement layer once the app is
 proven in daily use, not before.
 
+## Interior screen simplification (built 2026-08-05)
+
+Checked Loxone's actual room-detail screen directly (tapped into
+"Wohnzimmer" on the live demo, not just the room list) — real finding: no
+tab switcher, no separate view-mode row anywhere. One continuous scroll
+per room, labeled sections (Audio, Beleuchtung, Beschattung, Energie,
+Klima), same compact row style used identically across every domain.
+
+Decision (confirmed with Mike): don't copy Loxone's compact-row visual
+language — that reads as their deliberately budget/utilitarian
+positioning, and this project's whole thesis is Savant-grade outcomes, not
+Loxone-grade (see `NATIVE_APP_SPEC.md`). Instead, take their *structural*
+simplicity — one scroll, no redundant tabs — and keep our own richer
+controls (full-width sliders, generous spacing) inside it.
+
+Built: `renderContent()` no longer branches on `currentService`
+(Lighting/Climate/Media/Shades tabs) or `lightingView`
+(sliders/scenes/global mode-switcher) or `mediaView`
+(now-playing/favorites). Instead `renderRoomSections()` renders one
+continuous scroll of real, wired sections only:
+
+- **Lighting** — always shown (every room has a lighting array, even if
+  empty), full slider list plus the Global brightness presets inline
+  below it (real service calls, kept — just no longer a separate "mode")
+- **Music** — only if the room has a real `media_player` assigned via
+  Admin Mode
+
+**Dropped entirely, not hidden:** Scenes (the old Scenes tab used
+`room.activeScene`/`room.scenes`, still fabricated mockup data — no real
+HA scene entities wired) and Media's Favorites view (showed
+`FAVORITE_CHANNELS`, a leftover fabricated TV-channel list from the
+AppleTV mockup, unrelated to real music data). Same "no fabricated
+content" discipline already applied to Ambient Mode's cards, now applied
+to the interior screens too — this is what actually closes the "two
+systems" gap, not just matching colors.
+
+Climate and Shades sections are omitted, not shown empty/fake — no
+climate entities exist in this HA instance yet (verified live), and
+shades were never wired.
+
+## Remaining roadmap from this same conversation (not built yet)
+
+In priority order, per Mike's confirmed sequencing:
+
+1. ~~Interior simplification~~ — done, above
+2. **Elevate Ambient Mode's cards** with inline mini-controls (closer to
+   Loxone's Central screen, which had inline dropdowns/+/- controls on
+   its cards, not just a label) — not yet started
+3. **Day/night theme shift** — the app's own visual appearance
+   (dimmer/warmer at night, brighter by day) should change automatically
+   with time of day — cosmetic, self-contained, not started
+4. **Color presets surfaced in Ambient** — the White Presets/color wheel
+   already built into the interior Lighting screen should be reachable as
+   a quick action from Ambient Mode too, not only from inside a room —
+   not started
+5. **Real day/night lighting control** — a control (Ambient or interior)
+   that actually changes the house's lighting state for day/night, not
+   just the app's own look — needs a decision on what that control
+   actually does (a scene? a service call pattern?) before building —
+   not started
+6. **Admin accent-color personalization** — a setting, probably in Admin
+   Mode, to change the app's own UI accent color — not started
+
 ## Physical install note (context, not a change here)
 
 Loxone's flush wall-mount (cabling hidden, screen clicks into a slim
