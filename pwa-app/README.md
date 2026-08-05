@@ -17,14 +17,18 @@ content.
   you turn a light on with a switch/Homey/voice, the app updates without
   a refresh.
 
-## Ambient Mode (added 2026-08-05)
+## Ambient Mode (v2, updated 2026-08-05)
 
 After 90 seconds of no touch, the app drops into a full-screen idle view —
-clock, date, and one quick-action button per wired room (toggles all of
-that room's lights). Any tap anywhere wakes back to whatever screen was
-showing before. See [`docs/UI_MODES_SPEC.md`](../docs/UI_MODES_SPEC.md)
-for the design reasoning (Loxone Wall Display comparison). Not tested on
-a real device yet, same caveat as everything else below.
+clock, date, and a status card per wired room (icon, room name, "N of M
+lights on" as the live headline value), styled after Loxone's Favorites
+card pattern but merged directly into the ambient/idle view rather than a
+separate screen, and in our own dark palette rather than Loxone's. Tapping
+a card toggles that room's lights; tapping anywhere else wakes back to
+whatever screen was showing before. See
+[`docs/UI_MODES_SPEC.md`](../docs/UI_MODES_SPEC.md) for the full design
+reasoning. Not tested on a real device yet, same caveat as everything else
+below.
 
 ## Layout: landscape (iPad/wall panel) vs. portrait (phone)
 

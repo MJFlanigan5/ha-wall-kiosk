@@ -19,6 +19,26 @@ distinct from the full active dashboard. Same hardware reframes itself by
 context: whole-home overview, single-room control, or a technical/status
 view. Admin folded into the same device, no separate portal.
 
+**Confirmed directly (2026-08-05) against a live Loxone demo instance and
+the product marketing page, not just written material:**
+
+- The demo app's actual nav is 4-way: **Favorites** (curated cross-cutting
+  status cards — icon, location label, a live value as headline, a
+  description underneath), **Central** (whole-house bulk actions per
+  category — all lights off, all shades, etc.), **Räume** (browse by
+  room — what our rail nav already is), **Kategorien** (browse by domain
+  across the whole house — all lighting everywhere, regardless of room).
+  Only Favorites is worth adopting now; Central and Kategorien are
+  legitimate but lower-value, skipped for now rather than building all
+  four nav modes at once.
+- The product page's hero image shows Ambient Mode and Favorites-style
+  quick-status tiles **combined into one view**, not two separate
+  screens — floating cards (climate with +/- controls, a mode toggle, a
+  light's brightness) sit directly over the clock/weather background,
+  alongside energy/CO2/presence tiles, all visible without navigating
+  anywhere. That's a better structure than treating them as separate
+  screens — see the revised Ambient Mode section below.
+
 ## Decision: hybrid, not either vendor wholesale
 
 1. **Keep photo-based active control** (Savant-style) as the long-term
@@ -35,22 +55,45 @@ view. Admin folded into the same device, no separate portal.
    fully HA-native and self-hosted; there was never a Home-Manager-style
    cloud gate to remove.
 
-## Ambient Mode (building now, 2026-08-05)
+## Ambient Mode v1 (built 2026-08-05, first pass)
 
-Auto-triggers after a period of no touch interaction. Replaces whatever
-room screen was showing with a simplified glanceable view:
+Auto-triggers after 90s of no touch interaction. Clock, date, and one
+quick-action button per wired room (toggles that room's lights). Any tap
+wakes back to the previous screen. Live in `pwa-app/index.html`.
 
-- Clock (already exists elsewhere in the app, reused here)
-- A curated set of quick-action shortcuts (Loxone caps at 12 — reasonable
-  ceiling to match, not a hard technical limit on our side)
-- Custom/ambient background, not the full room-control chrome
-- Any touch anywhere dismisses back to the last active room screen
+## Ambient Mode v2 (revised direction, 2026-08-05 — build next)
 
-Any live state change relevant to what's shown (a light left on, etc.)
-still updates in the background — Ambient Mode is a different view of the
-same live data, not a separate offline mode.
+**Merge the status-card layer directly into Ambient Mode, not a separate
+Favorites screen.** Confirmed against Loxone's own product marketing image
+that their idle/ambient view already includes live status tiles overlaid
+on the clock — not a bare clock you then have to navigate away from to see
+anything useful. Revised Ambient Mode:
 
-## Technical/status view (smaller scope, next after Ambient Mode)
+- Clock + date (unchanged from v1)
+- A curated set of Loxone-style status cards around/below the clock: icon,
+  a short location/context label, a live value as the headline (matches
+  the card pattern seen on the live demo's Favorites view — e.g. a room's
+  current light state, an energy reading, presence status), tap-through to
+  the relevant detail screen
+- Our own dark palette and visual weight, not Loxone's green branding —
+  adopting the card *structure*, not their skin (Mike's call, and the
+  right one — the whole thesis of this project is a more premium visual
+  language than a generic DIY dashboard)
+- Cap the curated set at a reasonable number (Loxone caps Favorites at a
+  handful of cards — match that spirit, not a hard technical limit)
+
+**This also answers the deferred photo-tap-target problem** (see below) —
+a status-card grid gives the same "glanceable, tap to act, feels premium"
+quality as Savant's TrueImage photo-tap concept, without needing real room
+photography or hand-placed hotspots. Not a replacement for that idea long
+-term, but a much cheaper way to get most of the value now.
+
+**Explicitly not building now:** Central (bulk category actions) and
+Kategorien (cross-room domain browsing) nav modes — legitimate patterns
+seen on the live demo, but lower priority than getting one good merged
+Ambient/Favorites view working first.
+
+## Technical/status view (smaller scope, still after Ambient Mode v2)
 
 Expand the footer's existing connection-status dot/text into a real
 screen: HA WebSocket connection state, last state update time, per-room
