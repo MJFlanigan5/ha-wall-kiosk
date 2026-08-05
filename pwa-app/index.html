@@ -583,10 +583,17 @@
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
   }
 
+  /* Room header status row — same .ambient-card component as Ambient
+     Mode, just laid out inline instead of centered full-screen. See
+     renderHero(). */
+  .hero-status-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0 24px; }
+  .hero-status-card { width: auto; min-width: 148px; flex: 0 1 auto; }
+
   .admin-btn {
     background: none; border: none; color: var(--text-dim); cursor: pointer;
     display: flex; align-items: center; padding: 2px;
   }
+  .ambient-admin-btn { position: absolute; bottom: 40px; right: 40px; opacity: 0.5; }
   .admin-overlay {
     position: fixed; inset: 0; background: var(--base); z-index: 6000;
     display: none; flex-direction: column; padding: 32px; overflow-y: auto;
@@ -674,6 +681,7 @@
     <div class="ambient-date" id="ambientDate"></div>
     <div class="ambient-actions" id="ambientActions"></div>
     <div class="ambient-hint">Tap anywhere to wake</div>
+    <button class="admin-btn ambient-admin-btn" id="ambientAdminOpenBtn" title="Admin"></button>
   </div>
 
 <script src="config.js"></script>
@@ -1379,17 +1387,29 @@ function heroStatusText(room) {
   return `${onLights} light${onLights > 1 ? "s" : ""} on · ${room.activeScene} active`;
 }
 
+// Room header status row (2026-08-05) — replaces the old "TrueImage"
+// image-driven hero (an empty placeholder gradient labeled for a real
+// room photo + tap-target interaction that was never built, see
+// docs/UI_MODES_SPEC.md "Deferred: photo-based tap-target lighting
+// control"). Reuses the exact .ambient-card component Ambient Mode
+// already established, so room screens and Ambient share one visual
+// language instead of two — only real wired data shown, same discipline
+// as Ambient's cards.
 function renderHero(room) {
-  const glow = avgBrightness(room) / 100;
-  const bg = room.photoImg ? `url('${room.photoImg}'), ${room.photo}` : room.photo;
-  return `
-    <div class="hero" style="filter: brightness(${0.82 + glow * 0.3})">
-      <div class="photo-base" style="background-image:${bg}"></div>
-      <div class="glow" style="opacity:${glow}"></div>
-      <div class="scrim"></div>
-      <div class="hero-room-label">TrueImage</div>
-      <div class="hero-status">${heroStatusText(room)}</div>
-    </div>`;
+  const onCount = room.lighting.filter(l => l.on).length;
+  const lightingCard = `<div class="ambient-card hero-status-card ${onCount > 0 ? "is-on" : ""}" style="cursor:default;">
+    ${ico("lightbulb", "ambient-card-icon")}
+    <div class="ambient-card-label">Lighting</div>
+    <div class="ambient-card-value">${room.lighting.length ? heroStatusText(room) : "No lights"}</div>
+  </div>`;
+
+  const mediaCard = (room.media && room.media.entityId) ? `<div class="ambient-card hero-status-card ${room.media.playing ? "is-on" : ""}" style="cursor:default;">
+    ${ico("music", "ambient-card-icon")}
+    <div class="ambient-card-label">Music</div>
+    <div class="ambient-card-value">${room.media.playing ? room.media.track : "Not playing"}</div>
+  </div>` : "";
+
+  return `<div class="hero-status-row">${lightingCard}${mediaCard}</div>`;
 }
 
 function renderLightingSlider(room) {
@@ -2876,8 +2896,13 @@ document.getElementById("adminCloseBtn").addEventListener("click", () => closeAd
 document.getElementById("adminNewRoomBtn").addEventListener("click", () => {
   createNewRoom(document.getElementById("adminNewRoomName").value);
 });
+document.getElementById("ambientAdminOpenBtn").addEventListener("click", (e) => {
+  e.stopPropagation(); // don't also trigger the ambient overlay's wake-on-tap
+  openAdmin();
+});
 document.getElementById("adminOpenBtn").innerHTML = ico("settings", "i18");
 document.getElementById("adminCloseBtn").innerHTML = ico("x", "i22");
+document.getElementById("ambientAdminOpenBtn").innerHTML = ico("settings", "i16");
 icons();
 
 // --- Ambient Mode (2026-08-05) ---

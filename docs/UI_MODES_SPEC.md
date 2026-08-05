@@ -93,6 +93,30 @@ Kategorien (cross-room domain browsing) nav modes — legitimate patterns
 seen on the live demo, but lower priority than getting one good merged
 Ambient/Favorites view working first.
 
+### Follow-up fixes, same day (2026-08-05)
+
+- **Admin access from Ambient Mode itself.** The admin gear originally
+  only lived in the room screens' footer, which Ambient Mode's full-screen
+  overlay completely covers — meant tapping to wake first, then finding
+  the gear, just to reach config. Since Ambient is meant to be the screen
+  that's up most of the time, added a small, low-opacity gear directly on
+  the Ambient overlay (bottom-right, same restrained treatment as the
+  "tap anywhere to wake" hint) so admin is one tap away, not two.
+- **Room screens no longer "fight" Ambient Mode's style.** Real user
+  observation after seeing both side by side: the room-screen header was
+  still the old "TrueImage" hero — an empty gradient placeholder literally
+  labeled for a photo that was never built (see "Deferred" below), sitting
+  right above a functional control list. Next to Ambient's confident card
+  layout, that empty box read as unfinished and made the app feel like two
+  different systems. Fix: `renderHero()` now reuses the *exact* `.ambient-
+  card` component instead of the image placeholder — a small status-card
+  row (Lighting always, Music if a player's assigned) at the top of every
+  room screen. Same component, two places — one visual language across the
+  whole app instead of an idle-screen skin bolted onto an unrelated control
+  screen. This is the concrete resolution of "steal the layout" from
+  earlier: not just Ambient Mode borrowing Loxone's card pattern, but that
+  pattern becoming this app's actual shared design system.
+
 ## Admin Mode (not started — next up)
 
 Loxone's Wall Display folds first-setup *and* later config changes into
