@@ -18,29 +18,37 @@ have a 4GB/8GB board, it'll just have more headroom to spare.
 
 ## Status / what's left
 
-This runs our own native app end to end — no browser, no touchkio, no
-third-party kiosk wrapper. See [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md)
-for the full architecture and phase breakdown.
+**Build order (reversed 2026-08-05): iPad/phone PWA first, native Pi app
+second.** The PWA doesn't depend on any unfinished hardware — it can be
+self-hosted and actually used/tested today, while the native Pi app stays
+blocked on physical assembly regardless. See
+[`docs/IPAD_PWA_SPEC.md`](docs/IPAD_PWA_SPEC.md) (~2-3 weeks part-time) and
+[`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md) for full breakdowns.
 
-**Physical (blocking everything else):**
-1. Finish the mount — right side printed and working; left side needs a
+**PWA (build this first — testable immediately, no hardware dependency):**
+1. JS HA WebSocket client
+2. Wire live state into the existing HTML mockup screens
+3. Service calls (write actions)
+4. PWA wrapper + self-hosting (HTTPS required)
+5. Responsive pass for phone + real device testing on iPad and phone
+
+**Physical (blocking the native app only, not the PWA):**
+6. Finish the mount — right side printed and working; left side needs a
    fix where the wall stud leaves zero cavity clearance for the arm-lock
    clamp (handled directly on the printed piece — drill/adhesive — not a
    frame redesign)
-2. Assemble Pi 5 + POE HAT + NVMe SSD + Touch Display 2
-3. Bootstrap NVMe boot (temporary SD card pass, see below)
+7. Assemble Pi 5 + POE HAT + NVMe SSD + Touch Display 2
+8. Bootstrap NVMe boot (temporary SD card pass, see below)
 
-**Software (native app — see [`native-app/README.md`](native-app/README.md) for setup/run):**
-4. `scripts/01-pi-kiosk-prep.sh` — 2GB tuning, zram, autologin
-5. Verify the native app's HA WebSocket client against real data — untested
-   against a live instance so far, only a stub-client smoke test
-6. Port remaining screens one at a time
-7. Wire service calls (write actions)
-8. Full-screen kiosk launch on boot (systemd service, display session
-   config) — not finalized yet
-9. Hardware/perf testing on the real Pi
-
-Full phase breakdown and time estimates: [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md).
+**Native app (see [`native-app/README.md`](native-app/README.md) for setup/run):**
+9. `scripts/01-pi-kiosk-prep.sh` — 2GB tuning, zram, autologin
+10. Verify the native app's HA WebSocket client against real data — untested
+    against a live instance so far, only a stub-client smoke test
+11. Port remaining screens one at a time
+12. Wire service calls (write actions)
+13. Full-screen kiosk launch on boot (systemd service, display session
+    config) — not finalized yet
+14. Hardware/perf testing on the real Pi
 
 ## Hardware
 

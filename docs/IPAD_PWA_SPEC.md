@@ -84,8 +84,14 @@ language, for two different hardware targets with different constraints.
 Both should draw from the same design tokens (the mockup's CSS custom
 properties), but no code is shared between them.
 
-## When to actually start this
+## Sequencing: build this first (2026-08-05)
 
-Not started. Sequenced after the wall-kiosk native app reaches a working
-state end-to-end — same "prove the first one works before building the
-second" discipline used throughout this project.
+**Reversed from the original plan.** This now comes *before* the native Pi
+app, not after — the reason for the original ordering (prove one thing
+works before building the second) doesn't actually favor the Pi app here.
+The PWA doesn't depend on any unfinished hardware: no mount, no Pi
+assembly, no NVMe boot. Mike can self-host it today and use/test it on his
+own iPad and phone immediately, giving real usage feedback while the
+physical build is still in progress. The native Pi app stays blocked on
+hardware regardless of which one is "spec'd first," so there's no
+downside to building the thing that's actually testable right now.
