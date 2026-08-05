@@ -17,6 +17,25 @@ content.
   you turn a light on with a switch/Homey/voice, the app updates without
   a refresh.
 
+## Ambient Mode (added 2026-08-05)
+
+After 90 seconds of no touch, the app drops into a full-screen idle view —
+clock, date, and one quick-action button per wired room (toggles all of
+that room's lights). Any tap anywhere wakes back to whatever screen was
+showing before. See [`docs/UI_MODES_SPEC.md`](../docs/UI_MODES_SPEC.md)
+for the design reasoning (Loxone Wall Display comparison). Not tested on
+a real device yet, same caveat as everything else below.
+
+## Layout: landscape (iPad/wall panel) vs. portrait (phone)
+
+No new work needed here — the existing responsive breakpoint (rail nav
+above 768px CSS width, bottom `mobile-rail` nav below 640px) already lines
+up with the real usage split: iPad and the wall-mounted Pi run landscape
+(wide viewport → side rail), phone runs portrait as normal (narrow
+viewport → bottom nav). `manifest.json`'s `orientation: "any"` is
+deliberate — locking to one orientation would break the other device
+class.
+
 ## What's still mock content
 
 Every other screen (climate, media, security, cameras, shades, energy,

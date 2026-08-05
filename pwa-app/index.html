@@ -550,6 +550,34 @@
 
   .mobile-rail { display: none; }
 
+  .ambient-overlay {
+    position: fixed; inset: 0; background: var(--base); z-index: 5000;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; cursor: pointer;
+    animation: ambientFadeIn 0.6s ease;
+  }
+  .ambient-overlay.visible { display: flex; }
+  @keyframes ambientFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .ambient-clock {
+    font-family: var(--font-mono); font-size: clamp(64px, 12vw, 140px); font-weight: 600;
+    color: var(--text); letter-spacing: -1px; font-variant-numeric: tabular-nums;
+  }
+  .ambient-date {
+    font-family: var(--font-mono); font-size: 15px; color: var(--text-dim);
+    letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
+  }
+  .ambient-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 90vw; }
+  .ambient-action-btn {
+    padding: 14px 22px; border-radius: 12px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text); font-family: var(--font-sans, inherit);
+    font-size: 14px; cursor: pointer;
+  }
+  .ambient-action-btn.is-on { border-color: var(--on); color: var(--on); }
+  .ambient-hint {
+    position: absolute; bottom: 40px; font-size: 12px; color: var(--text-dim);
+    letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
+  }
+
   @media (max-width: 1024px) { .content { padding: 26px 24px 16px; } .header h1 { font-size: 27px; } }
 
   @media (max-width: 640px) {
@@ -582,6 +610,13 @@
       <div class="sync">last sync 2s ago</div>
     </div>
     <nav class="mobile-rail" id="mobileRail"></nav>
+  </div>
+
+  <div class="ambient-overlay" id="ambientOverlay">
+    <div class="ambient-clock" id="ambientClock">--:--</div>
+    <div class="ambient-date" id="ambientDate"></div>
+    <div class="ambient-actions" id="ambientActions"></div>
+    <div class="ambient-hint">Tap anywhere to wake</div>
   </div>
 
 <script src="config.js"></script>
@@ -2503,6 +2538,86 @@ if (HAConfig.isConfigured()) {
 }
 
 setInterval(updateClock, 1000 * 15);
+
+// --- Ambient Mode (2026-08-05) ---
+// Loxone-inspired idle/glanceable state: after a period of no touch, drop
+// the active room screen for a simple clock + curated quick actions. Any
+// touch anywhere wakes back to whatever was showing before. See
+// docs/UI_MODES_SPEC.md.
+
+const AMBIENT_IDLE_MS = 90 * 1000; // 90s of no interaction triggers ambient
+const AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.config.js
+
+let ambientTimer = null;
+
+function updateAmbientClock() {
+  const clockEl = document.getElementById("ambientClock");
+  const dateEl = document.getElementById("ambientDate");
+  if (!clockEl) return;
+  const now = new Date();
+  let h = now.getHours(); const m = now.getMinutes();
+  const ampm = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+  clockEl.textContent = `${h}:${String(m).padStart(2, "0")}`;
+  if (dateEl) {
+    dateEl.textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) + ` · ${ampm}`;
+  }
+}
+
+function renderAmbientActions() {
+  const el = document.getElementById("ambientActions");
+  if (!el) return;
+  el.innerHTML = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
+    const r = ROOMS[id];
+    const anyOn = r.lighting.some(l => l.on);
+    return `<button class="ambient-action-btn ${anyOn ? "is-on" : ""}" data-ambient-room="${id}">${r.name} ${anyOn ? "On" : "Off"}</button>`;
+  }).join("");
+
+  el.querySelectorAll("[data-ambient-room]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation(); // don't also trigger the overlay's wake-on-tap
+      const id = btn.dataset.ambientRoom;
+      const r = ROOMS[id];
+      const anyOn = r.lighting.some(l => l.on);
+      r.lighting.forEach(l => {
+        l.on = !anyOn;
+        l.brightness = anyOn ? 0 : 100;
+        haSyncLight(l);
+      });
+      renderAmbientActions();
+    });
+  });
+}
+
+function showAmbient() {
+  updateAmbientClock();
+  renderAmbientActions();
+  document.getElementById("ambientOverlay").classList.add("visible");
+}
+
+function hideAmbient() {
+  document.getElementById("ambientOverlay").classList.remove("visible");
+}
+
+function resetIdleTimer() {
+  if (document.getElementById("ambientOverlay").classList.contains("visible")) {
+    hideAmbient();
+  }
+  clearTimeout(ambientTimer);
+  ambientTimer = setTimeout(showAmbient, AMBIENT_IDLE_MS);
+}
+
+document.getElementById("ambientOverlay").addEventListener("click", () => resetIdleTimer());
+["pointerdown", "touchstart", "keydown"].forEach(evt => {
+  document.addEventListener(evt, () => {
+    // ignore taps that landed on the ambient overlay itself (its own
+    // listener above already handles waking) to avoid double-resetting
+    if (!document.getElementById("ambientOverlay").classList.contains("visible")) resetIdleTimer();
+  });
+});
+setInterval(() => {
+  if (document.getElementById("ambientOverlay").classList.contains("visible")) updateAmbientClock();
+}, 1000 * 15);
+resetIdleTimer();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
