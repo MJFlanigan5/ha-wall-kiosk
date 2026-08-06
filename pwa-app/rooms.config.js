@@ -17,17 +17,20 @@
 // original 3 (many devices in this house have a dead/unavailable twin).
 
 const ROOM_ENTITY_MAP = {
-  // No media_player/tv here — the only speaker in this area is the Home
+  // No media_player here — the only speaker in this area is the Home
   // Assistant Voice PE, confirmed defective this session (zero streamed
-  // output audio, refund requested); the TV is the Apple TV, which
-  // already has its own dedicated remote-style screen, so adding it here
-  // too would just duplicate that.
+  // output audio, refund requested). TV is the real Apple TV
+  // (media_player.living_room_2, area_id: living_room, confirmed live) —
+  // still gets the same on/off status card as every other room even
+  // though the Apple TV also has its own fuller remote screen elsewhere;
+  // consistency with the rest of the rooms wins over avoiding the overlap.
   living: {
     lighting: [
       "light.living_room_couch",
       "light.spot",
       "light.floor",
     ],
+    tv: "media_player.living_room_2",
   },
   // media_player added 2026-08-06 — pilot room for wiring real per-room
   // speakers/TVs. Kitchen's Sonos speaker is oddly entity-id'd
