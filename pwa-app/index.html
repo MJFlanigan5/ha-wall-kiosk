@@ -655,15 +655,16 @@
   .ambient-energy-row .label { color: var(--text-dim); }
   .ambient-energy-row .value { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-  .ambient-nightmode-card { display: flex; flex-direction: column; gap: 12px; }
-  .ambient-nightmode-buttons { display: flex; gap: 8px; }
-  .ambient-nightmode-btn {
-    flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid var(--hairline);
-    background: var(--base); color: var(--text-dim); cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 600;
+  /* Bottom quick-jump row (2026-08-06) — real navigation to a few of our
+     actual rail-nav destinations, not decorative icons standing in for
+     sections we don't have (Loxone's own row is specific to their app). */
+  .ambient-quicknav-row { display: flex; gap: 20px; margin-top: 32px; }
+  .ambient-quicknav-btn {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.4px;
   }
-  .ambient-nightmode-btn svg { width: 14px; height: 14px; }
-  .ambient-nightmode-btn:active { background: var(--accent-dim); color: var(--text); }
+  .ambient-quicknav-btn svg { width: 20px; height: 20px; }
 
   /* Room header status row — same .ambient-card component as Ambient
      Mode, just laid out inline instead of centered full-screen. See
@@ -776,6 +777,7 @@
     <div class="ambient-clock" id="ambientClock">--:--</div>
     <div class="ambient-date" id="ambientDate"></div>
     <div class="ambient-actions" id="ambientActions"></div>
+    <div class="ambient-quicknav-row" id="ambientQuickNav"></div>
     <div class="ambient-hint">Tap a card to open that room · tap anywhere else to wake</div>
     <button class="admin-btn ambient-admin-btn" id="ambientAdminOpenBtn" title="Admin"></button>
   </div>
@@ -2694,6 +2696,17 @@ let waterHeaterState = null;
 let waterHeaterRecircState = null;
 let waterHeaterFlowState = null;
 
+// Ambient's Security tile (2026-08-06) — real Alarmo alarm panel, replaces
+// the Night Mode tile per Mike's call: a manual whole-house lighting
+// override was in tension with the automation-first principle used all
+// night (routine stuff belongs in HA automations, not a tap-to-force
+// button), whereas arm/disarm is exactly the kind of decision a real wall
+// panel puts front and center — it should require a human tap, not run on
+// its own. code_arm_required is false on this panel (confirmed live), so
+// a single tap arm/disarm needs no PIN-entry UI.
+const AMBIENT_ALARM_ENTITY = "alarm_control_panel.alarmo";
+let ambientAlarmState = null;
+
 // Recomputes the Energy screen's POWER fields (totalKw/mix/battery/
 // liveConsumption) from the same real Powerwall sensors Ambient Mode's
 // Energy Flow card already uses — the Flow Diagram/Ring/Power Mix/Battery
@@ -2887,6 +2900,7 @@ async function initLiveData() {
     waterHeaterRecircState = stateById.get(WATER_HEATER_RECIRC_ENTITY) || null;
     waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
     refreshWaterHeaterFromHA();
+    ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
     for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
       ambientPresenceStates[roomId] = stateById.get(entityId) || null;
     }
@@ -2920,6 +2934,11 @@ async function initLiveData() {
         refreshPowerFromHA();
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         if (currentRoom === "power") renderPowerContent();
+        return;
+      }
+      if (entityId === AMBIENT_ALARM_ENTITY) {
+        ambientAlarmState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
       if (entityId === WATER_HEATER_ENTITY || entityId === WATER_HEATER_RECIRC_ENTITY || entityId === WATER_HEATER_FLOW_ENTITY) {
@@ -3210,14 +3229,6 @@ function updateAmbientClock() {
 // <button> can't validly contain another <button>. Matches Loxone's
 // Central screen, which had inline +/- chevrons directly on cards instead
 // of tap-the-whole-card-only.
-// Whole-house Night/Day kelvin targets — manual only, per
-// docs/UI_MODES_SPEC.md's confirmed direction, this deliberately does NOT
-// auto-trigger on sun.sun the way the app's own theme filter does. "When to
-// change real lights" stays a decision Mike makes by tapping a button, not
-// automation logic baked into the app.
-const WHOLE_HOUSE_NIGHT_KELVIN = WHITE_PRESETS.find(p => p.name === "Sunrise").k;
-const WHOLE_HOUSE_DAY_KELVIN = WHITE_PRESETS.find(p => p.name === "Cool White").k;
-
 function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
@@ -3310,19 +3321,25 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
-  // Night Mode: folded into the grid as its own tile (was a separate row
-  // below the grid) — same manual, non-auto-triggering Day/Night action
-  // pair, just laid out like every other card now.
-  const nightModeCard = `<div class="ambient-card ambient-nightmode-card" style="cursor:default;">
-    ${ico("moon", "ambient-card-icon")}
-    <div class="ambient-card-label">Night Mode</div>
-    <div class="ambient-nightmode-buttons">
-      <button class="ambient-nightmode-btn" data-wholehouse="night">${ico("moon", "i14")} Night</button>
-      <button class="ambient-nightmode-btn" data-wholehouse="day">${ico("sun", "i14")} Day</button>
+  // Security: real Alarmo alarm panel — replaces the old Night Mode tile
+  // (2026-08-06, Mike's call: a manual whole-house lighting override was in
+  // tension with the automation-first principle used all night; arm/disarm
+  // is the kind of decision that should require a human tap, lighting
+  // shouldn't). Single tap arms away / disarms — code_arm_required is false
+  // on this panel (confirmed live), no PIN-entry UI needed.
+  const alarmState = ambientAlarmState ? ambientAlarmState.state : null;
+  const isArmed = alarmState && (alarmState.startsWith("armed") || alarmState === "arming" || alarmState === "pending");
+  const alarmLabel = alarmState ? alarmState.replace("armed_", "Armed ").replace(/^\w/, c => c.toUpperCase()) : "—";
+  const securityCard = `<div class="ambient-card ${isArmed ? "is-on" : ""}" data-ambient-nav="security">
+    ${ico(isArmed ? "shield-check" : "shield", "ambient-card-icon")}
+    <div class="ambient-card-label">Security</div>
+    <div class="ambient-card-value">${alarmLabel}</div>
+    <div class="ambient-card-controls">
+      <button class="ambient-stepper-btn" data-ambient-alarm-toggle style="flex:1">${isArmed ? "Disarm" : "Arm Away"}</button>
     </div>
   </div>`;
 
-  el.innerHTML = roomCards.join("") + musicCard + energyCard + nightModeCard;
+  el.innerHTML = roomCards.join("") + musicCard + energyCard + securityCard;
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
@@ -3442,24 +3459,40 @@ function renderAmbientActions() {
     });
   });
 
-  el.querySelectorAll("[data-wholehouse]").forEach(btn => {
+  const alarmToggleBtn = el.querySelector("[data-ambient-alarm-toggle]");
+  if (alarmToggleBtn) {
+    alarmToggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!window.haClient || !window.haClient.connected) return;
+      const service = isArmed ? "alarm_disarm" : "alarm_arm_away";
+      window.haClient.callService("alarm_control_panel", service, AMBIENT_ALARM_ENTITY).catch(console.error);
+    });
+  }
+}
+
+// Quick-jump row (2026-08-06) — real navigation to a few rail-nav
+// destinations that aren't already reachable via a card (Video, Settings
+// have no Ambient card at all; Security/Music do, but a direct shortcut
+// here matches Loxone's own "always-visible way to the main sections"
+// pattern without inventing icons for sections we don't have).
+const AMBIENT_QUICKNAV = [
+  ["security", "shield", "Security"],
+  ["video", "video", "Video"],
+  ["music", "music", "Music"],
+  ["settings", "settings", "Settings"],
+];
+function renderAmbientQuickNav() {
+  const el = document.getElementById("ambientQuickNav");
+  if (!el) return;
+  el.innerHTML = AMBIENT_QUICKNAV.map(([id, icon, label]) =>
+    `<button class="ambient-quicknav-btn" data-ambient-quicknav="${id}">${ico(icon, "i20")}<span>${label}</span></button>`
+  ).join("");
+  icons();
+  el.querySelectorAll("[data-ambient-quicknav]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const isNight = btn.dataset.wholehouse === "night";
-      const kelvin = isNight ? WHOLE_HOUSE_NIGHT_KELVIN : WHOLE_HOUSE_DAY_KELVIN;
-      const brightnessPct = isNight ? 40 : 100;
-      AMBIENT_ROOMS.filter(id => ROOMS[id]).forEach(id => {
-        ROOMS[id].lighting.filter(l => l.color).forEach(l => {
-          l.on = true;
-          l.brightness = brightnessPct;
-          if (l.entityId && window.haClient && window.haClient.connected) {
-            window.haClient.callService("light", "turn_on", l.entityId, {
-              brightness_pct: brightnessPct, color_temp_kelvin: kelvin,
-            }).catch(console.error);
-          }
-        });
-      });
-      renderAmbientActions();
+      hideAmbient();
+      goToRoom(btn.dataset.ambientQuicknav);
     });
   });
 }
@@ -3467,6 +3500,7 @@ function renderAmbientActions() {
 function showAmbient() {
   updateAmbientClock();
   renderAmbientActions();
+  renderAmbientQuickNav();
   document.getElementById("ambientOverlay").classList.add("visible");
 }
 

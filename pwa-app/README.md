@@ -51,10 +51,19 @@ dark palette by default:
   music screen's still-mock volume control).
 - **Energy Flow card** — real Tesla Powerwall solar/battery/grid breakdown
   alongside the home-load figure (previously just the one load number).
-  Tapping it opens the Energy screen — which is still mock data end to end,
-  a real inconsistency this surfaced, not yet fixed.
-- **Night Mode** — folded into a grid tile instead of a separate row below
-  the cards; same manual (non-auto-triggering) Day/Night actions as before.
+  Tapping it opens the real Energy screen (now also wired, see below).
+- **Security card** (replaces Night Mode) — real Alarmo alarm panel,
+  single-tap Arm Away / Disarm (`code_arm_required` is false on this panel,
+  confirmed live, so no PIN-entry UI is needed). Swapped in for the
+  whole-house Night/Day lighting tile: a manual lighting override was in
+  tension with the automation-first principle used everywhere else tonight
+  (routine stuff belongs in a real HA automation, not a tap-to-force
+  button), whereas arm/disarm is exactly the kind of decision that should
+  require a human tap. Each room's own White presets still give manual
+  color control without the whole-house version.
+- **Bottom quick-nav row** — Security/Video/Music/Settings, real navigation
+  to those rail-nav destinations (not decorative icons standing in for
+  Loxone's own app sections, which don't map to anything here).
 - **Light/dark theme toggle** — a real second palette (moon/sun icon, top
   right), not just the brightness-dim filter used for the app's own
   day/night shift. Scoped entirely to `.ambient-overlay.ambient-light` via
@@ -79,6 +88,25 @@ cache name that never got bumped across any of tonight's pushes — every
 push after the first was silently invisible on reload. Rewritten to
 network-first (cache is now just an offline fallback), so a reload always
 gets the latest code when online.
+
+## Energy screen (Overview + Water Heater wired, 2026-08-06)
+
+Reached from the rail nav ("Energy") or Ambient's Energy Flow card:
+
+- **Overview** — Power Flow, Ring, and Power Mix cards read real Tesla
+  Powerwall solar/battery/grid sensors (no code changes needed to those
+  components — they always just rendered `POWER.mix`/`totalKw`/`battery`,
+  which now hold real numbers instead of fabricated ones). "Top Consumers"
+  and "Est. until full" are gone entirely — no per-device wattage or
+  battery-ETA data exists anywhere in this HA instance, so rather than
+  fabricate it the sections were dropped.
+- **Water Heater** — real Rinnai tankless entities (set temp, recirculation,
+  flow rate, away/vacation mode). Vacation Mode calls the real
+  `water_heater.set_away_mode` service instead of flipping a local boolean.
+- **History / Automation / EV Charging / Events** — still mock, explicitly
+  flagged in a code comment above `renderEnergyHistory()`. EV Charging has
+  zero real backing entity (no EV charger exists in this house); the others
+  need separate scoping (real historical time-series data, etc.).
 
 ## Admin Mode (added 2026-08-05)
 
