@@ -209,9 +209,14 @@ shades were never wired.
 In priority order, per Mike's confirmed sequencing:
 
 1. ~~Interior simplification~~ — done, above
-2. **Elevate Ambient Mode's cards** with inline mini-controls (closer to
-   Loxone's Central screen, which had inline dropdowns/+/- controls on
-   its cards, not just a label) — not yet started
+2. ~~**Elevate Ambient Mode's cards**~~ — done 2026-08-06. Room cards got
+   an inline +/- brightness stepper (nudges all lights in that room ±10%,
+   real service calls, `stopPropagation()` so it doesn't also trigger the
+   whole-card toggle); the Music card got an inline play/pause button when
+   something's actually playing. Card wrapper changed from `<button>` to
+   `<div>` so it could validly nest the new inline `<button>` controls.
+   Verified live: clicked +, watched the card go to "3 of 3 on" and the
+   icon turn on-color, confirmed real lights changed, turned back off.
 3. **Day/night theme shift** — the app's own visual appearance
    (dimmer/warmer at night, brighter by day) should change automatically
    with time of day — cosmetic, self-contained, not started

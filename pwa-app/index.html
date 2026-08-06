@@ -579,6 +579,13 @@
     letter-spacing: 0.5px; margin-bottom: 4px;
   }
   .ambient-card-value { font-size: 16px; font-weight: 600; color: var(--text); }
+  .ambient-card-controls { display: flex; gap: 8px; margin-top: 14px; }
+  .ambient-stepper-btn {
+    flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid var(--hairline);
+    background: var(--base); color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ambient-stepper-btn:active { background: var(--accent-dim); color: var(--text); }
   .ambient-hint {
     position: absolute; bottom: 40px; font-size: 12px; color: var(--text-dim);
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
@@ -2911,49 +2918,64 @@ function updateAmbientClock() {
   }
 }
 
+// Ambient card outer wrapper is a <div> not a <button> (2026-08-06,
+// roadmap item 2 in docs/UI_MODES_SPEC.md "Remaining roadmap") — cards now
+// nest real inline mini-controls (brightness stepper, play/pause), and a
+// <button> can't validly contain another <button>. Matches Loxone's
+// Central screen, which had inline +/- chevrons directly on cards instead
+// of tap-the-whole-card-only.
 function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
-  // Loxone-style status cards (icon, location label, live value headline)
-  // merged directly into Ambient Mode rather than a separate Favorites
-  // screen — see docs/UI_MODES_SPEC.md "Ambient Mode v2". Every card here
-  // is backed by real live data, no fabricated values.
 
   const roomCards = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
     const r = ROOMS[id];
     const onCount = r.lighting.filter(l => l.on).length;
     const anyOn = onCount > 0;
     const value = r.lighting.length ? (anyOn ? `${onCount} of ${r.lighting.length} on` : "All off") : "No lights";
-    return `<button class="ambient-card ${anyOn ? "is-on" : ""}" data-ambient-room="${id}">
+    const steppers = r.lighting.length ? `
+      <div class="ambient-card-controls">
+        <button class="ambient-stepper-btn" data-ambient-dim="${id}">${ico("minus", "i14")}</button>
+        <button class="ambient-stepper-btn" data-ambient-bright="${id}">${ico("plus", "i14")}</button>
+      </div>` : "";
+    return `<div class="ambient-card ${anyOn ? "is-on" : ""}" data-ambient-room="${id}">
       ${ico("lightbulb", "ambient-card-icon")}
       <div class="ambient-card-label">${r.name}</div>
       <div class="ambient-card-value">${value}</div>
-    </button>`;
+      ${steppers}
+    </div>`;
   });
 
   // Music: whichever room's assigned media_player is actively playing, if any
   const playingRoom = AMBIENT_ROOMS.map(id => ROOMS[id]).find(r => r && r.media && r.media.entityId && r.media.playing);
-  const musicCard = `<button class="ambient-card ${playingRoom ? "is-on" : ""}" style="cursor:default;">
+  const musicPlayPause = playingRoom ? `
+    <div class="ambient-card-controls">
+      <button class="ambient-stepper-btn" data-ambient-playpause="${AMBIENT_ROOMS.find(id => ROOMS[id] === playingRoom)}">${ico("pause", "i14")}</button>
+    </div>` : "";
+  const musicCard = `<div class="ambient-card ${playingRoom ? "is-on" : ""}">
     ${ico("music", "ambient-card-icon")}
     <div class="ambient-card-label">Music</div>
     <div class="ambient-card-value">${playingRoom ? playingRoom.media.track : "Nothing playing"}</div>
-  </button>`;
+    ${musicPlayPause}
+  </div>`;
 
-  // Power: real Tesla Powerwall load sensor, kW
+  // Power: real Tesla Powerwall load sensor, kW — informational only, no
+  // control possible on a sensor, matches how Loxone's own energy tiles
+  // are read-only too
   const powerValue = ambientPowerState ? `${parseFloat(ambientPowerState.state).toFixed(2)} kW` : "—";
-  const powerCard = `<button class="ambient-card" style="cursor:default;">
+  const powerCard = `<div class="ambient-card" style="cursor:default;">
     ${ico("zap", "ambient-card-icon")}
     <div class="ambient-card-label">Home Power</div>
     <div class="ambient-card-value">${powerValue}</div>
-  </button>`;
+  </div>`;
 
   el.innerHTML = roomCards.join("") + musicCard + powerCard;
   icons();
 
-  el.querySelectorAll("[data-ambient-room]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
+  el.querySelectorAll("[data-ambient-room]").forEach(card => {
+    card.addEventListener("click", (e) => {
       e.stopPropagation(); // don't also trigger the overlay's wake-on-tap
-      const id = btn.dataset.ambientRoom;
+      const id = card.dataset.ambientRoom;
       const r = ROOMS[id];
       const anyOn = r.lighting.some(l => l.on);
       r.lighting.forEach(l => {
@@ -2961,6 +2983,34 @@ function renderAmbientActions() {
         l.brightness = anyOn ? 0 : 100;
         haSyncLight(l);
       });
+      renderAmbientActions();
+    });
+  });
+
+  function nudgeRoomBrightness(id, delta) {
+    const r = ROOMS[id];
+    r.lighting.forEach(l => {
+      const next = Math.max(0, Math.min(100, (l.on ? l.brightness : 0) + delta));
+      l.brightness = next;
+      l.on = next > 0;
+      haSyncLight(l);
+    });
+    renderAmbientActions();
+  }
+  el.querySelectorAll("[data-ambient-dim]").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); nudgeRoomBrightness(btn.dataset.ambientDim, -10); });
+  });
+  el.querySelectorAll("[data-ambient-bright]").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); nudgeRoomBrightness(btn.dataset.ambientBright, 10); });
+  });
+  el.querySelectorAll("[data-ambient-playpause]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const r = ROOMS[btn.dataset.ambientPlaypause];
+      r.media.playing = !r.media.playing;
+      if (window.haClient && window.haClient.connected) {
+        window.haClient.callService("media_player", r.media.playing ? "media_play" : "media_pause", r.media.entityId).catch(console.error);
+      }
       renderAmbientActions();
     });
   });
