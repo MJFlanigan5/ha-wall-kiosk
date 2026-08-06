@@ -28,7 +28,7 @@ const ROOM_ENTITY_MAP = {
       "light.floor",
     ],
     tv: "media_player.living_room_2",
-    airQuality: { aqi: "sensor.living_room_living_room_aq_air_quality", temp: "sensor.h5106_3136_temperature", humidity: "sensor.h5106_3136_humidity" },
+    airQuality: { pm25: "sensor.h5106_3136_pm25", temp: "sensor.h5106_3136_temperature", humidity: "sensor.h5106_3136_humidity" },
   },
   // media_player added 2026-08-06 — pilot room for wiring real per-room
   // speakers/TVs. Kitchen's Sonos speaker is oddly entity-id'd
@@ -45,10 +45,10 @@ const ROOM_ENTITY_MAP = {
     ],
     media_player: "media_player.utility_room",
     tv: "media_player.kitchen_tv_2",
-    // No airQuality here — the Smart Air Purifier only reports an AQI
-    // number (no temp/humidity pair), and the app dropped AQI display
-    // everywhere (2026-08-06, confirmed stuck at "1" for 30+ hours across
-    // every room — see index.html's renderHero for the full note).
+    // No airQuality here — the Smart Air Purifier only reports the
+    // computed AQI number (confirmed broken, see index.html's renderHero),
+    // no raw PM2.5/temp/humidity sensors like the other rooms' Govee AQ
+    // monitors have. Nothing real to show for this room.
   },
   // No speaker/TV added here — the only media_player candidates in Utility
   // Room's area are appliance-adjacent, not a real listening device.
@@ -58,7 +58,7 @@ const ROOM_ENTITY_MAP = {
       "light.entry_smells_diffuser_nightlight",
     ],
     tv: "media_player.utility_room_tv_2",
-    airQuality: { aqi: "sensor.utility_room_aq_air_quality", temp: "sensor.utility_room_aq_temperature", humidity: "sensor.utility_room_aq_humidity" },
+    airQuality: { pm25: "sensor.utility_room_air_quality_pm25", temp: "sensor.utility_room_aq_temperature", humidity: "sensor.utility_room_aq_humidity" },
   },
   // Speaker is "Veda" (a real house nickname for this room's Google Home,
   // not a mistake) — not area-tagged in HA's registry the way Kitchen's
@@ -70,7 +70,7 @@ const ROOM_ENTITY_MAP = {
       "light.floor_lamp_office",
     ],
     media_player: "media_player.veda",
-    airQuality: { aqi: "sensor.office_office_aq_air_quality", temp: "sensor.h5106_1378_temperature", humidity: "sensor.h5106_1378_humidity" },
+    airQuality: { pm25: "sensor.h5106_1378_pm25", temp: "sensor.h5106_1378_temperature", humidity: "sensor.h5106_1378_humidity" },
   },
   // Speaker is the Google Home Mini (master_bedroom_speaker), not the
   // HT-A3000 soundbar (that's TV-paired audio, not an independent music
@@ -81,7 +81,7 @@ const ROOM_ENTITY_MAP = {
     ],
     media_player: "media_player.master_bedroom_speaker",
     tv: "media_player.master_bedroom_tv_2",
-    airQuality: { aqi: "sensor.master_aq_air_quality", temp: "sensor.h5106_568d_temperature", humidity: "sensor.h5106_568d_humidity" },
+    airQuality: { pm25: "sensor.h5106_568d_pm25", temp: "sensor.h5106_568d_temperature", humidity: "sensor.h5106_568d_humidity" },
   },
   // TV picked as the Cast-bridge entity (dining_room_tcl_tv, matches the
   // same supported_features scheme as Kitchen/Utility's working Cast
@@ -105,7 +105,7 @@ const ROOM_ENTITY_MAP = {
     lighting: [],
     media_player: "media_player.bedroom_4_speaker",
     tv: "media_player.guest_bedroom_tv_2",
-    airQuality: { aqi: "sensor.bedroom_bedroom_4_aq_air_quality", temp: "sensor.h5106_2a62_temperature", humidity: "sensor.h5106_2a62_humidity" },
+    airQuality: { pm25: "sensor.h5106_2a62_pm25", temp: "sensor.h5106_2a62_temperature", humidity: "sensor.h5106_2a62_humidity" },
   },
   // Bedroom 3 — area_id "bedroom" in HA's Area registry is actually named
   // "Bedroom 3" (confusingly, not "bedroom_3"). First search missed this;
@@ -117,6 +117,6 @@ const ROOM_ENTITY_MAP = {
       "light.rocco_ceiling_1",
     ],
     media_player: "media_player.bedroom_3_speaker",
-    airQuality: { aqi: "sensor.bedroom_bedroom_3_aq_air_quality", temp: "sensor.bedroom_3_air_quality_temperature", humidity: "sensor.bedroom_3_air_quality_humidity" },
+    airQuality: { pm25: "sensor.bedroom_3_air_quality_pm25", temp: "sensor.bedroom_3_air_quality_temperature", humidity: "sensor.bedroom_3_air_quality_humidity" },
   },
 };

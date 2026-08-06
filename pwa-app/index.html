@@ -1461,17 +1461,24 @@ function renderHero(room) {
 
   // Read-only status, no matching section to jump to — plain cursor:default
   // like the hero cards were before the jump-to-section behavior existed.
-  // AQI number dropped (2026-08-06) — checked its history and it's been
-  // stuck at exactly "1" for 30+ hours (only 4 state changes, all "1"),
-  // same uncalibrated-sensor issue already flagged for Dining Room's CO2.
-  // Temp/humidity are genuinely live (confirmed varying per room), so the
-  // card keeps those and drops the fake-looking-static AQI number.
+  // The computed "AQI" index was dropped (2026-08-06) — checked its
+  // history and it was stuck at exactly "1" for 30+ hours across every
+  // room, including a totally different device (Kitchen's air purifier,
+  // different manufacturer), with identical change timestamps across
+  // unrelated devices — a shared broken calculation, not real readings.
+  // The raw PM2.5 sensor underneath it is genuinely live (confirmed: it
+  // updated within the last minute, value changed 1->2), so that's what's
+  // shown instead — same real metric Kith already uses successfully.
   const aq = room.airQuality;
-  const aqCard = (aq && (aq.temp != null || aq.humidity != null)) ? `<div class="ambient-card hero-status-card" style="cursor:default">
-    ${ico("thermometer", "ambient-card-icon")}
-    <div class="ambient-card-label">Climate</div>
-    <div class="ambient-card-value">${aq.temp != null ? Math.round(aq.temp) + "°" : "—"}</div>
-    <div class="ambient-card-sub">${aq.humidity != null ? Math.round(aq.humidity) + "% humidity" : ""}</div>
+  const aqSub = aq ? [
+    aq.temp != null ? Math.round(aq.temp) + "°" : null,
+    aq.humidity != null ? Math.round(aq.humidity) + "% humidity" : null,
+  ].filter(Boolean).join(" · ") : "";
+  const aqCard = (aq && aq.pm25 != null) ? `<div class="ambient-card hero-status-card" style="cursor:default">
+    ${ico("wind", "ambient-card-icon")}
+    <div class="ambient-card-label">Air Quality</div>
+    <div class="ambient-card-value">${aq.pm25} µg/m³ PM2.5</div>
+    <div class="ambient-card-sub">${aqSub}</div>
   </div>` : "";
 
   return `<div class="hero-status-row">${lightingCard}${mediaCard}${tvCard}${aqCard}</div>`;
@@ -2562,9 +2569,9 @@ function populateRoomsFromMap(map, statesById) {
     }
 
     const aq = map[roomId].airQuality;
-    if (aq && aq.aqi) {
-      const aqObj = { aqi: null, temp: null, humidity: null };
-      ["aqi", "temp", "humidity"].forEach(field => {
+    if (aq && (aq.pm25 || aq.temp || aq.humidity)) {
+      const aqObj = { pm25: null, temp: null, humidity: null };
+      ["pm25", "temp", "humidity"].forEach(field => {
         if (!aq[field]) return;
         airQualityEntityLocations.set(aq[field], { roomId, field });
         const s = statesById && statesById.get(aq[field]);
