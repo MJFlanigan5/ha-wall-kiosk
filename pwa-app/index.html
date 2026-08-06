@@ -573,11 +573,11 @@
     font-family: var(--font-mono); font-size: 15px; color: var(--text-dim);
     letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
   }
-  /* 7 columns (2026-08-06) — 6 wrapped the top status row onto 2 lines
-     (7 tiles, Music spanning 2 = 8 units), pushing everything into 3 rows
-     total. 7 columns fits the status row on one line. */
+  /* 9 columns (2026-08-06) — status row is 8 cards (Music spans 2 + 7
+     singles = 9 units) and the room row is 8 single cards. 9 columns fits
+     both exactly, so the whole screen is exactly 2 rows, not 3. */
   .ambient-actions {
-    display: grid; grid-template-columns: repeat(7, 130px); grid-auto-rows: auto;
+    display: grid; grid-template-columns: repeat(9, 130px); grid-auto-rows: auto;
     gap: 12px; justify-content: center; max-width: 90vw;
   }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
