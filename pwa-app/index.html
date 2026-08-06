@@ -1444,14 +1444,17 @@ function renderHero(room) {
 
   // Read-only status, no matching section to jump to — plain cursor:default
   // like the hero cards were before the jump-to-section behavior existed.
+  // AQI number dropped (2026-08-06) — checked its history and it's been
+  // stuck at exactly "1" for 30+ hours (only 4 state changes, all "1"),
+  // same uncalibrated-sensor issue already flagged for Dining Room's CO2.
+  // Temp/humidity are genuinely live (confirmed varying per room), so the
+  // card keeps those and drops the fake-looking-static AQI number.
   const aq = room.airQuality;
-  const aqSub = aq && (aq.temp != null || aq.humidity != null)
-    ? `<div class="ambient-card-sub">${aq.temp != null ? Math.round(aq.temp) + "°" : ""}${aq.temp != null && aq.humidity != null ? " · " : ""}${aq.humidity != null ? Math.round(aq.humidity) + "% humidity" : ""}</div>` : "";
-  const aqCard = (aq && aq.aqi != null) ? `<div class="ambient-card hero-status-card" style="cursor:default">
-    ${ico("wind", "ambient-card-icon")}
-    <div class="ambient-card-label">Air Quality</div>
-    <div class="ambient-card-value">AQI ${aq.aqi}</div>
-    ${aqSub}
+  const aqCard = (aq && (aq.temp != null || aq.humidity != null)) ? `<div class="ambient-card hero-status-card" style="cursor:default">
+    ${ico("thermometer", "ambient-card-icon")}
+    <div class="ambient-card-label">Climate</div>
+    <div class="ambient-card-value">${aq.temp != null ? Math.round(aq.temp) + "°" : "—"}</div>
+    <div class="ambient-card-sub">${aq.humidity != null ? Math.round(aq.humidity) + "% humidity" : ""}</div>
   </div>` : "";
 
   return `<div class="hero-status-row">${lightingCard}${mediaCard}${tvCard}${aqCard}</div>`;

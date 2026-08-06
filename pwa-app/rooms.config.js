@@ -45,10 +45,10 @@ const ROOM_ENTITY_MAP = {
     ],
     media_player: "media_player.utility_room",
     tv: "media_player.kitchen_tv_2",
-    // AQI only — the Smart Air Purifier reports air quality but has no
-    // matching temp/humidity sensor pair like the other rooms' Govee AQ
-    // monitors do.
-    airQuality: { aqi: "sensor.kitchen_smart_air_purifier_air_quality" },
+    // No airQuality here — the Smart Air Purifier only reports an AQI
+    // number (no temp/humidity pair), and the app dropped AQI display
+    // everywhere (2026-08-06, confirmed stuck at "1" for 30+ hours across
+    // every room — see index.html's renderHero for the full note).
   },
   // No speaker/TV added here — the only media_player candidates in Utility
   // Room's area are appliance-adjacent, not a real listening device.
