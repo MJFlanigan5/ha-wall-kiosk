@@ -2739,6 +2739,27 @@ let ambientAlarmState = null;
 const AMBIENT_KITCHEN_TEMP_ENTITY = "sensor.apollo_mtr_1_5452d0_dps310_temperature";
 let ambientKitchenTempState = null;
 
+// Comfort tile, corrected (2026-08-06) — the Hallway Nest thermostat itself
+// is the real climate-control device (Homey drives it; the device was
+// deliberately excluded from the Homey->MQTT->HA bridge until now, flipped
+// on tonight so it shows up here without re-enabling HA's own competing
+// Nest integration). This is a genuinely better match for the reference's
+// Comfort tile than a bare room sensor — it's the actual thermostat's own
+// current reading, not a proxy.
+const AMBIENT_THERMOSTAT_TEMP_ENTITY = "sensor.thermostat_temperature";
+const AMBIENT_THERMOSTAT_COOL_ENTITY = "sensor.thermostat_cool_temperature";
+let ambientThermostatTempState = null;
+let ambientThermostatCoolState = null;
+
+// CO2 tile (2026-08-06) — real per-room ppm CO2 sensors exist (Apollo
+// devices) but all read "unknown" right now (uncalibrated SCD40 hardware,
+// confirmed live). The Electricity Maps grid-carbon-intensity sensor is
+// real and live now, so used here instead — labeled for what it actually
+// is (grid intensity) rather than reusing the reference's "emission saved"
+// wording, which would overstate what this number means.
+const AMBIENT_CO2_ENTITY = "sensor.electricity_maps_co2_intensity";
+let ambientCo2State = null;
+
 // Packages tile (2026-08-06) — real Mail and Packages integration, replaces
 // the static "Front window" cover placeholder (no cover entity exists in
 // this house). Sums the per-carrier "packages" count sensors — genuinely
@@ -2947,6 +2968,9 @@ async function initLiveData() {
     refreshWaterHeaterFromHA();
     ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
     ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
+    ambientThermostatTempState = stateById.get(AMBIENT_THERMOSTAT_TEMP_ENTITY) || null;
+    ambientThermostatCoolState = stateById.get(AMBIENT_THERMOSTAT_COOL_ENTITY) || null;
+    ambientCo2State = stateById.get(AMBIENT_CO2_ENTITY) || null;
     for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
       ambientPackageStates[entityId] = stateById.get(entityId) || null;
     }
@@ -2992,6 +3016,17 @@ async function initLiveData() {
       }
       if (entityId === AMBIENT_KITCHEN_TEMP_ENTITY) {
         ambientKitchenTempState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === AMBIENT_THERMOSTAT_TEMP_ENTITY || entityId === AMBIENT_THERMOSTAT_COOL_ENTITY) {
+        if (entityId === AMBIENT_THERMOSTAT_TEMP_ENTITY) ambientThermostatTempState = newState;
+        if (entityId === AMBIENT_THERMOSTAT_COOL_ENTITY) ambientThermostatCoolState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === AMBIENT_CO2_ENTITY) {
+        ambientCo2State = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
@@ -3347,19 +3382,20 @@ function renderAmbientActions() {
     </div>`;
   }
 
-  // Comfort tile (2026-08-06, exact-grid rebuild) — fills the reference's
-  // "Kitchen ... Comfort" tile position. No thermostat/climate entity
-  // exists in this HA instance, but a real Kitchen temperature sensor does
-  // (Apollo MTR-1, DPS310) — used directly rather than leaving this grid
-  // position empty or inventing a fake climate control.
-  const tempF = ambientKitchenTempState ? parseFloat(ambientKitchenTempState.state) : null;
+  // Comfort tile (2026-08-06, real thermostat) — the Hallway Nest
+  // thermostat, bridged Homey -> MQTT -> HA tonight specifically for this
+  // tile (was excluded from the bridge before). Shows the thermostat's own
+  // current reading and cool setpoint — a real climate device, not a proxy
+  // room sensor.
+  const thermoTemp = ambientThermostatTempState ? parseFloat(ambientThermostatTempState.state) : null;
+  const thermoCool = ambientThermostatCoolState ? parseFloat(ambientThermostatCoolState.state) : null;
   const comfortCard = `<div class="ambient-card" style="cursor:default">
     <div class="ambient-card-header">
       ${ico("thermometer", "ambient-card-icon")}
-      <div class="ambient-card-roomlabel">Kitchen</div>
+      <div class="ambient-card-roomlabel">Hallway</div>
     </div>
-    <div class="ambient-card-primary">${tempF != null ? tempF.toFixed(1) + "°" : "—"}</div>
-    <div class="ambient-card-sub">Comfort</div>
+    <div class="ambient-card-primary">${thermoTemp != null ? Math.round(thermoTemp) + "°" : "—"}</div>
+    <div class="ambient-card-sub">${thermoCool != null ? "Comfort · cools to " + Math.round(thermoCool) + "°" : "Comfort"}</div>
   </div>`;
 
   // The reference's Cover and CO2/Energy Produced tiles have no real
@@ -3379,10 +3415,16 @@ function renderAmbientActions() {
     <div class="ambient-card-primary" style="margin-top:12px">${packageCount}</div>
     <div class="ambient-card-sub">Packages</div>
   </div>`;
+  // CO2 tile — real Electricity Maps grid carbon intensity (gCO2/kWh), the
+  // only live CO2-related data source in this house right now (the local
+  // ppm CO2 sensors exist but are uncalibrated/"unknown"). Labeled for what
+  // it actually is rather than reusing the reference's "emission saved"
+  // wording, which implies a different (currently unavailable) metric.
+  const co2Intensity = ambientCo2State ? parseFloat(ambientCo2State.state) : null;
   const co2Card = `<div class="ambient-card" style="cursor:default">
     ${ico("leaf", "ambient-card-icon")}
-    <div class="ambient-card-primary" style="margin-top:12px">—</div>
-    <div class="ambient-card-sub">CO2 emission saved</div>
+    <div class="ambient-card-primary" style="margin-top:12px">${co2Intensity != null ? Math.round(co2Intensity) : "—"}</div>
+    <div class="ambient-card-sub">g CO2/kWh · Grid</div>
   </div>`;
   const energyProducedCard = `<div class="ambient-card" style="cursor:default">
     ${ico("sprout", "ambient-card-icon")}
