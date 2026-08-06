@@ -27,48 +27,58 @@ content.
   Living Room, and Living Room has no other real speaker entity right now
   — its Music section is intentionally unassigned until one exists.
 
-## Ambient Mode (v3, redesigned 2026-08-06)
+## Ambient Mode (v4, tile anatomy rebuilt 2026-08-06)
 
 After 90 seconds of no touch, the app drops into a full-screen idle view.
-Redesigned directly against a real screenshot of Loxone's live Favorites
-screen (not the marketing hero image) to close the "not enough on there"
-gap from v2 — richer per-card controls, plus new card types, still our own
-dark palette by default:
+v3 was still "our own interpretation" of the Loxone reference — close, but
+the actual tile anatomy (horizontal slider, chip-style header, verbose
+status text) didn't match the real screenshot closely enough. v4 rebuilds
+every card from scratch against the literal reference anatomy instead of
+reinterpreting it:
 
-- **Room cards** — icon/label/status same as before, but the +/− steppers
-  are now a real drag slider (reuses the exact `.slider-track` component
-  already proven on interior room screens), a dedicated power-toggle button
-  replaces "tap card to toggle", and a presence line (real Magic Areas
-  per-room sensor) is shown under the status text.
-- **Tap-to-navigate** — tapping a card's body now opens that room's real
-  screen and exits Ambient (`goToRoom()`, shared with the rail nav). The
-  slider, power toggle, and presets are separate inner controls that stop
-  propagation and stay on Ambient. Previously there was no way to actually
-  get into a room from here at all.
-- **Music card** — real album art (`entity_picture`, resolved against the
-  HA base URL), prev/next transport, and a real volume slider
-  (`media_player.volume_set` — this is genuinely wired, unlike the interior
-  music screen's still-mock volume control).
-- **Energy Flow card** — real Tesla Powerwall solar/battery/grid breakdown
-  alongside the home-load figure (previously just the one load number).
-  Tapping it opens the real Energy screen (now also wired, see below).
-- **Security card** (replaces Night Mode) — real Alarmo alarm panel,
-  single-tap Arm Away / Disarm (`code_arm_required` is false on this panel,
-  confirmed live, so no PIN-entry UI is needed). Swapped in for the
-  whole-house Night/Day lighting tile: a manual lighting override was in
-  tension with the automation-first principle used everywhere else tonight
-  (routine stuff belongs in a real HA automation, not a tap-to-force
-  button), whereas arm/disarm is exactly the kind of decision that should
-  require a human tap. Each room's own White presets still give manual
-  color control without the whole-house version.
-- **Bottom quick-nav row** — Security/Video/Music/Settings, real navigation
-  to those rail-nav destinations (not decorative icons standing in for
-  Loxone's own app sections, which don't map to anything here).
-- **Light/dark theme toggle** — a real second palette (moon/sun icon, top
-  right), not just the brightness-dim filter used for the app's own
-  day/night shift. Scoped entirely to `.ambient-overlay.ambient-light` via
-  CSS custom-property overrides, so it never touches the interior room
-  screens — those stay on our one dark palette per explicit direction.
+- **Card anatomy** — small icon top-left, room/zone label top-right (bare
+  text, no chip), one bold single-word primary status ("Off"/"Bright"/
+  "Presence"), a dim device-type subtext line underneath. Every card is the
+  same fixed 148px width — a uniform grid, not the mixed-width layout v3
+  had.
+- **Vertical pill slider** (replaces v3's horizontal `.slider-track` reuse)
+  — Loxone's actual brightness control is a tall narrow capsule that fills
+  from the bottom, not a horizontal bar. New `.ambient-vpill-track`
+  component, drag sets brightness via inverted-Y pointer math (higher on
+  the pill = brighter). Verified live: dispatched real pointer events
+  against a real light (`light.living_room_couch` + 2 others), confirmed
+  `light.turn_on` fired with the correct `brightness_pct` by reading HA
+  state directly afterward, then restored the lights to off.
+- **Presence split into its own card type** — v3 folded a presence line
+  into the lighting card; the reference shows presence as its own separate
+  tile (icon + "Presence"/"No Presence" + room name), so v4 does too, one
+  per room with a `PRESENCE_ENTITY_BY_ROOM` mapping to the real Magic Areas
+  sensors.
+- **Tap-to-navigate** — unchanged from v3: tapping a card's body opens that
+  room's real screen and exits Ambient (`goToRoom()`, shared with the rail
+  nav). The pill, power toggle, and transport controls are separate inner
+  elements that stop propagation and stay on Ambient.
+- **Music card** — real album art, prev/next transport, and a real volume
+  slider (`media_player.volume_set`), restructured to the new header/
+  primary/sub anatomy but otherwise unchanged from v3.
+- **Energy Flow card** — real Tesla Powerwall solar/battery/grid breakdown,
+  same header/primary/sub restructure, content unchanged from v3.
+- **Security card** — real Alarmo panel, single-tap Arm Away / Disarm,
+  unchanged from v3 (see prior reasoning below on why this replaced a
+  whole-house Night Mode tile).
+- **Bottom quick-nav row** — now bare icons only (no text labels), matching
+  the reference's plain glyph row exactly. Security/Video/Music/Settings,
+  real navigation to those rail-nav destinations.
+- **Corner theme toggle** — now a bare icon (no button chrome/circle),
+  matching the reference's plain moon glyph instead of v3's filled button.
+- **Light/dark theme** — a real second palette (moon/sun icon, top right),
+  scoped entirely to `.ambient-overlay.ambient-light` via CSS
+  custom-property overrides, so it never touches the interior room screens.
+
+Dropped from v3: inline color-preset swatches on room cards (the reference
+doesn't show them on its lighting tiles — the interior room screen's color
+wheel still has full color control, so this isn't a capability loss, just
+moved off the idle screen).
 
 **Real bug found and fixed during this redesign:** removing HT-A3000 from
 Living Room's Music assignment earlier the same night left

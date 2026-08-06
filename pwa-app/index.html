@@ -574,16 +574,27 @@
     letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
   }
   .ambient-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 90vw; }
+  /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
+     Favorites screenshot (docs reference, not the marketing hero image):
+     small icon top-left, room/zone label top-right (bare text, no chip),
+     one bold primary word, a dim device-type subtext line under it. Denser
+     and smaller than the previous pass — that's deliberate, matches the
+     reference's tile size relative to the screen. */
   .ambient-card {
-    width: 168px; padding: 16px; border-radius: 14px; border: 1px solid var(--hairline);
+    width: 148px; padding: 14px; border-radius: 14px; border: 1px solid var(--hairline);
     background: var(--base-raised); color: var(--text); text-align: left; cursor: pointer;
+    display: flex; flex-direction: column;
   }
-  .ambient-card-icon { width: 22px; height: 22px; color: var(--text-dim); margin-bottom: 14px; }
+  .ambient-card-icon { width: 18px; height: 18px; color: var(--text-dim); }
   .ambient-card.is-on .ambient-card-icon { color: var(--on); }
+  .ambient-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+  .ambient-card-roomlabel { font-size: 11px; color: var(--text-dim); }
   .ambient-card-label {
     font-size: 10.5px; color: var(--text-dim); text-transform: uppercase;
     letter-spacing: 0.5px; margin-bottom: 4px;
   }
+  .ambient-card-primary { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .ambient-card-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
   .ambient-card-value { font-size: 16px; font-weight: 600; color: var(--text); }
   .ambient-card-controls { display: flex; gap: 8px; margin-top: 14px; }
   .ambient-stepper-btn {
@@ -592,6 +603,25 @@
     display: flex; align-items: center; justify-content: center;
   }
   .ambient-stepper-btn:active { background: var(--accent-dim); color: var(--text); }
+
+  /* Vertical pill — Loxone's real brightness indicator is a tall narrow
+     capsule that fills from the bottom, not a horizontal bar. Dragging
+     vertically sets brightness; higher on the pill = brighter, matching
+     the reference exactly (not a relabeled version of the horizontal
+     .slider-track used on interior screens). */
+  .ambient-vpill-row { display: flex; align-items: flex-end; gap: 10px; margin-top: auto; padding-top: 12px; }
+  .ambient-vpill-track {
+    width: 13px; height: 46px; border-radius: 999px; background: var(--hairline);
+    position: relative; cursor: pointer; touch-action: none; overflow: hidden; flex-shrink: 0;
+  }
+  .ambient-vpill-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--text-dim); border-radius: 999px; }
+  .ambient-card.is-on .ambient-vpill-fill { background: var(--on); }
+  .ambient-more-btn {
+    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--hairline);
+    background: var(--base); color: var(--text-dim); display: flex; align-items: center;
+    justify-content: center; cursor: pointer; flex-shrink: 0;
+  }
+  .ambient-card.is-on .ambient-more-btn { color: var(--on); border-color: var(--on-dim); background: var(--on-dim); }
   .ambient-hint {
     position: absolute; bottom: 40px; font-size: 12px; color: var(--text-dim);
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
@@ -613,31 +643,16 @@
     --text: #1C1C1E; --text-dim: #6E6E73; --text-faint: #A0A0A5;
     --accent-dim: rgba(0, 0, 0, 0.06);
   }
+  /* Bare icon, no button chrome — matches Loxone's actual corner icons
+     (moon/more/search), which are plain glyphs with no circle/background,
+     not a filled button like the first pass here had. */
   .ambient-theme-toggle {
-    position: absolute; top: 40px; right: 40px; background: var(--base-raised);
-    border: 1px solid var(--hairline); border-radius: 999px; width: 40px; height: 40px;
-    display: flex; align-items: center; justify-content: center; color: var(--text-dim); cursor: pointer;
+    position: absolute; top: 40px; right: 40px; background: none; border: none;
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); cursor: pointer;
   }
 
-  /* Room card tap-to-navigate (2026-08-06) — the card body enters that
-     room's real screen; the power toggle / slider / presets are separate
-     inner controls that stop propagation and stay on Ambient. */
-  .ambient-room-card { display: flex; flex-direction: column; gap: 10px; }
-  .ambient-card-top { display: flex; align-items: flex-start; justify-content: space-between; }
-  .ambient-power-btn {
-    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--hairline);
-    background: var(--base); color: var(--text-dim); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; flex-shrink: 0;
-  }
-  .ambient-card.is-on .ambient-power-btn { color: var(--on); border-color: var(--on-dim); background: var(--on-dim); }
   .ambient-card .slider-track { margin-top: 2px; }
-  .ambient-presence-row {
-    display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-faint);
-    text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px;
-  }
-  .ambient-presence-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; }
-  .ambient-presence-row.is-present .ambient-presence-dot { background: var(--on); }
-  .ambient-presence-row.is-present { color: var(--text-dim); }
 
   /* Media card — album art background + real transport/volume controls */
   .ambient-media-card { position: relative; overflow: hidden; }
@@ -657,12 +672,14 @@
 
   /* Bottom quick-jump row (2026-08-06) — real navigation to a few of our
      actual rail-nav destinations, not decorative icons standing in for
-     sections we don't have (Loxone's own row is specific to their app). */
-  .ambient-quicknav-row { display: flex; gap: 20px; margin-top: 32px; }
+     sections we don't have (Loxone's own row is specific to their app).
+     Bare icons only, no labels/chrome — matches the reference's row
+     exactly (star/home/doc/refresh/shield, plain glyphs, no button
+     backgrounds or text underneath). */
+  .ambient-quicknav-row { display: flex; gap: 30px; margin-top: 32px; justify-content: center; }
   .ambient-quicknav-btn {
     background: none; border: none; color: var(--text-dim); cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 10.5px;
-    text-transform: uppercase; letter-spacing: 0.4px;
+    display: flex; align-items: center; justify-content: center;
   }
   .ambient-quicknav-btn svg { width: 20px; height: 20px; }
 
@@ -3229,61 +3246,73 @@ function updateAmbientClock() {
 // <button> can't validly contain another <button>. Matches Loxone's
 // Central screen, which had inline +/- chevrons directly on cards instead
 // of tap-the-whole-card-only.
+// One bold word for the primary value, derived from real average
+// brightness — matches how the Loxone reference labels its light tiles
+// ("Bright") rather than a fraction like "3 of 3 on".
+function ambientBrightnessWord(pct) {
+  if (pct <= 0) return "Off";
+  if (pct < 40) return "Dim";
+  if (pct < 75) return "On";
+  return "Bright";
+}
+
 function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
 
-  // A compact subset of WHITE_PRESETS (already built for the interior
-  // color wheel screen) — full 6 presets don't fit a 168px card, these 3
-  // span cool to warm. Roadmap item 4, docs/UI_MODES_SPEC.md.
-  const AMBIENT_PRESETS = WHITE_PRESETS.filter(p => ["Cool White", "Natural White", "Sunrise"].includes(p.name));
-
-  // Room cards (2026-08-06 redesign): tapping the card body now navigates
-  // into that room's real screen (goToRoom + hideAmbient) — the power
-  // toggle, slider, and presets are separate inner controls that stop
-  // propagation and stay on Ambient. Replaces the old "tap card to toggle
-  // lights" behavior, which left no way to actually get into a room from
+  // Room cards (rebuilt 2026-08-06 to literally match the Loxone
+  // screenshot's light-tile anatomy): icon top-left, room name top-right,
+  // one bold word, "Lighting" subtext, vertical pill + power button.
+  // Tapping the card body navigates into that room's real screen
+  // (goToRoom + hideAmbient); the pill and power button are separate inner
+  // controls that stop propagation and stay on Ambient. Color presets
+  // (roadmap item 4) are dropped from this card for now — they don't
+  // appear on Loxone's tile at all, and the interior room screen's color
+  // wheel still has them, so the feature isn't lost, just not duplicated
   // here.
   const roomCards = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
     const r = ROOMS[id];
-    const onCount = r.lighting.filter(l => l.on).length;
-    const anyOn = onCount > 0;
+    const anyOn = r.lighting.some(l => l.on);
     const avgPct = r.lighting.length ? avgBrightness(r) : 0;
-    const value = r.lighting.length ? (anyOn ? `${onCount} of ${r.lighting.length} on` : "All off") : "No lights";
-    const slider = r.lighting.length ? `
-      <div class="slider-track" data-ambient-slider="${id}">
-        <div class="slider-fill" style="width:${avgPct}%"></div>
-        <div class="slider-thumb" style="left:${avgPct}%"></div>
+    const primary = r.lighting.length ? ambientBrightnessWord(avgPct) : "No lights";
+    const vpill = r.lighting.length ? `
+      <div class="ambient-vpill-row">
+        <div class="ambient-vpill-track" data-ambient-vpill="${id}">
+          <div class="ambient-vpill-fill" style="height:${avgPct}%"></div>
+        </div>
+        <button class="ambient-more-btn" data-ambient-toggle="${id}">${ico("power", "i14")}</button>
       </div>` : "";
-    const hasColor = r.lighting.some(l => l.color);
-    const presets = hasColor ? `
-      <div class="ambient-card-controls">
-        ${AMBIENT_PRESETS.map(p => `<button class="color-swatch-btn" style="background:${p.hex}" data-ambient-preset="${id}:${p.k}" title="${p.name}"></button>`).join("")}
-      </div>` : "";
-    const presence = PRESENCE_ENTITY_BY_ROOM[id] ? (() => {
-      const pState = ambientPresenceStates[id];
-      const isPresent = pState && pState.state === "on";
-      return `<div class="ambient-presence-row ${isPresent ? "is-present" : ""}">
-        <span class="ambient-presence-dot"></span>${isPresent ? "Presence" : "No presence"}
-      </div>`;
-    })() : "";
-    return `<div class="ambient-card ambient-room-card ${anyOn ? "is-on" : ""}" data-ambient-nav="${id}">
-      <div class="ambient-card-top">
+    return `<div class="ambient-card ${anyOn ? "is-on" : ""}" data-ambient-nav="${id}">
+      <div class="ambient-card-header">
         ${ico("lightbulb", "ambient-card-icon")}
-        ${r.lighting.length ? `<button class="ambient-power-btn" data-ambient-toggle="${id}">${ico("power", "i14")}</button>` : ""}
+        <div class="ambient-card-roomlabel">${r.name}</div>
       </div>
-      <div class="ambient-card-label">${r.name}</div>
-      <div class="ambient-card-value">${value}</div>
-      ${slider}
-      ${presets}
-      ${presence}
+      <div class="ambient-card-primary">${primary}</div>
+      <div class="ambient-card-sub">Lighting</div>
+      ${vpill}
+    </div>`;
+  });
+
+  // Presence — its own tile per room now (was folded into the light card),
+  // matching the reference's dedicated "No Presence / Bed room" tile. Real
+  // Magic Areas per-room sensor, read-only.
+  const presenceCards = AMBIENT_ROOMS.filter(id => PRESENCE_ENTITY_BY_ROOM[id]).map(id => {
+    const r = ROOMS[id];
+    const pState = ambientPresenceStates[id];
+    const isPresent = pState && pState.state === "on";
+    return `<div class="ambient-card ${isPresent ? "is-on" : ""}" style="cursor:default">
+      ${ico("user", "ambient-card-icon")}
+      <div class="ambient-card-primary" style="margin-top:12px">${isPresent ? "Presence" : "No Presence"}</div>
+      <div class="ambient-card-sub">${r.name}</div>
     </div>`;
   });
 
   // Music: whichever room's assigned media_player is actively playing, if
   // any — falls back to the first room with a media_player assigned at all
   // so the card (and its "open Music" nav) still shows when nothing's
-  // playing, matching how the other cards behave when idle.
+  // playing, matching how the other cards behave when idle. Kept richer
+  // than the reference's compact card per explicit direction — this one
+  // stays as-is content-wise, just uses the shared header style now.
   const mediaRooms = AMBIENT_ROOMS.map(id => ROOMS[id]).filter(r => r && r.media && r.media.entityId);
   const playingRoom = mediaRooms.find(r => r.media.playing) || mediaRooms[0] || null;
   const playingRoomId = playingRoom ? AMBIENT_ROOMS.find(id => ROOMS[id] === playingRoom) : null;
@@ -3300,9 +3329,11 @@ function renderAmbientActions() {
     </div>` : "";
   const musicCard = `<div class="ambient-card ambient-media-card ${playingRoom && playingRoom.media.playing ? "is-on" : ""}" data-ambient-nav="music">
     ${art}
-    ${ico("music", "ambient-card-icon")}
-    <div class="ambient-card-label">Music</div>
-    <div class="ambient-card-value">${playingRoom ? (playingRoom.media.playing ? playingRoom.media.track : "Paused") : "Nothing playing"}</div>
+    <div class="ambient-card-header">
+      ${ico("music", "ambient-card-icon")}
+    </div>
+    <div class="ambient-card-primary">${playingRoom ? (playingRoom.media.playing ? playingRoom.media.track : "Paused") : "Nothing playing"}</div>
+    <div class="ambient-card-sub">${playingRoom ? playingRoom.media.name : "Music"}</div>
     ${transport}
   </div>`;
 
@@ -3311,9 +3342,11 @@ function renderAmbientActions() {
   // tapping opens the real Power screen for the fuller view.
   const kw = (state) => state && !isNaN(parseFloat(state.state)) ? `${parseFloat(state.state).toFixed(2)} kW` : "—";
   const energyCard = `<div class="ambient-card" data-ambient-nav="power">
-    ${ico("zap", "ambient-card-icon")}
-    <div class="ambient-card-label">Energy Flow</div>
-    <div class="ambient-card-value">${kw(ambientPowerState)} home</div>
+    <div class="ambient-card-header">
+      ${ico("zap", "ambient-card-icon")}
+    </div>
+    <div class="ambient-card-primary">${kw(ambientPowerState)}</div>
+    <div class="ambient-card-sub">Energy Flow</div>
     <div class="ambient-energy-rows">
       <div class="ambient-energy-row"><span class="label">Solar</span><span class="value">${kw(ambientSolarState)}</span></div>
       <div class="ambient-energy-row"><span class="label">Battery</span><span class="value">${kw(ambientBatteryState)}</span></div>
@@ -3331,15 +3364,17 @@ function renderAmbientActions() {
   const isArmed = alarmState && (alarmState.startsWith("armed") || alarmState === "arming" || alarmState === "pending");
   const alarmLabel = alarmState ? alarmState.replace("armed_", "Armed ").replace(/^\w/, c => c.toUpperCase()) : "—";
   const securityCard = `<div class="ambient-card ${isArmed ? "is-on" : ""}" data-ambient-nav="security">
-    ${ico(isArmed ? "shield-check" : "shield", "ambient-card-icon")}
-    <div class="ambient-card-label">Security</div>
-    <div class="ambient-card-value">${alarmLabel}</div>
+    <div class="ambient-card-header">
+      ${ico(isArmed ? "shield-check" : "shield", "ambient-card-icon")}
+    </div>
+    <div class="ambient-card-primary">${alarmLabel}</div>
+    <div class="ambient-card-sub">Security</div>
     <div class="ambient-card-controls">
       <button class="ambient-stepper-btn" data-ambient-alarm-toggle style="flex:1">${isArmed ? "Disarm" : "Arm Away"}</button>
     </div>
   </div>`;
 
-  el.innerHTML = roomCards.join("") + musicCard + energyCard + securityCard;
+  el.innerHTML = roomCards.join("") + presenceCards.join("") + musicCard + energyCard + securityCard;
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
@@ -3365,22 +3400,24 @@ function renderAmbientActions() {
     });
   });
 
-  el.querySelectorAll("[data-ambient-slider]").forEach(track => {
-    const id = track.dataset.ambientSlider;
+  // Vertical pill (2026-08-06) — matches Loxone's real brightness
+  // indicator: a tall capsule that fills from the bottom. Dragging sets
+  // fill height from the pointer's position within the track, inverted
+  // (higher on the pill = brighter, since screen Y grows downward).
+  el.querySelectorAll("[data-ambient-vpill]").forEach(track => {
+    const id = track.dataset.ambientVpill;
     const r = ROOMS[id];
     let dragging = false;
-    const fill = track.querySelector(".slider-fill");
-    const thumb = track.querySelector(".slider-thumb");
-    function setFromEvent(clientX) {
+    const fill = track.querySelector(".ambient-vpill-fill");
+    function setFromEvent(clientY) {
       const rect = track.getBoundingClientRect();
-      let pct = Math.round(((clientX - rect.left) / rect.width) * 100);
+      let pct = Math.round(((rect.bottom - clientY) / rect.height) * 100);
       pct = Math.max(0, Math.min(100, pct));
       r.lighting.forEach(l => { l.brightness = pct; l.on = pct > 0; });
-      fill.style.width = pct + "%";
-      thumb.style.left = pct + "%";
+      fill.style.height = pct + "%";
     }
-    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
-    track.addEventListener("pointermove", e => { e.stopPropagation(); if (dragging) setFromEvent(e.clientX); });
+    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; setFromEvent(e.clientY); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointermove", e => { e.stopPropagation(); if (dragging) setFromEvent(e.clientY); });
     track.addEventListener("pointerup", e => { e.stopPropagation(); dragging = false; r.lighting.forEach(haSyncLight); renderAmbientActions(); });
     track.addEventListener("pointercancel", e => { e.stopPropagation(); dragging = false; });
     track.addEventListener("click", e => e.stopPropagation());
@@ -3441,23 +3478,6 @@ function renderAmbientActions() {
     track.addEventListener("click", e => e.stopPropagation());
   });
 
-  el.querySelectorAll("[data-ambient-preset]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const [id, kelvin] = btn.dataset.ambientPreset.split(":");
-      const r = ROOMS[id];
-      r.lighting.filter(l => l.color).forEach(l => {
-        l.on = true;
-        if (!l.brightness) l.brightness = 100;
-        if (l.entityId && window.haClient && window.haClient.connected) {
-          window.haClient.callService("light", "turn_on", l.entityId, {
-            brightness_pct: l.brightness, color_temp_kelvin: +kelvin,
-          }).catch(console.error);
-        }
-      });
-      renderAmbientActions();
-    });
-  });
 
   const alarmToggleBtn = el.querySelector("[data-ambient-alarm-toggle]");
   if (alarmToggleBtn) {
@@ -3485,7 +3505,7 @@ function renderAmbientQuickNav() {
   const el = document.getElementById("ambientQuickNav");
   if (!el) return;
   el.innerHTML = AMBIENT_QUICKNAV.map(([id, icon, label]) =>
-    `<button class="ambient-quicknav-btn" data-ambient-quicknav="${id}">${ico(icon, "i20")}<span>${label}</span></button>`
+    `<button class="ambient-quicknav-btn" data-ambient-quicknav="${id}" title="${label}">${ico(icon, "i20")}</button>`
   ).join("");
   icons();
   el.querySelectorAll("[data-ambient-quicknav]").forEach(btn => {
