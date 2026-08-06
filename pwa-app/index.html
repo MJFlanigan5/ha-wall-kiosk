@@ -252,7 +252,9 @@
     padding: 15px 10px; border-radius: 12px; border: 1px solid var(--hairline);
     background: var(--base-raised); color: var(--text); font-family: var(--font-body);
     font-size: 12.5px; font-weight: 500; text-align: center; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
   }
+  .quick-btn svg { flex-shrink: 0; color: var(--text-dim); }
   .security-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .security-filter-tabs { display: flex; gap: 16px; margin-bottom: 14px; border-bottom: 1px solid var(--hairline); }
   .security-filter-tab {
@@ -265,7 +267,9 @@
     width: 100%; margin-top: 16px; padding: 14px; border-radius: 12px; border: 1px solid var(--hairline);
     background: var(--base-raised); color: var(--text); font-family: var(--font-body);
     font-size: 13.5px; font-weight: 500; text-align: center; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
   }
+  .bypass-btn svg { color: var(--text-dim); }
   .security-group { margin-bottom: 22px; }
   .security-group-header {
     display: flex; justify-content: space-between; align-items: center; padding: 8px 0;
@@ -1744,21 +1748,24 @@ function renderShades(room) {
 }
 
 function renderSecurityArm() {
-  const states = [["stay", "Stay"], ["disarmed", "Disarmed"], ["away", "Away"]];
+  // Icon differentiated per arm state (2026-08-06) — all three used a plain
+  // "shield" before, which didn't distinguish Stay/Away/Disarmed at a
+  // glance the way the rest of the app's icon-forward screens do.
+  const states = [["stay", "Stay", "home"], ["disarmed", "Disarmed", "shield-off"], ["away", "Away", "shield-check"]];
   const label = armState === "disarmed" ? "READY TO ARM" : `ARMED · ${armState.toUpperCase()}`;
   return `
     <div class="arm-row">
-      ${states.map(([id, name]) => `
+      ${states.map(([id, name, icon]) => `
         <button class="arm-shield ${armState === id ? "active" : ""}" data-arm="${id}">
-          ${ico("shield", "i24")}<div class="label">${name.toUpperCase()}</div>
+          ${ico(icon, "i24")}<div class="label">${name.toUpperCase()}</div>
         </button>`).join("")}
     </div>
     <div class="arm-status-text">${label}</div>
     <div class="quick-grid">
-      <button class="quick-btn" data-quick="lock">Lock Doors</button>
-      <button class="quick-btn" data-quick="unlock">Unlock Front Door</button>
-      <button class="quick-btn" data-quick="porch">Turn On Porch Lights</button>
-      <button class="quick-btn" data-quick="entry">Open Door Entry</button>
+      <button class="quick-btn" data-quick="lock">${ico("lock", "i16")}Lock Doors</button>
+      <button class="quick-btn" data-quick="unlock">${ico("lock-open", "i16")}Unlock Front Door</button>
+      <button class="quick-btn" data-quick="porch">${ico("lightbulb", "i16")}Turn On Porch Lights</button>
+      <button class="quick-btn" data-quick="entry">${ico("door-open", "i16")}Open Door Entry</button>
     </div>`;
 }
 
@@ -1800,7 +1807,7 @@ function renderSecurityStatusAll() {
             </div>`).join("")}
         </div>
       </div>`).join("")}
-    ${anyFaults ? `<button class="bypass-btn" data-bypass>Bypass All Faults</button>` : ""}`;
+    ${anyFaults ? `<button class="bypass-btn" data-bypass>${ico("shield-off", "i16")}Bypass All Faults</button>` : ""}`;
 }
 
 function renderSecurityCameras() {
