@@ -573,12 +573,11 @@
     font-family: var(--font-mono); font-size: 15px; color: var(--text-dim);
     letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
   }
-  /* Reverted 2026-08-06 back to 6 columns per Mike's original direction —
-     the 8/9-column widening was for the interim "fit every card in one
-     line" experiment; 6 columns is the actual target, content wraps into
-     two natural rows (system cards on top, room cards below). */
+  /* 7 columns (2026-08-06) — 6 wrapped the top status row onto 2 lines
+     (7 tiles, Music spanning 2 = 8 units), pushing everything into 3 rows
+     total. 7 columns fits the status row on one line. */
   .ambient-actions {
-    display: grid; grid-template-columns: repeat(6, 130px); grid-auto-rows: auto;
+    display: grid; grid-template-columns: repeat(7, 130px); grid-auto-rows: auto;
     gap: 12px; justify-content: center; max-width: 90vw;
   }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
@@ -3555,8 +3554,11 @@ function renderAmbientActions() {
   // sits right after Music per Mike's direction. Grid is 9 columns (Music
   // spans 2 + 7 singles = 9 units) so the top row fills one line cleanly.
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
-  el.innerHTML = musicCard + comfortCard + securityCard + energyCard + packagesCard + co2Card + energyProducedCard
-    + waterHeaterCard + roomCards;
+  // Water Heater moved right after Music (2026-08-06) so it lands in the
+  // top row's first 7 units at the new 7-column width, instead of
+  // spilling onto its own line — Mike's explicit ask.
+  el.innerHTML = musicCard + waterHeaterCard + comfortCard + securityCard + energyCard + packagesCard
+    + co2Card + energyProducedCard + roomCards;
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
