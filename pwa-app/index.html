@@ -1071,14 +1071,19 @@ function wattsOf(str) {
   return str.includes("kW") ? n * 1000 : n;
 }
 
+// Ring gauge — real Power Mix breakdown by source (Grid/Solar/Battery),
+// not a per-device "Top Consumers" breakdown (2026-08-06: that section was
+// dropped entirely, no per-appliance wattage data exists in this HA
+// instance — reusing this exact component for the real source mix instead
+// of fabricating device-level numbers).
 function renderRing(compact) {
   const stops = [];
   let acc = 0;
-  const totalW = POWER.consumers.reduce((s, c) => s + wattsOf(c.watts), 0);
-  POWER.consumers.forEach(c => {
-    const frac = wattsOf(c.watts) / (totalW || 1);
+  const totalKw = POWER.mix.reduce((s, m) => s + m.kw, 0);
+  POWER.mix.forEach(m => {
+    const frac = m.kw / (totalKw || 1);
     const start = acc, end = acc + frac * 360;
-    stops.push(`${c.color} ${start}deg ${end}deg`);
+    stops.push(`${m.color} ${start}deg ${end}deg`);
     acc = end;
   });
   stops.push(`var(--hairline) ${acc}deg 360deg`);
@@ -1109,15 +1114,6 @@ function renderEnergyGrid() {
           <div class="eco-icon ${POWER.battery.charging ? "active" : ""}">${ico("zap", "i16")}<div class="lbl">CHARGING</div></div>
           <div class="eco-icon ${producing > 0 ? "active" : ""}">${ico("sun", "i16")}<div class="lbl">PRODUCING</div></div>
           <div class="eco-icon">${ico("minus", "i16")}<div class="lbl">INACTIVE</div></div>
-        </div>
-      </div>
-      <div class="energy-card">
-        <div class="energy-card-title">Top Consumers <span class="live">● LIVE</span></div>
-        <div class="mini-ring-row">
-          ${renderRing(true)}
-          <div class="mini-legend">
-            ${POWER.consumers.slice(0, 4).map(c => `<div class="mini-legend-row"><span class="mini-legend-dot" style="background:${c.color}"></span>${c.name}</div>`).join("")}
-          </div>
         </div>
       </div>
       <div class="energy-card">
@@ -1255,6 +1251,13 @@ function renderEnergyModeCard() {
     </div>`;
 }
 
+// History/Automation/EV Charging/Events (below) are NOT wired to real data
+// as of the 2026-08-06 Energy screen pass — Overview and Water Heater are.
+// History would need HA's get_history/get_statistics for real Powerwall
+// time series (real, just not done yet). Automation's pill list has no
+// backing entity to read from. EV Charging has zero real data — no EV
+// charger entity exists anywhere in this HA instance. Events reuses mock
+// POWER.events. Left as-is rather than fabricating a "real" version.
 function renderEnergyHistory() {
   const h = POWER.history;
   const w = 320, hgt = 140, pad = 10;
@@ -1346,23 +1349,6 @@ function renderPowerOverview() {
       <div class="section-label-sm">Power Flow</div>
       ${renderFlowDiagram()}
       ${renderRing()}
-      <div class="section-label-sm">Top Consumers</div>
-      <div class="consumer-list">
-        ${POWER.consumers.map((c, i) => `
-          <div class="consumer-row">
-            <div class="consumer-left">
-              <div class="consumer-dot" style="background:${c.color}22; color:${c.color}">${ico(c.icon, "i16")}</div>
-              <div class="consumer-name">${c.name}</div>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px">
-              <div class="consumer-watts">${c.watts}</div>
-              ${c.toggleable
-                ? `<button class="switch-btn ${c.on ? "on" : ""}" style="padding:4px 10px" data-consumer-toggle="${i}">${c.on ? "ON" : "OFF"}</button>`
-                : `<span style="color:var(--text-faint); display:flex">${ico("more-horizontal", "i14")}</span>`}
-            </div>
-          </div>
-        `).join("")}
-      </div>
       <div class="section-label-sm" style="margin-top:26px">Live Consumption</div>
       <div class="ev-stats-row" style="margin-bottom:10px">
         <div class="ev-stat"><div class="ev-stat-val">${POWER.liveConsumption.current} kW</div><div class="ev-stat-label">Current Usage</div></div>
@@ -1373,10 +1359,6 @@ function renderPowerOverview() {
         <div class="kv-row">
           <div class="kv-left"><div class="kv-icon">${ico("battery-charging", "i18")}</div><div class="kv-name">Powerwall</div></div>
           <div class="kv-value">${POWER.battery.pct}% · ${POWER.battery.charging ? `Charging ${POWER.battery.rate}` : "Idle"}</div>
-        </div>
-        <div class="kv-row">
-          <div class="kv-left"><div class="kv-icon">${ico("clock", "i18")}</div><div class="kv-name">Est. until full</div></div>
-          <div class="kv-value">${POWER.battery.eta}</div>
         </div>
       </div>
     </div>
@@ -1447,7 +1429,14 @@ function renderPowerContent() {
     el.addEventListener("click", () => { powerTab = el.dataset.powertab; renderPowerContent(); });
   });
   const vac = document.querySelector("[data-vacation]");
-  if (vac) vac.addEventListener("click", () => { POWER.waterHeater.vacationMode = !POWER.waterHeater.vacationMode; renderPowerContent(); });
+  if (vac) vac.addEventListener("click", () => {
+    const next = !POWER.waterHeater.vacationMode;
+    POWER.waterHeater.vacationMode = next; // optimistic; refreshWaterHeaterFromHA() corrects it once the real state lands
+    renderPowerContent();
+    if (window.haClient && window.haClient.connected) {
+      window.haClient.callService("water_heater", "set_away_mode", WATER_HEATER_ENTITY, { away_mode: next ? "on" : "off" }).catch(console.error);
+    }
+  });
 
   document.querySelectorAll("[data-energy-mode]").forEach(el => {
     el.addEventListener("click", () => { energyMode = el.dataset.energyMode; renderPowerContent(); });
@@ -2687,10 +2676,60 @@ const AMBIENT_POWER_ENTITY = "sensor.my_home_load_power";
 const AMBIENT_SOLAR_ENTITY = "sensor.my_home_solar_power";
 const AMBIENT_BATTERY_ENTITY = "sensor.my_home_battery_power";
 const AMBIENT_GRID_ENTITY = "sensor.my_home_grid_power";
+const AMBIENT_BATTERY_PCT_ENTITY = "sensor.my_home_percentage_charged";
+const AMBIENT_HOME_USAGE_ENTITY = "sensor.my_home_home_usage";
 let ambientPowerState = null;
 let ambientSolarState = null;
 let ambientBatteryState = null;
 let ambientGridState = null;
+let ambientBatteryPctState = null;
+let ambientHomeUsageState = null;
+
+// Energy screen (2026-08-06) — real Rinnai tankless water heater, confirmed
+// live before wiring (was previously POWER.waterHeater's fabricated data).
+const WATER_HEATER_ENTITY = "water_heater.utility_room_water_heater";
+const WATER_HEATER_RECIRC_ENTITY = "binary_sensor.water_heater_recirculation";
+const WATER_HEATER_FLOW_ENTITY = "sensor.utility_room_water_flow_rate";
+let waterHeaterState = null;
+let waterHeaterRecircState = null;
+let waterHeaterFlowState = null;
+
+// Recomputes the Energy screen's POWER fields (totalKw/mix/battery/
+// liveConsumption) from the same real Powerwall sensors Ambient Mode's
+// Energy Flow card already uses — the Flow Diagram/Ring/Power Mix/Battery
+// cards need no code changes at all, they just read POWER.* like they
+// always did. Top Consumers is gone entirely (see renderPowerOverview) —
+// no per-device wattage breakdown exists anywhere in this HA instance.
+function refreshPowerFromHA() {
+  const num = (state) => state && !isNaN(parseFloat(state.state)) ? parseFloat(state.state) : 0;
+  POWER.totalKw = +num(ambientPowerState).toFixed(2);
+  POWER.mix = [
+    { name: "Grid", kw: +num(ambientGridState).toFixed(2), color: "#FF453A" },
+    { name: "Solar", kw: +num(ambientSolarState).toFixed(2), color: "#FFD60A" },
+    { name: "Battery", kw: +Math.abs(num(ambientBatteryState)).toFixed(2), color: "#34C759" },
+    { name: "Generator", kw: 0, color: "#8E8E93" }, // no generator hardware exists — real zero, not fabricated
+  ];
+  const battKw = num(ambientBatteryState);
+  POWER.battery = {
+    pct: Math.round(num(ambientBatteryPctState)),
+    charging: battKw > 0.05, // real Powerwall convention: positive = charging
+    rate: `${Math.abs(battKw).toFixed(1)} kW`,
+    eta: null, // not derivable from these sensors — dropped from the UI, not guessed
+  };
+  POWER.liveConsumption = { current: +num(ambientPowerState).toFixed(2), totalToday: +num(ambientHomeUsageState).toFixed(1) };
+}
+
+function refreshWaterHeaterFromHA() {
+  if (!waterHeaterState) return;
+  const attrs = waterHeaterState.attributes || {};
+  POWER.waterHeater = {
+    setTemp: attrs.temperature != null ? Math.round(attrs.temperature) : null,
+    recirculation: waterHeaterRecircState ? (waterHeaterRecircState.state === "on" ? "Active" : "Idle") : "—",
+    flow: waterHeaterFlowState ? `${parseFloat(waterHeaterFlowState.state).toFixed(1)} gpm` : "—",
+    mode: attrs.operation_mode || waterHeaterState.state || "—",
+    vacationMode: attrs.away_mode === "on",
+  };
+}
 
 // Per-room presence for Ambient Mode cards (2026-08-06) — real Magic Areas
 // aggregate presence sensors (per-room automation config already confirmed
@@ -2841,6 +2880,13 @@ async function initLiveData() {
     ambientSolarState = stateById.get(AMBIENT_SOLAR_ENTITY) || null;
     ambientBatteryState = stateById.get(AMBIENT_BATTERY_ENTITY) || null;
     ambientGridState = stateById.get(AMBIENT_GRID_ENTITY) || null;
+    ambientBatteryPctState = stateById.get(AMBIENT_BATTERY_PCT_ENTITY) || null;
+    ambientHomeUsageState = stateById.get(AMBIENT_HOME_USAGE_ENTITY) || null;
+    refreshPowerFromHA();
+    waterHeaterState = stateById.get(WATER_HEATER_ENTITY) || null;
+    waterHeaterRecircState = stateById.get(WATER_HEATER_RECIRC_ENTITY) || null;
+    waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
+    refreshWaterHeaterFromHA();
     for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
       ambientPresenceStates[roomId] = stateById.get(entityId) || null;
     }
@@ -2863,12 +2909,25 @@ async function initLiveData() {
         return;
       }
       if (entityId === AMBIENT_POWER_ENTITY || entityId === AMBIENT_SOLAR_ENTITY ||
-          entityId === AMBIENT_BATTERY_ENTITY || entityId === AMBIENT_GRID_ENTITY) {
+          entityId === AMBIENT_BATTERY_ENTITY || entityId === AMBIENT_GRID_ENTITY ||
+          entityId === AMBIENT_BATTERY_PCT_ENTITY || entityId === AMBIENT_HOME_USAGE_ENTITY) {
         if (entityId === AMBIENT_POWER_ENTITY) ambientPowerState = newState;
         if (entityId === AMBIENT_SOLAR_ENTITY) ambientSolarState = newState;
         if (entityId === AMBIENT_BATTERY_ENTITY) ambientBatteryState = newState;
         if (entityId === AMBIENT_GRID_ENTITY) ambientGridState = newState;
+        if (entityId === AMBIENT_BATTERY_PCT_ENTITY) ambientBatteryPctState = newState;
+        if (entityId === AMBIENT_HOME_USAGE_ENTITY) ambientHomeUsageState = newState;
+        refreshPowerFromHA();
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        if (currentRoom === "power") renderPowerContent();
+        return;
+      }
+      if (entityId === WATER_HEATER_ENTITY || entityId === WATER_HEATER_RECIRC_ENTITY || entityId === WATER_HEATER_FLOW_ENTITY) {
+        if (entityId === WATER_HEATER_ENTITY) waterHeaterState = newState;
+        if (entityId === WATER_HEATER_RECIRC_ENTITY) waterHeaterRecircState = newState;
+        if (entityId === WATER_HEATER_FLOW_ENTITY) waterHeaterFlowState = newState;
+        refreshWaterHeaterFromHA();
+        if (currentRoom === "power" && powerTab === "waterheater") renderPowerContent();
         return;
       }
       const presenceRoom = Object.keys(PRESENCE_ENTITY_BY_ROOM).find(r => PRESENCE_ENTITY_BY_ROOM[r] === entityId);
