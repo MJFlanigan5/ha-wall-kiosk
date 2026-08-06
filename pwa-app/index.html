@@ -1490,21 +1490,30 @@ function heroStatusText(room) {
 // already established, so room screens and Ambient share one visual
 // language instead of two — only real wired data shown, same discipline
 // as Ambient's cards.
+// Hero cards jump to their section instead of sitting inert (2026-08-06,
+// Mike's ask) — tapping Lighting/Music/TV scrolls straight to that part of
+// the room screen instead of making him scroll past everything manually.
 function renderHero(room) {
   const onCount = room.lighting.filter(l => l.on).length;
-  const lightingCard = `<div class="ambient-card hero-status-card ${onCount > 0 ? "is-on" : ""}" style="cursor:default;">
+  const lightingCard = `<div class="ambient-card hero-status-card ${onCount > 0 ? "is-on" : ""}" data-hero-jump="lighting">
     ${ico("lightbulb", "ambient-card-icon")}
     <div class="ambient-card-label">Lighting</div>
     <div class="ambient-card-value">${room.lighting.length ? heroStatusText(room) : "No lights"}</div>
   </div>`;
 
-  const mediaCard = (room.media && room.media.entityId) ? `<div class="ambient-card hero-status-card ${room.media.playing ? "is-on" : ""}" style="cursor:default;">
+  const mediaCard = (room.media && room.media.entityId) ? `<div class="ambient-card hero-status-card ${room.media.playing ? "is-on" : ""}" data-hero-jump="music">
     ${ico("music", "ambient-card-icon")}
     <div class="ambient-card-label">Music</div>
     <div class="ambient-card-value">${room.media.playing ? room.media.track : "Not playing"}</div>
   </div>` : "";
 
-  return `<div class="hero-status-row">${lightingCard}${mediaCard}</div>`;
+  const tvCard = (room.tv && room.tv.entityId) ? `<div class="ambient-card hero-status-card ${room.tv.on ? "is-on" : ""}" data-hero-jump="tv">
+    ${ico("tv", "ambient-card-icon")}
+    <div class="ambient-card-label">TV</div>
+    <div class="ambient-card-value">${room.tv.on ? "On" : "Off"}</div>
+  </div>` : "";
+
+  return `<div class="hero-status-row">${lightingCard}${mediaCard}${tvCard}</div>`;
 }
 
 function renderLightingSlider(room) {
@@ -2200,17 +2209,23 @@ function renderTv(room) {
 }
 
 function renderRoomSections(room) {
-  let sections = `<div class="section-label-sm" style="margin-top:24px">${ico("lightbulb", "i14")}Lighting</div>${renderLighting(room)}`;
+  let sections = `<div class="section-label-sm" id="section-lighting" style="margin-top:24px">${ico("lightbulb", "i14")}Lighting</div>${renderLighting(room)}`;
   if (room.media && room.media.entityId) {
-    sections += `<div class="section-label-sm" style="margin-top:32px">${ico("music", "i14")}Music</div>${renderMedia(room)}`;
+    sections += `<div class="section-label-sm" id="section-music" style="margin-top:32px">${ico("music", "i14")}Music</div>${renderMedia(room)}`;
   }
   if (room.tv && room.tv.entityId) {
-    sections += `<div class="section-label-sm" style="margin-top:32px">${ico("tv", "i14")}TV</div>${renderTv(room)}`;
+    sections += `<div class="section-label-sm" id="section-tv" style="margin-top:32px">${ico("tv", "i14")}TV</div>${renderTv(room)}`;
   }
   return sections;
 }
 
 function wireInteractions(room) {
+  document.querySelectorAll("[data-hero-jump]").forEach(el => {
+    el.addEventListener("click", () => {
+      const target = document.getElementById(`section-${el.dataset.heroJump}`);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
   document.querySelectorAll("[data-color-open]").forEach(el => {
     el.addEventListener("click", e => { e.stopPropagation(); colorWheelIndex = +el.dataset.colorOpen; colorSubView = "wheel"; renderContent(); });
   });
@@ -3011,6 +3026,8 @@ async function renderAdminRoomList() {
   const availableLights = allLights.filter(s => !assignedLightIds.has(s.entity_id) && s.state !== "unavailable");
   const assignedMediaIds = new Set(Object.values(map).map(r => r.media_player).filter(Boolean));
   const availableMedia = allMediaPlayers.filter(s => !assignedMediaIds.has(s.entity_id) && s.state !== "unavailable");
+  const assignedTvIds = new Set(Object.values(map).map(r => r.tv).filter(Boolean));
+  const availableTv = allMediaPlayers.filter(s => !assignedTvIds.has(s.entity_id) && s.state !== "unavailable");
 
   listEl.innerHTML = Object.keys(map).filter(id => ROOMS[id]).map(roomId => {
     const room = ROOMS[roomId];
@@ -3037,6 +3054,14 @@ async function renderAdminRoomList() {
       `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id} (${s.entity_id})</option>`
     ).join("");
 
+    const currentTvId = map[roomId].tv;
+    const currentTvLabel = currentTvId
+      ? (allMediaPlayers.find(s => s.entity_id === currentTvId)?.attributes.friendly_name || currentTvId)
+      : null;
+    const tvOptions = availableTv.map(s =>
+      `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id} (${s.entity_id})</option>`
+    ).join("");
+
     return `<div class="admin-room-block">
       <h3>${room.name} — Lighting</h3>
       ${rows}
@@ -3054,6 +3079,16 @@ async function renderAdminRoomList() {
                ${mediaOptions || '<option>No unassigned media players available</option>'}
              </select>
              <button class="admin-add-btn" data-add-media-room="${roomId}" ${mediaOptions ? "" : "disabled"}>Add</button>
+           </div>`
+      }
+      <h3 style="margin-top:18px;">${room.name} — TV (power only)</h3>
+      ${currentTvId
+        ? `<div class="admin-entity-row"><span>${currentTvLabel}</span><button class="admin-remove-btn" data-remove-tv-room="${roomId}">×</button></div>`
+        : `<div class="admin-add-row">
+             <select class="admin-add-select" data-tv-room="${roomId}" ${tvOptions ? "" : "disabled"}>
+               ${tvOptions || '<option>No unassigned media players available</option>'}
+             </select>
+             <button class="admin-add-btn" data-add-tv-room="${roomId}" ${tvOptions ? "" : "disabled"}>Add</button>
            </div>`
       }
     </div>`;
@@ -3075,6 +3110,15 @@ async function renderAdminRoomList() {
     btn.addEventListener("click", () => {
       const select = listEl.querySelector(`select[data-media-room="${btn.dataset.addMediaRoom}"]`);
       if (select && select.value) addMediaToRoom(btn.dataset.addMediaRoom, select.value);
+    });
+  });
+  listEl.querySelectorAll("[data-remove-tv-room]").forEach(btn => {
+    btn.addEventListener("click", () => removeTvFromRoom(btn.dataset.removeTvRoom));
+  });
+  listEl.querySelectorAll("[data-add-tv-room]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const select = listEl.querySelector(`select[data-tv-room="${btn.dataset.addTvRoom}"]`);
+      if (select && select.value) addTvToRoom(btn.dataset.addTvRoom, select.value);
     });
   });
 }
@@ -3107,6 +3151,22 @@ async function removeMediaFromRoom(roomId) {
   const map = getRoomEntityMap();
   if (map[roomId]) delete map[roomId].media_player;
   if (ROOMS[roomId]) ROOMS[roomId].media = defaultRoomShape("").media;
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function addTvToRoom(roomId, entityId) {
+  const map = getRoomEntityMap();
+  if (!map[roomId]) map[roomId] = { lighting: [] };
+  map[roomId].tv = entityId;
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function removeTvFromRoom(roomId) {
+  const map = getRoomEntityMap();
+  if (map[roomId]) delete map[roomId].tv;
+  if (ROOMS[roomId]) ROOMS[roomId].tv = null;
   saveRoomEntityMap(map);
   await refreshAfterAdminChange(map);
 }
