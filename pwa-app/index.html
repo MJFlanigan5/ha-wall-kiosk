@@ -474,6 +474,8 @@
     overflow: hidden; transition: transform 0.15s ease, border-color 0.15s ease; cursor: pointer;
   }
   .tv-card.focused { transform: scale(1.08); border-color: rgba(255,255,255,0.6); z-index: 1; }
+  .tv-card-current { border-color: var(--accent); }
+  .tv-card-current .tv-card-name { color: var(--accent); }
   .tv-card-bg { position: absolute; inset: 0; background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%); }
   .tv-card-name { position: relative; font-size: 12px; font-weight: 600; }
   .tv-card-icon {
@@ -2179,6 +2181,7 @@ function renderEntryContent() {
 function renderAppleTVContent() {
   const content = document.getElementById("content");
   const room = ROOMS.living;
+  const appleTvApps = (appleTvState && appleTvState.attributes && appleTvState.attributes.source_list) || [];
   const services = [
     ["lighting", "Lighting", "sliders-horizontal"],
     ["climate", "Climate", "thermometer"],
@@ -2212,13 +2215,13 @@ function renderAppleTVContent() {
             ${ico(icon, "i24")}
           </div>`).join("")}
       </div>
-      <div class="tv-row-label">Favorites</div>
+      <div class="tv-row-label">Apps</div>
       <div class="tv-carousel">
-        ${FAVORITE_CHANNELS.map((c, i) => `
-          <div class="tv-card ${tvFocused.row === "favorites" && tvFocused.index === i ? "focused" : ""}" data-tv="favorites:${i}" style="height:64px">
+        ${appleTvApps.length ? appleTvApps.map((appName, i) => `
+          <div class="tv-card ${tvFocused.row === "apps" && tvFocused.index === i ? "focused" : ""} ${appleTvState && appleTvState.attributes && appleTvState.attributes.source === appName ? "tv-card-current" : ""}" data-tv="apps:${i}" data-tv-app="${appName}" style="height:64px">
             <div class="tv-card-bg"></div>
-            <div class="tv-card-name">${c}</div>
-          </div>`).join("")}
+            <div class="tv-card-name">${appName}</div>
+          </div>`).join("") : `<div class="notif-desc">No apps found — check that ${APPLETV_ENTITY} is connected in Home Assistant.</div>`}
       </div>
     </div>
   `;
@@ -2228,6 +2231,9 @@ function renderAppleTVContent() {
     el.addEventListener("click", () => {
       const [row, idx] = el.dataset.tv.split(":");
       tvFocused = { row, index: +idx };
+      if (el.dataset.tvApp && window.haClient && window.haClient.connected) {
+        window.haClient.callService("media_player", "select_source", APPLETV_ENTITY, { source: el.dataset.tvApp }).catch(console.error);
+      }
       renderAppleTVContent();
     });
   });
@@ -2599,6 +2605,14 @@ let AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.
 const AMBIENT_POWER_ENTITY = "sensor.my_home_load_power";
 let ambientPowerState = null;
 
+// Apple TV screen (2026-08-06) — real installed-apps list pulled from HA's
+// source_list attribute (Homey's Apple TV integration bridged in), not the
+// old fabricated FAVORITE_CHANNELS list. Confirmed live: 27 real apps
+// (Netflix, Plex, Disney+, YouTube, Spotify, Infuse, etc.) with
+// select_source supported.
+const APPLETV_ENTITY = "media_player.living_room_2";
+let appleTvState = null;
+
 // Day/night theme shift (2026-08-06, roadmap item 3) — uses HA's real
 // sun.sun entity (state: above_horizon/below_horizon) rather than a
 // guessed clock cutoff, so it's correct for wherever this is actually
@@ -2699,6 +2713,7 @@ async function initLiveData() {
       if (state) ROOMS[roomId].media = haStateToMediaItem(entityId, state);
     }
     ambientPowerState = stateById.get(AMBIENT_POWER_ENTITY) || null;
+    appleTvState = stateById.get(APPLETV_ENTITY) || null;
     const sunState = stateById.get(SUN_ENTITY);
     if (sunState) applyNightMode(sunState.state === "below_horizon");
 
@@ -2719,6 +2734,11 @@ async function initLiveData() {
       if (entityId === AMBIENT_POWER_ENTITY) {
         ambientPowerState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === APPLETV_ENTITY) {
+        appleTvState = newState;
+        if (currentRoom === "appletv") renderAppleTVContent();
         return;
       }
       if (entityId === SUN_ENTITY) {
