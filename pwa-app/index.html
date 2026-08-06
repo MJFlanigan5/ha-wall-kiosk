@@ -2328,14 +2328,11 @@ const AMBIENT_THERMOSTAT_COOL_ENTITY = "sensor.thermostat_cool_temperature";
 let ambientThermostatTempState = null;
 let ambientThermostatCoolState = null;
 
-// CO2 tile (2026-08-06) — real per-room ppm CO2 sensors exist (Apollo
-// devices) but all read "unknown" right now (uncalibrated SCD40 hardware,
-// confirmed live). The Electricity Maps grid-carbon-intensity sensor is
-// real and live now, so used here instead — labeled for what it actually
-// is (grid intensity) rather than reusing the reference's "emission saved"
-// wording, which would overstate what this number means.
-const AMBIENT_CO2_ENTITY = "sensor.electricity_maps_co2_intensity";
-let ambientCo2State = null;
+// Water Usage tile (2026-08-06) — swapped in for the old CO2/grid-intensity
+// tile per Mike's direction. Real Flo shutoff valve sensor, confirmed live
+// (19.8 gal, state_class total_increasing, resets daily).
+const AMBIENT_WATER_USAGE_ENTITY = "sensor.flo_shutoff_today_s_water_usage";
+let ambientWaterUsageState = null;
 
 // Packages tile (2026-08-06) — real Mail and Packages integration, replaces
 // the static "Front window" cover placeholder (no cover entity exists in
@@ -2577,7 +2574,7 @@ async function initLiveData() {
     ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
     ambientThermostatTempState = stateById.get(AMBIENT_THERMOSTAT_TEMP_ENTITY) || null;
     ambientThermostatCoolState = stateById.get(AMBIENT_THERMOSTAT_COOL_ENTITY) || null;
-    ambientCo2State = stateById.get(AMBIENT_CO2_ENTITY) || null;
+    ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
     for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
       ambientPackageStates[entityId] = stateById.get(entityId) || null;
     }
@@ -2643,8 +2640,8 @@ async function initLiveData() {
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
-      if (entityId === AMBIENT_CO2_ENTITY) {
-        ambientCo2State = newState;
+      if (entityId === AMBIENT_WATER_USAGE_ENTITY) {
+        ambientWaterUsageState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
@@ -2940,7 +2937,11 @@ document.getElementById("ambientAdminOpenBtn").addEventListener("click", (e) => 
 });
 document.getElementById("adminOpenBtn").innerHTML = ico("settings", "i18");
 document.getElementById("adminCloseBtn").innerHTML = ico("x", "i22");
-document.getElementById("ambientAdminOpenBtn").innerHTML = ico("settings", "i16");
+// Wrench, not the gear (2026-08-06) — Ambient already has a gear in its own
+// quick-nav row that goes to the real Settings screen; this one opens Admin
+// Mode's Rooms & Entities config, a different destination that looked like
+// a duplicate when both used the same icon.
+document.getElementById("ambientAdminOpenBtn").innerHTML = ico("wrench", "i16");
 icons();
 
 const adminAccentInput = document.getElementById("adminAccentColor");
@@ -3063,16 +3064,13 @@ function renderAmbientActions() {
     <div class="ambient-card-primary" style="margin-top:12px">${packageCount}</div>
     <div class="ambient-card-sub">Packages</div>
   </div>`;
-  // CO2 tile — real Electricity Maps grid carbon intensity (gCO2/kWh), the
-  // only live CO2-related data source in this house right now (the local
-  // ppm CO2 sensors exist but are uncalibrated/"unknown"). Labeled for what
-  // it actually is rather than reusing the reference's "emission saved"
-  // wording, which implies a different (currently unavailable) metric.
-  const co2Intensity = ambientCo2State ? parseFloat(ambientCo2State.state) : null;
-  const co2Card = `<div class="ambient-card" style="cursor:default">
-    ${ico("leaf", "ambient-card-icon")}
-    <div class="ambient-card-primary" style="margin-top:12px">${co2Intensity != null ? Math.round(co2Intensity) : "—"}</div>
-    <div class="ambient-card-sub">g CO2/kWh · Grid</div>
+  // Water Usage tile — real Flo shutoff valve sensor (gallons used today),
+  // swapped in for the old CO2/grid-intensity tile per Mike's direction.
+  const waterUsageGal = ambientWaterUsageState ? parseFloat(ambientWaterUsageState.state) : null;
+  const waterUsageCard = `<div class="ambient-card" style="cursor:default">
+    ${ico("droplets", "ambient-card-icon")}
+    <div class="ambient-card-primary" style="margin-top:12px">${waterUsageGal != null ? waterUsageGal.toFixed(1) : "—"}</div>
+    <div class="ambient-card-sub">gal · Water Today</div>
   </div>`;
   // No solar panels installed yet, so there's no real "Energy Produced"
   // number to show (Mike's call: solar's coming eventually, use general
@@ -3171,12 +3169,13 @@ function renderAmbientActions() {
   </div>`;
 
   // Exact layout dictated by Mike 2026-08-06. Row 1 (status): Music,
-  // Comfort, Packages, Energy Flow, CO2, Home Usage, Water Heater. Row 2
-  // (rooms): Living, Kitchen, Dining, Office, Master, Guest East, Guest
-  // West, then Security last. Security moved out of the status row into
-  // the room row per this spec.
+  // Comfort, Packages, Energy Flow, Water Usage, Home Usage, Water Heater
+  // (CO2 swapped for Water Usage per Mike's direction). Row 2 (rooms):
+  // Living, Kitchen, Dining, Office, Master, Guest East, Guest West, then
+  // Security last. Security moved out of the status row into the room row
+  // per this spec.
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
-  el.innerHTML = musicCard + comfortCard + packagesCard + energyCard + co2Card + energyProducedCard
+  el.innerHTML = musicCard + comfortCard + packagesCard + energyCard + waterUsageCard + energyProducedCard
     + waterHeaterCard + roomCards + securityCard;
   icons();
 
