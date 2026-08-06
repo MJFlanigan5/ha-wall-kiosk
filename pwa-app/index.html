@@ -55,9 +55,10 @@
     border-right: 1px solid var(--hairline); gap: 4px; overflow-y: auto;
   }
   .rail-brand {
-    font-family: var(--font-head); font-weight: 600; font-size: 13px; letter-spacing: 1px;
-    color: var(--text-dim); margin-bottom: 28px; writing-mode: vertical-rl; text-orientation: mixed;
+    width: 100%; padding: 10px 0; margin-bottom: 20px; background: none; border: none;
+    color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
+  .rail-brand:active { color: var(--text); }
   .rail-item {
     position: relative; width: 100%; display: flex; flex-direction: column; align-items: center;
     gap: 8px; padding: 14px 4px; cursor: pointer; border: none; background: transparent;
@@ -333,15 +334,13 @@
      is visible per breakpoint (see dashboard-design-spec.md "iPad is NOT a scaled
      phone" section — confirmed from the Pro 9 App brochure's iPad screenshots). --- */
   .energy-grid { display: none; }
-  .video-tablet-only { display: none; }
   @media (min-width: 768px) {
     .energy-phone { display: none; }
     .energy-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 4px; }
-    .video-phone-note { display: none; }
-    .video-tablet-only { display: block; }
   }
   .energy-card { background: var(--base-raised); border: 1px solid var(--hairline); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; }
   .energy-card-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .energy-card-title-label { display: flex; align-items: center; gap: 6px; }
   .energy-card-title .live { color: var(--on); font-size: 8.5px; }
   .eco-icons { display: flex; justify-content: space-between; margin-top: auto; }
   .eco-icon { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 15px; color: var(--text-faint); }
@@ -361,23 +360,11 @@
   .overview-ring-stat .dot { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
   .battery-big { font-family: var(--font-mono); font-size: 30px; font-weight: 500; text-align: center; margin-top: auto; }
 
-  /* ---------- Favorites grid — shared by Media's Favorites view and Video
-     Tiling's Favorites view (real Savant surfaces one shared favorites list in
-     both places, not two separate ones). ---------- */
-  .favorites-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .favorite-tile {
-    aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--hairline);
-    background: var(--base-raised); color: var(--text); font-family: var(--font-body);
-    font-weight: 600; font-size: 12.5px; text-align: center; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; padding: 8px;
-  }
-  .favorite-tile.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); }
-
-  /* ---------- Video Tiling — freeform multi-source composer, iPad-scoped in the
-     real product. Interaction is simplified vs. real Savant (tap-to-select audio
-     source instead of drag-and-drop; dock-switched Canvas/Layouts/Favorites screens
-     instead of a side panel) to match this app's established navigation language —
-     see dashboard-design-spec.md for the noted departure. ---------- */
+  /* ---------- Room chip row + fullscreen video wrap — originally built for
+     Video Tiling (removed 2026-08-06: it was 100% mock, no real entities
+     behind any source tile). Kept here because Energy's Eco Mode/Storm
+     Watch/Power Outage picker and the Security/Entry camera fullscreen
+     views reuse these exact classes. ---------- */
   .video-room-row { display: flex; gap: 8px; margin-bottom: 18px; overflow-x: auto; }
   .video-room-chip {
     padding: 8px 16px; border-radius: 999px; border: 1px solid var(--hairline);
@@ -386,31 +373,7 @@
   }
   .video-room-chip.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
 
-  .video-canvas { display: grid; gap: 6px; height: 340px; border-radius: 14px; overflow: hidden; position: relative; }
-  .video-tile {
-    position: relative; background: var(--base-raised); border: 2px solid transparent;
-    border-radius: 8px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;
-    justify-content: flex-end; padding: 10px;
-  }
-  .video-tile.selected { border-color: var(--accent); }
   .video-tile-bg { position: absolute; inset: 0; background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%); }
-  .video-tile-name { position: relative; font-size: 13px; font-weight: 600; color: var(--text); }
-  .video-tile-audio {
-    position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; color: var(--text-faint);
-    background: rgba(0,0,0,0.45); border: none; cursor: pointer; z-index: 1;
-  }
-  .video-tile-audio.active { color: var(--on); background: var(--on-dim); }
-
-  .video-pip-main { position: absolute; inset: 0; }
-  .video-pip-corner { position: absolute; right: 12px; bottom: 12px; width: 34%; height: 38%; z-index: 2; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
-
-  .video-transport { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 18px; }
-  .video-transport button {
-    width: 42px; height: 42px; border-radius: 999px; background: var(--base-raised);
-    border: 1px solid var(--hairline); color: var(--text); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-  }
 
   .video-fullscreen-wrap { position: relative; height: 340px; border-radius: 14px; overflow: hidden; }
   .video-fullscreen-close {
@@ -420,19 +383,8 @@
   }
   .video-fullscreen-name { position: relative; z-index: 1; padding: 14px; font-size: 15px; font-weight: 600; }
 
-  .layout-list { display: flex; flex-direction: column; gap: 10px; }
-  .layout-row {
-    display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px;
-    border: 1px solid var(--hairline); background: var(--base-raised); cursor: pointer;
-  }
-  .layout-row.active { border-color: rgba(255,255,255,0.35); background: var(--accent-dim); }
-  .layout-preview { width: 44px; height: 32px; display: grid; gap: 2px; border-radius: 4px; overflow: hidden; flex-shrink: 0; position: relative; }
-  .layout-preview div { background: var(--hairline); }
-  .layout-preview .pip-corner { position: absolute; right: 3px; bottom: 3px; width: 40%; height: 40%; background: var(--text-dim); }
-  .layout-row-name { font-size: 13.5px; font-weight: 500; }
-
   /* ---------- Security Cameras — live feed grid, tap to expand (reuses the
-     .video-fullscreen-* classes from Video Tiling for the expanded view — same
+     .video-fullscreen-* classes above for the expanded view — same
      visual treatment, genuinely the same pattern). ---------- */
   .camera-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .camera-tile {
@@ -1005,12 +957,6 @@ let securityView = "arm";            // arm | status
 let securityFilter = "all";          // all | ready | notready
 let armState = "disarmed";           // stay | disarmed | away (whole-home, matches real Savant)
 let mediaView = "now";               // now | favorites
-let videoView = "canvas";            // canvas | layouts | favorites
-let videoRoom = "living";            // which room's display Video Tiling is targeting
-let videoLayoutIdx = 0;              // index into VIDEO_LAYOUTS
-let videoSelectedTile = null;        // tile index with the transport bar showing
-let videoAudioTile = 0;              // tile index currently providing audio
-let videoFullscreenTile = null;      // tile index expanded fullscreen, or null
 let securityCameraFullscreen = null; // index into CAMERAS expanded fullscreen, or null
 let entryCameraFullscreen = false;   // Front Door camera expanded on the Entry screen
 let colorWheelIndex = null;          // room.lighting index whose color wheel is open, or null
@@ -1077,31 +1023,10 @@ const POWER = {
   dailyTotal: { kwh: 142, changePct: 30, direction: "more" },
 };
 
-// Video Tiling — the iPad-only freeform multi-source composer from the Pro 9 App /
-// IP Video brochures (layout picker with named presets, not a fixed grid). Three
-// representative presets rather than the full real list — enough to prove the pattern.
-const VIDEO_LAYOUTS = [
-  {
-    name: "2×2",
-    sources: ["Apple TV", "PS4", "DirecTV", "Cable TV"],
-    css: "grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); grid-template-areas: 't0 t1' 't2 t3';",
-  },
-  {
-    name: "1 Large Front 4 Back",
-    sources: ["DirecTV", "Apple TV", "PS4", "DVD", "Cable TV"],
-    css: "grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); grid-template-areas: 't0 t0 t1 t2' 't0 t0 t3 t4';",
-  },
-  {
-    name: "PIP Lower Right",
-    sources: ["DirecTV", "Apple TV"],
-    pip: true,
-  },
-];
-
 function renderRail() {
   const rail = document.getElementById("rail");
   const mobileRail = document.getElementById("mobileRail");
-  rail.innerHTML = `<div class="rail-brand">HOME</div>`;
+  rail.innerHTML = `<button class="rail-brand" data-rail-home title="Home">${ico("home", "i20")}</button>`;
   mobileRail.innerHTML = "";
   ROOM_ORDER.forEach(id => {
     const room = ROOMS[id];
@@ -1114,8 +1039,6 @@ function renderRail() {
   const powerHtml = `<button class="rail-item ${powerActive}" data-room="power"><span class="stem"></span><span class="label">Energy</span></button>`;
   const securityActive = currentRoom === "security" ? "active" : "";
   const securityHtml = `<button class="rail-item ${securityActive}" data-room="security"><span class="stem"></span><span class="label">Security</span></button>`;
-  const videoActive = currentRoom === "video" ? "active" : "";
-  const videoHtml = `<button class="rail-item ${videoActive}" data-room="video"><span class="stem"></span><span class="label">Video</span></button>`;
   const poolActive = currentRoom === "poolspa" ? "active" : "";
   const poolHtml = `<button class="rail-item ${poolActive}" data-room="poolspa"><span class="stem"></span><span class="label">Pool & Spa</span></button>`;
   const musicActive = currentRoom === "music" ? "active" : "";
@@ -1126,12 +1049,15 @@ function renderRail() {
   const tvHtml = `<button class="rail-item ${tvActive}" data-room="appletv"><span class="stem"></span><span class="label">Apple TV</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
   const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
-  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + videoHtml + poolHtml + musicHtml + entryHtml + tvHtml + `<div class="rail-divider"></div>` + settingsHtml);
-  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + videoHtml + poolHtml + musicHtml + entryHtml + tvHtml + settingsHtml);
+  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + poolHtml + musicHtml + entryHtml + tvHtml + `<div class="rail-divider"></div>` + settingsHtml);
+  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + poolHtml + musicHtml + entryHtml + tvHtml + settingsHtml);
 
   document.querySelectorAll("[data-room]").forEach(el => {
     el.addEventListener("click", () => goToRoom(el.dataset.room));
   });
+  const homeBtn = document.querySelector("[data-rail-home]");
+  if (homeBtn) homeBtn.addEventListener("click", () => showAmbient());
+  icons();
 }
 
 // Shared by the rail nav and Ambient Mode's card-tap-to-enter (2026-08-06) —
@@ -1184,7 +1110,7 @@ function renderEnergyGrid() {
   return `
     <div class="energy-grid">
       <div class="energy-card">
-        <div class="energy-card-title">Eco Mode</div>
+        <div class="energy-card-title"><span class="energy-card-title-label">${ico("leaf", "i14")}Eco Mode</span></div>
         <div class="eco-icons">
           <div class="eco-icon ${importing > 0 ? "active" : ""}">${ico("arrow-down", "i16")}<div class="lbl">IMPORTING</div></div>
           <div class="eco-icon ${POWER.battery.charging ? "active" : ""}">${ico("zap", "i16")}<div class="lbl">CHARGING</div></div>
@@ -1193,11 +1119,11 @@ function renderEnergyGrid() {
         </div>
       </div>
       <div class="energy-card">
-        <div class="energy-card-title">Power Flow <span class="live">● LIVE</span></div>
+        <div class="energy-card-title"><span class="energy-card-title-label">${ico("activity", "i14")}Power Flow</span><span class="live">● LIVE</span></div>
         ${renderFlowDiagram()}
       </div>
       <div class="energy-card">
-        <div class="energy-card-title">Power Mix</div>
+        <div class="energy-card-title"><span class="energy-card-title-label">${ico("pie-chart", "i14")}Power Mix</span></div>
         <div class="mix-bar">
           ${POWER.mix.map(m => `<div style="flex:${m.kw || 0.0001}; background:${m.color}"></div>`).join("")}
         </div>
@@ -1206,14 +1132,14 @@ function renderEnergyGrid() {
         </div>
       </div>
       <div class="energy-card">
-        <div class="energy-card-title">Overview <span class="live">● LIVE</span></div>
+        <div class="energy-card-title"><span class="energy-card-title-label">${ico("gauge", "i14")}Overview</span><span class="live">● LIVE</span></div>
         <div class="overview-rings">
           <div class="overview-ring-stat"><div class="dot" style="background:rgba(10,132,255,0.16); color:#0A84FF">${importing.toFixed(1)}</div><div class="flow-sub">Importing</div></div>
           <div class="overview-ring-stat"><div class="dot" style="background:rgba(255,159,10,0.16); color:#FF9F0A">${producing.toFixed(1)}</div><div class="flow-sub">Producing</div></div>
         </div>
       </div>
       <div class="energy-card">
-        <div class="energy-card-title">Battery <span class="live">● LIVE</span></div>
+        <div class="energy-card-title"><span class="energy-card-title-label">${ico("battery-charging", "i14")}Battery</span><span class="live">● LIVE</span></div>
         <div class="battery-big">${POWER.battery.pct}%</div>
         <div class="flow-sub">${POWER.battery.charging ? `Charging for ${POWER.battery.eta}` : "Idle"}</div>
       </div>
@@ -1743,12 +1669,6 @@ function renderClimate(room) {
     </div>`;
 }
 
-function renderFavoritesGrid(list, activeName, attr) {
-  return `<div class="favorites-grid">${list.map(f => `
-    <button class="favorite-tile ${f === activeName ? "active" : ""}" data-${attr}="${f}">${f}</button>
-  `).join("")}</div>`;
-}
-
 function fmtTime(s) {
   const m = Math.floor(s / 60);
   const sec = String(Math.floor(s % 60)).padStart(2, "0");
@@ -1932,176 +1852,6 @@ function renderSecurityContent() {
   if (bypassBtn) bypassBtn.addEventListener("click", () => {
     ROOM_ORDER.forEach(id => { ROOMS[id].security.forEach(s => { if (isFault(s)) s.status = "Clear"; }); });
     renderSecurityContent();
-  });
-}
-
-function renderVideoTile(name, i) {
-  const selected = videoSelectedTile === i;
-  const audioActive = videoAudioTile === i;
-  return `
-    <div class="video-tile ${selected ? "selected" : ""}" style="grid-area:t${i}" data-tile="${i}">
-      <div class="video-tile-bg"></div>
-      <button class="video-tile-audio ${audioActive ? "active" : ""}" data-audio-tile="${i}" title="Set as audio source">${ico("volume-2", "i14")}</button>
-      <div class="video-tile-name">${name}</div>
-    </div>`;
-}
-
-function renderVideoTransport() {
-  return `
-    <div class="video-transport">
-      <button>${ico("rewind", "i18")}</button>
-      <button>${ico("play", "i18")}</button>
-      <button>${ico("fast-forward", "i18")}</button>
-      <button>${ico("list", "i18")}</button>
-    </div>`;
-}
-
-function renderVideoRoomRow() {
-  return `<div class="video-room-row">
-    ${ROOM_ORDER.map(id => `<button class="video-room-chip ${videoRoom === id ? "active" : ""}" data-videoroom="${id}">${ROOMS[id].name}</button>`).join("")}
-  </div>`;
-}
-
-function renderVideoCanvas() {
-  const layout = VIDEO_LAYOUTS[videoLayoutIdx];
-
-  if (videoFullscreenTile !== null) {
-    return `
-      ${renderVideoRoomRow()}
-      <div class="video-fullscreen-wrap">
-        <div class="video-tile-bg"></div>
-        <button class="video-fullscreen-close" data-fullscreen-close>${ico("minimize-2", "i16")}</button>
-        <div class="video-fullscreen-name">${layout.sources[videoFullscreenTile]}</div>
-      </div>
-      ${renderVideoTransport()}`;
-  }
-
-  let canvasHtml;
-  if (layout.pip) {
-    canvasHtml = `
-      <div class="video-canvas" style="display:block">
-        <div class="video-tile video-pip-main ${videoSelectedTile === 0 ? "selected" : ""}" data-tile="0">
-          <div class="video-tile-bg"></div>
-          <button class="video-tile-audio ${videoAudioTile === 0 ? "active" : ""}" data-audio-tile="0" title="Set as audio source">${ico("volume-2", "i14")}</button>
-          <div class="video-tile-name">${layout.sources[0]}</div>
-        </div>
-        <div class="video-tile video-pip-corner ${videoSelectedTile === 1 ? "selected" : ""}" data-tile="1">
-          <div class="video-tile-bg"></div>
-          <button class="video-tile-audio ${videoAudioTile === 1 ? "active" : ""}" data-audio-tile="1" title="Set as audio source">${ico("volume-2", "i14")}</button>
-          <div class="video-tile-name">${layout.sources[1]}</div>
-        </div>
-      </div>`;
-  } else {
-    canvasHtml = `
-      <div class="video-canvas" style="${layout.css}">
-        ${layout.sources.map((name, i) => renderVideoTile(name, i)).join("")}
-      </div>`;
-  }
-
-  return `
-    ${renderVideoRoomRow()}
-    ${canvasHtml}
-    ${videoSelectedTile !== null ? renderVideoTransport() : ""}`;
-}
-
-function renderVideoLayouts() {
-  return `<div class="layout-list">${VIDEO_LAYOUTS.map((layout, i) => {
-    const preview = layout.pip
-      ? `<div class="layout-preview"><div style="width:100%;height:100%"></div><div class="pip-corner"></div></div>`
-      : `<div class="layout-preview" style="${layout.css}">${layout.sources.map((_, si) => `<div style="grid-area:t${si}"></div>`).join("")}</div>`;
-    return `
-      <button class="layout-row ${i === videoLayoutIdx ? "active" : ""}" data-layout="${i}">
-        ${preview}
-        <div class="layout-row-name">${layout.name}</div>
-      </button>`;
-  }).join("")}</div>`;
-}
-
-function renderVideoFavorites() {
-  const layout = VIDEO_LAYOUTS[videoLayoutIdx];
-  const activeIdx = videoSelectedTile !== null ? videoSelectedTile : 0;
-  return renderFavoritesGrid(FAVORITE_CHANNELS, layout.sources[activeIdx], "video-favorite");
-}
-
-function renderVideoContent() {
-  const content = document.getElementById("content");
-  const subnav = `
-    <div class="subnav">
-      <button class="subnav-btn ${videoView === "canvas" ? "active" : ""}" data-videoview="canvas" title="Canvas">${ico("tv", "i18")}</button>
-      <button class="subnav-btn ${videoView === "layouts" ? "active" : ""}" data-videoview="layouts" title="Layouts">${ico("layout-grid", "i18")}</button>
-      <button class="subnav-btn ${videoView === "favorites" ? "active" : ""}" data-videoview="favorites" title="Favorites">${ico("star", "i18")}</button>
-    </div>`;
-  let body;
-  if (videoView === "layouts") body = renderVideoLayouts();
-  else if (videoView === "favorites") body = renderVideoFavorites();
-  else body = renderVideoCanvas();
-
-  content.innerHTML = `
-    <div class="header">
-      <div class="header-title-row"><span>${ico("video", "i24")}</span><h1>Video</h1></div>
-      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Multi-source tiling</div></div>
-    </div>
-    <div class="video-phone-note">
-      <div class="section-label-sm">${ico("layout-grid", "i14")}Video Tiling</div>
-      <div style="color:var(--text-dim); font-size:13.5px; line-height:1.5;">
-        Video Tiling is an iPad and larger-display feature — multiple live sources composed
-        on one screen. On phone, control one source at a time from each room's Media tab.
-      </div>
-    </div>
-    <div class="video-tablet-only">
-      ${subnav}
-      ${body}
-    </div>
-  `;
-  updateClock();
-  icons();
-
-  document.querySelectorAll("[data-videoroom]").forEach(el => {
-    el.addEventListener("click", () => { videoRoom = el.dataset.videoroom; renderVideoContent(); });
-  });
-  document.querySelectorAll("[data-videoview]").forEach(el => {
-    el.addEventListener("click", () => { videoView = el.dataset.videoview; videoSelectedTile = null; renderVideoContent(); });
-  });
-  document.querySelectorAll("[data-layout]").forEach(el => {
-    el.addEventListener("click", () => {
-      videoLayoutIdx = +el.dataset.layout;
-      videoAudioTile = 0;
-      videoSelectedTile = null;
-      videoFullscreenTile = null;
-      videoView = "canvas";
-      renderVideoContent();
-    });
-  });
-  document.querySelectorAll("[data-tile]").forEach(el => {
-    el.addEventListener("click", () => {
-      const i = +el.dataset.tile;
-      videoSelectedTile = videoSelectedTile === i ? null : i;
-      renderVideoContent();
-    });
-    el.addEventListener("dblclick", () => {
-      videoFullscreenTile = +el.dataset.tile;
-      renderVideoContent();
-    });
-  });
-  document.querySelectorAll("[data-audio-tile]").forEach(el => {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      videoAudioTile = +el.dataset.audioTile;
-      renderVideoContent();
-    });
-  });
-  const closeBtn = document.querySelector("[data-fullscreen-close]");
-  if (closeBtn) closeBtn.addEventListener("click", () => { videoFullscreenTile = null; renderVideoContent(); });
-  document.querySelectorAll("[data-video-favorite]").forEach(el => {
-    el.addEventListener("click", () => {
-      // Simplified vs. real Savant's drag-to-assign: applies the pick to the
-      // selected tile, or the first source if none is selected.
-      const layout = VIDEO_LAYOUTS[videoLayoutIdx];
-      const idx = videoSelectedTile !== null ? videoSelectedTile : 0;
-      layout.sources[idx] = el.dataset.videoFavorite;
-      videoView = "canvas";
-      renderVideoContent();
-    });
   });
 }
 
@@ -2412,7 +2162,6 @@ function renderSettingsContent() {
 function renderContent() {
   if (currentRoom === "power") { renderPowerContent(); return; }
   if (currentRoom === "security") { renderSecurityContent(); return; }
-  if (currentRoom === "video") { renderVideoContent(); return; }
   if (currentRoom === "poolspa") { renderPoolSpaContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
   if (currentRoom === "entry") { renderEntryContent(); return; }
@@ -3682,13 +3431,12 @@ function renderAmbientActions() {
 }
 
 // Quick-jump row (2026-08-06) — real navigation to a few rail-nav
-// destinations that aren't already reachable via a card (Video, Settings
-// have no Ambient card at all; Security/Music do, but a direct shortcut
+// destinations that aren't already reachable via a card (Settings has
+// no Ambient card at all; Security/Music do, but a direct shortcut
 // here matches Loxone's own "always-visible way to the main sections"
 // pattern without inventing icons for sections we don't have).
 const AMBIENT_QUICKNAV = [
   ["security", "shield", "Security"],
-  ["video", "video", "Video"],
   ["music", "music", "Music"],
   ["settings", "settings", "Settings"],
 ];
