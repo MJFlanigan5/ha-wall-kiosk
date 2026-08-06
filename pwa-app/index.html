@@ -573,12 +573,12 @@
     font-family: var(--font-mono); font-size: 15px; color: var(--text-dim);
     letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
   }
-  /* Grid widened 2026-08-06 to 8 columns so the two-row layout lines up
-     cleanly: top row (Music spanning 2 + 6 single status cards = 8 units)
-     fills one line exactly, bottom row (one merged light+presence card per
-     real room) starts fresh underneath it. */
+  /* Reverted 2026-08-06 back to 6 columns per Mike's original direction —
+     the 8/9-column widening was for the interim "fit every card in one
+     line" experiment; 6 columns is the actual target, content wraps into
+     two natural rows (system cards on top, room cards below). */
   .ambient-actions {
-    display: grid; grid-template-columns: repeat(9, 130px); grid-auto-rows: auto;
+    display: grid; grid-template-columns: repeat(6, 130px); grid-auto-rows: auto;
     gap: 12px; justify-content: center; max-width: 90vw;
   }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
@@ -3463,14 +3463,22 @@ function renderAmbientActions() {
     <div class="ambient-card-sub">kWh · Home Usage</div>
   </div>`;
 
-  // Water Heater tile (2026-08-06) — the extra top-row card to balance out
-  // the grid against the newly-expanded 8-room bottom row. Real Rinnai
-  // tankless data, already fully wired for the Energy screen (set temp,
-  // mode) — nothing new to fetch, just a second place to glance at it.
+  // Water Heater tile — real Rinnai tankless data. The +/- set-temperature
+  // control was tested and removed: verified live, twice, that
+  // water_heater.set_temperature doesn't move the real device — even
+  // clicking HA's own native +/- more-info dial directly (bypassing this
+  // app entirely) left the real target_temperature unchanged. Replaced
+  // with the real "Shower Prep Now" script (script.shower_prep_now,
+  // already live in HA, same one behind the existing iPad Control
+  // dashboard's "Shower Prep" button) instead of a setpoint control known
+  // not to work on this integration.
   const waterHeaterCard = `<div class="ambient-card" data-ambient-nav="power">
     ${ico("droplet", "ambient-card-icon")}
     <div class="ambient-card-primary" style="margin-top:12px">${POWER.waterHeater.setTemp != null ? POWER.waterHeater.setTemp + "°" : "—"}</div>
     <div class="ambient-card-sub">Water Heater</div>
+    <div class="ambient-card-controls">
+      <button class="ambient-stepper-btn" data-ambient-shower-prep style="flex:1">Hot Water Prep</button>
+    </div>
   </div>`;
 
   // Music: whichever room's assigned media_player is actively playing, if
@@ -3647,6 +3655,15 @@ function renderAmbientActions() {
       if (!window.haClient || !window.haClient.connected) return;
       const service = isArmed ? "alarm_disarm" : "alarm_arm_away";
       window.haClient.callService("alarm_control_panel", service, AMBIENT_ALARM_ENTITY).catch(console.error);
+    });
+  }
+
+  const showerPrepBtn = el.querySelector("[data-ambient-shower-prep]");
+  if (showerPrepBtn) {
+    showerPrepBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!window.haClient || !window.haClient.connected) return;
+      window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(console.error);
     });
   }
 }
