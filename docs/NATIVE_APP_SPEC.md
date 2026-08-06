@@ -112,10 +112,9 @@ QML frontend (on the Pi, same process)
   - Theme.qml singleton: ports the mockup's design tokens (colors,
     fonts, radii, spacing) as QML properties — this is the direct
     equivalent of the CSS custom-property block in the current mockup
-  - One .qml file per screen, mirroring the existing HTML mockup's
-    screen list (Overview, room detail, quick actions, camera view,
-    etc.) — layout structure ported screen-by-screen, not rewritten
-    from a blank page
+  - One .qml file per screen, mirroring the PWA's PROVEN structure (see
+    "Port from the PWA, not the original mockup" below) — Ambient Mode
+    as a real idle state, single continuous scroll per room, no tabs
   - Bindings read directly from the Python-exposed properties above;
     UI updates automatically when HA pushes new state, no polling
 ```
@@ -140,21 +139,75 @@ ha-wall-kiosk/
     requirements.txt       # PySide6, websockets, etc.
 ```
 
-## Porting plan (phased, matches how the HTML mockup itself was built)
+## Port from the PWA, not the original mockup (updated 2026-08-06)
+
+**This reverses earlier guidance below that's now stale.** The original
+plan was to port the HTML mockup screen-by-screen, tabs and all
+(Lighting/Climate/Media/Shades tabs, a Sliders/Scenes/Global mode
+switcher, a Now Playing/Favorites switcher). Building the PWA against that
+exact structure proved it wrong: after seeing the interior screens next to
+Ambient Mode's cards, it read as two different design systems, not one.
+Real fix (see `UI_MODES_SPEC.md`): drop the tabs and mode-switchers
+entirely, one continuous scroll per room with labeled sections, plus an
+Ambient/idle mode with Loxone-style status cards. **Port the QML screens
+from that proven structure, not the original mockup's HTML/CSS** — porting
+the old structure now would mean faithfully rebuilding something already
+found broken and fixed once.
+
+Concretely, that means QML should include:
+- **Ambient Mode as a real idle state** — clock, date, per-room status
+  cards with inline mini-controls (brightness stepper, play/pause), color
+  presets, whole-house Night/Day buttons. Not a "someday" screen — it's
+  meant to be up most of the time, per Mike's own framing of it.
+- **Room screens as one continuous view**, sections only for domains with
+  real wired data (no fabricated Climate/Shades/Scenes sections just
+  because the mockup had them).
+- **A day/night theme shift** driven by HA's real `sun.sun` entity, not a
+  clock guess — cheap to port (a filter/property change, not new
+  architecture) and already proven correct against live data.
+
+## Porting plan (phased)
 
 1. **Theme.qml first** — port every design token from the mockup's CSS
    custom-property block. Verify it visually against the real mockup
    before building anything on top of it (same "prove one thing before
    templating" discipline used throughout this project).
-2. **One real screen, fully wired to live HA data** — Overview is the
-   natural first target, matching the existing mockup's structure.
+2. **One real screen, fully wired to live HA data** — Overview/Ambient is
+   the natural first target now, not the old tabbed Lighting screen.
    Confirm the WebSocket data flow actually works end-to-end (auth,
    subscribe, receive updates, render) before porting anything else.
-3. **Remaining screens, one at a time**, screenshot-verified against the
-   HTML mockup equivalent each time, same pattern as the rest of this
+3. **Remaining screens, one at a time**, matched against the PWA's
+   structure (not the original mockup), same pattern as the rest of this
    project.
 4. **Service calls last** — read-only display first, write actions
    (toggling lights, calling scenes, etc.) once the read path is solid.
+
+## Other lessons from the PWA build, worth carrying over (2026-08-06)
+
+- **Entity duplicates are a real, recurring problem, not a one-off.** The
+  live HA instance has multiple entities sharing the same friendly_name
+  across lights *and* media_players (one real, the rest stale/unavailable
+  duplicates from integration re-adds) — hit repeatedly while building the
+  PWA, in three different rooms. Whatever config/entity-picker the native
+  app eventually gets needs the same two defenses proven in Admin Mode:
+  filter out `state: "unavailable"` entities from what can be picked, and
+  show the real `entity_id` alongside the friendly name so same-named
+  duplicates are distinguishable.
+- **`config.yaml` alone won't be enough long-term.** The PWA started the
+  same way (a hand-edited `rooms.config.js`) and it became a real
+  limitation fast enough to build Admin Mode — an on-device config screen
+  — the same day. Worth planning for a config UI in the native app too,
+  not assuming a static YAML file will stay sufficient once this is
+  actually being used day to day.
+- **Media player wiring stays basic-only for now** — on/off, track/artist
+  name, play/pause. No progress-bar interpolation, volume, shuffle, or
+  repeat yet; that's `MUSIC_SPEC.md`'s dedicated scope in either app.
+- **Verify against real entity state, not just "the UI shows it."** Real
+  bugs this session were caught specifically by reading HA state directly
+  after a service call (e.g. confirming `color_temp_kelvin: 3703` actually
+  landed on the device) — a few looked correct in the UI while silently
+  doing nothing underneath (the duplicate-entity issue). Same discipline
+  should apply once the native app gets tested against live data.
 
 ## Honest scope
 
