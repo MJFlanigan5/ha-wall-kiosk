@@ -2746,10 +2746,20 @@ async function renderAdminRoomList() {
       allMediaPlayers = states.filter(s => s.entity_id.startsWith("media_player."));
     } catch (e) { console.error(e); }
   }
+  // Excludes "unavailable" entities from what CAN be picked (real bug found
+  // 2026-08-05: the live instance has duplicate entities sharing the same
+  // friendly_name, e.g. 4 different "HT-A3000" media_players, one real and
+  // working, the rest stale/unavailable leftovers from integration re-adds
+  // - same mess already hand-curated around for lighting in
+  // rooms.config.js, but this live picker wasn't filtering it, so it was
+  // possible to pick a dead duplicate with no way to tell from the label
+  // alone. Doesn't touch already-assigned entities, so a previously-picked
+  // bad one still displays (so it's visible/removable), just can't be
+  // picked again going forward.
   const assignedLightIds = new Set(Object.values(map).flatMap(r => r.lighting || []));
-  const availableLights = allLights.filter(s => !assignedLightIds.has(s.entity_id));
+  const availableLights = allLights.filter(s => !assignedLightIds.has(s.entity_id) && s.state !== "unavailable");
   const assignedMediaIds = new Set(Object.values(map).map(r => r.media_player).filter(Boolean));
-  const availableMedia = allMediaPlayers.filter(s => !assignedMediaIds.has(s.entity_id));
+  const availableMedia = allMediaPlayers.filter(s => !assignedMediaIds.has(s.entity_id) && s.state !== "unavailable");
 
   listEl.innerHTML = Object.keys(map).filter(id => ROOMS[id]).map(roomId => {
     const room = ROOMS[roomId];
@@ -2760,8 +2770,12 @@ async function renderAdminRoomList() {
       return `<div class="admin-entity-row"><span>${label}</span><button class="admin-remove-btn" data-remove-room="${roomId}" data-remove-entity="${id}">×</button></div>`;
     }).join("") || `<div class="admin-entity-row"><span style="opacity:0.5">No lighting assigned</span></div>`;
 
+    // entity_id always shown alongside the friendly_name, not just on
+    // collision — duplicate friendly_names turned out to be common enough
+    // (see filtering note above) that guessing which one's real by name
+    // alone isn't safe.
     const lightOptions = availableLights.map(s =>
-      `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id}</option>`
+      `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id} (${s.entity_id})</option>`
     ).join("");
 
     const currentMediaId = map[roomId].media_player;
@@ -2769,7 +2783,7 @@ async function renderAdminRoomList() {
       ? (allMediaPlayers.find(s => s.entity_id === currentMediaId)?.attributes.friendly_name || currentMediaId)
       : null;
     const mediaOptions = availableMedia.map(s =>
-      `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id}</option>`
+      `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id} (${s.entity_id})</option>`
     ).join("");
 
     return `<div class="admin-room-block">

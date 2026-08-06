@@ -56,6 +56,18 @@ hand-editing `rooms.config.js` to add a room or entity:
   need the real interpolation/feature-gating work in
   [`docs/MUSIC_SPEC.md`](../docs/MUSIC_SPEC.md), not done here.
 
+**Real bug found and fixed (2026-08-06):** the live instance has multiple
+entities sharing the same `friendly_name` (e.g. 4 different "HT-A3000"
+media_players — one real, the rest stale/unavailable duplicates from
+integration re-adds, the same mess already hand-curated around for
+lighting in `rooms.config.js`). Admin's live picker wasn't filtering this,
+so it was possible to pick a dead duplicate with no way to tell from the
+label alone — assigned it, tapped Play, nothing happened, because the
+entity itself was unreachable. Fixed two ways: entities in state
+`unavailable` are now excluded from what you can pick at all, and every
+option now shows its real `entity_id` alongside the friendly name so
+same-named duplicates are distinguishable.
+
 Changes save to `localStorage` on that device only — `rooms.config.js`
 stays the shipped default, Admin Mode changes are a per-device override on
 top of it (same pattern as the HA URL/token in `config.js`). A page reload
