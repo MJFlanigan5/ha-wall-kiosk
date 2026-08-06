@@ -573,7 +573,15 @@
     font-family: var(--font-mono); font-size: 15px; color: var(--text-dim);
     letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
   }
-  .ambient-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 90vw; }
+  /* Grid rebuilt 2026-08-06 to literally match the real Loxone screenshot's
+     layout, not just each card's own anatomy: a fixed 6-column grid (not a
+     wrapped flex row), same column width as the reference's single-cell
+     tiles, media card spans 2 columns exactly like Loxone's "Best of 90s"
+     tile does. */
+  .ambient-actions {
+    display: grid; grid-template-columns: repeat(6, 130px); grid-auto-rows: auto;
+    gap: 12px; justify-content: center; max-width: 90vw;
+  }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
      Favorites screenshot (docs reference, not the marketing hero image):
      small icon top-left, room/zone label top-right (bare text, no chip),
@@ -581,7 +589,7 @@
      and smaller than the previous pass — that's deliberate, matches the
      reference's tile size relative to the screen. */
   .ambient-card {
-    width: 148px; padding: 14px; border-radius: 14px; border: 1px solid var(--hairline);
+    padding: 14px; border-radius: 14px; border: 1px solid var(--hairline);
     background: var(--base-raised); color: var(--text); text-align: left; cursor: pointer;
     display: flex; flex-direction: column;
   }
@@ -655,7 +663,7 @@
   .ambient-card .slider-track { margin-top: 2px; }
 
   /* Media card — album art background + real transport/volume controls */
-  .ambient-media-card { position: relative; overflow: hidden; }
+  .ambient-media-card { grid-column: span 2; position: relative; overflow: hidden; }
   .ambient-media-art {
     position: absolute; inset: 0; background-size: cover; background-position: center;
     opacity: 0.22; filter: blur(1px);
@@ -2724,6 +2732,13 @@ let waterHeaterFlowState = null;
 const AMBIENT_ALARM_ENTITY = "alarm_control_panel.alarmo";
 let ambientAlarmState = null;
 
+// Comfort/climate tile (2026-08-06, exact-grid rebuild) — this house has no
+// climate/thermostat entities (confirmed via search_entities earlier), but
+// it does have real per-room temperature sensors. Kitchen's, confirmed live,
+// fills the reference's "Kitchen ... Comfort" tile position honestly.
+const AMBIENT_KITCHEN_TEMP_ENTITY = "sensor.apollo_mtr_1_5452d0_dps310_temperature";
+let ambientKitchenTempState = null;
+
 // Recomputes the Energy screen's POWER fields (totalKw/mix/battery/
 // liveConsumption) from the same real Powerwall sensors Ambient Mode's
 // Energy Flow card already uses — the Flow Diagram/Ring/Power Mix/Battery
@@ -2918,6 +2933,7 @@ async function initLiveData() {
     waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
     refreshWaterHeaterFromHA();
     ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
+    ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
     for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
       ambientPresenceStates[roomId] = stateById.get(entityId) || null;
     }
@@ -2955,6 +2971,11 @@ async function initLiveData() {
       }
       if (entityId === AMBIENT_ALARM_ENTITY) {
         ambientAlarmState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === AMBIENT_KITCHEN_TEMP_ENTITY) {
+        ambientKitchenTempState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
@@ -3269,8 +3290,9 @@ function renderAmbientActions() {
   // brightness word, the light's own device name as subtext — same
   // vertical pill + power toggle as before, now scoped to that one light
   // instead of the whole room.
-  const lightCards = AMBIENT_ROOMS.filter(id => ROOMS[id] && ROOMS[id].lighting.length).map(id => {
+  function lightCard(id) {
     const r = ROOMS[id];
+    if (!r || !r.lighting.length) return "";
     const light = r.lighting[0];
     const pct = light.on ? (light.brightness || 100) : 0;
     const key = `${id}:0`;
@@ -3285,15 +3307,15 @@ function renderAmbientActions() {
         <div class="ambient-vpill-track" data-ambient-vpill-light="${key}">
           <div class="ambient-vpill-fill" style="height:${pct}%"></div>
         </div>
-        <button class="ambient-more-btn" data-ambient-toggle-light="${key}">${ico("power", "i14")}</button>
+        <button class="ambient-more-btn" data-ambient-toggle-light="${key}">${ico("chevron-down", "i14")}</button>
       </div>
     </div>`;
-  });
+  }
 
-  // Presence — its own tile per room now (was folded into the light card),
-  // matching the reference's dedicated "No Presence / Bed room" tile. Real
-  // Magic Areas per-room sensor, read-only.
-  const presenceCards = AMBIENT_ROOMS.filter(id => PRESENCE_ENTITY_BY_ROOM[id]).map(id => {
+  // Presence — its own tile per room, matching the reference's dedicated
+  // "No Presence / Bed room" tile. Real Magic Areas per-room sensor,
+  // read-only.
+  function presenceCard(id) {
     const r = ROOMS[id];
     const pState = ambientPresenceStates[id];
     const isPresent = pState && pState.state === "on";
@@ -3302,7 +3324,45 @@ function renderAmbientActions() {
       <div class="ambient-card-primary" style="margin-top:12px">${isPresent ? "Presence" : "No Presence"}</div>
       <div class="ambient-card-sub">${r.name}</div>
     </div>`;
-  });
+  }
+
+  // Comfort tile (2026-08-06, exact-grid rebuild) — fills the reference's
+  // "Kitchen ... Comfort" tile position. No thermostat/climate entity
+  // exists in this HA instance, but a real Kitchen temperature sensor does
+  // (Apollo MTR-1, DPS310) — used directly rather than leaving this grid
+  // position empty or inventing a fake climate control.
+  const tempF = ambientKitchenTempState ? parseFloat(ambientKitchenTempState.state) : null;
+  const comfortCard = `<div class="ambient-card" style="cursor:default">
+    <div class="ambient-card-header">
+      ${ico("thermometer", "ambient-card-icon")}
+      <div class="ambient-card-roomlabel">Kitchen</div>
+    </div>
+    <div class="ambient-card-primary">${tempF != null ? tempF.toFixed(1) + "°" : "—"}</div>
+    <div class="ambient-card-sub">Comfort</div>
+  </div>`;
+
+  // The reference's Cover and CO2/Energy Produced tiles have no real
+  // backing entity in this house (no cover domain entity, no CO2 sensor,
+  // no cumulative energy-produced sensor — all confirmed via
+  // search_entities). Rendered as literal, non-interactive clones of those
+  // exact tiles (same icon/label as the reference) with a dash instead of
+  // an invented number, so the grid position/shape matches exactly without
+  // fabricating data.
+  const coverCard = `<div class="ambient-card" style="cursor:default">
+    ${ico("blinds", "ambient-card-icon")}
+    <div class="ambient-card-primary" style="margin-top:12px">—</div>
+    <div class="ambient-card-sub">Front window</div>
+  </div>`;
+  const co2Card = `<div class="ambient-card" style="cursor:default">
+    ${ico("leaf", "ambient-card-icon")}
+    <div class="ambient-card-primary" style="margin-top:12px">—</div>
+    <div class="ambient-card-sub">CO2 emission saved</div>
+  </div>`;
+  const energyProducedCard = `<div class="ambient-card" style="cursor:default">
+    ${ico("sprout", "ambient-card-icon")}
+    <div class="ambient-card-primary" style="margin-top:12px">—</div>
+    <div class="ambient-card-sub">Energy Produced</div>
+  </div>`;
 
   // Music: whichever room's assigned media_player is actively playing, if
   // any — falls back to the first room with a media_player assigned at all
@@ -3371,7 +3431,17 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
-  el.innerHTML = lightCards.join("") + presenceCards.join("") + musicCard + energyCard + securityCard;
+  // Order matches the reference grid: media tile first (same position as
+  // Loxone's double-wide "Best of 90s" tile), then lights, then Security in
+  // the row-1-end slot (Night Mode's position), then presence + energy on
+  // row 2 — same reading order as the screenshot, not alphabetical or
+  // insertion order.
+  // Exact 1:1 grid match to the reference screenshot (2026-08-06): same 11
+  // tiles, same row/column positions. Row 1 = media(2col) + Living light +
+  // Kitchen Comfort + Kitchen light + Security (Night Mode's slot). Row 2 =
+  // Cover + Energy Flow + CO2 + Energy Produced + Presence + Utility light.
+  el.innerHTML = musicCard + lightCard("living") + comfortCard + lightCard("kitchen") + securityCard
+    + coverCard + energyCard + co2Card + energyProducedCard + presenceCard("utility") + lightCard("utility");
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {

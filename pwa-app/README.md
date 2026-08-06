@@ -27,6 +27,25 @@ content.
   Living Room, and Living Room has no other real speaker entity right now
   — its Music section is intentionally unassigned until one exists.
 
+## Ambient Mode (v6, exact 1:1 grid match to reference 2026-08-06)
+
+v5 still picked which tile *types* to show based on what data existed.
+Rebuilt one more time as a literal 1:1 copy of the reference screenshot's
+11-tile grid — same positions, same labels, same icons — real data where
+it exists, a plain "—" (no invented numbers) where it doesn't:
+
+Row 1: Media (2-col) · Living Room light · Kitchen Comfort (real temp
+sensor) · Kitchen light · Security (Night Mode's slot).
+Row 2: Front window/Cover (no real cover entity — static, "—") · Energy
+Flow (real) · CO2 emission saved (no CO2 sensor — static, "—") · Energy
+Produced (no cumulative sensor — static, "—") · Presence · Utility Room
+light.
+
+Grid is real CSS Grid now (6 fixed 130px columns), not flex-wrap — media
+card spans 2 columns exactly like the reference's double-wide tile. Pill
+button icon changed from a power glyph to chevron-down to match the
+reference's dropdown control.
+
 ## Ambient Mode (v5, room cards replaced with individual favorites 2026-08-06)
 
 v4 (below) still put one card per configured room, showing that room's
