@@ -51,4 +51,23 @@ const ROOM_ENTITY_MAP = {
       "light.dining_room_right",
     ],
   },
+  // Bedroom 4 (guest bedroom) — only fan-integrated lights exist right now
+  // (the category Mike said is getting replaced with Inovelli switches +
+  // plain fixtures soon). Using it now, flagged to swap the entity_id
+  // once real fixtures land.
+  bedroom4: {
+    lighting: [
+      "light.bedroom_4_fan_1",
+    ],
+  },
+  // Bedroom 3 — area_id "bedroom" in HA's Area registry is actually named
+  // "Bedroom 3" (confusingly, not "bedroom_3"). First search missed this;
+  // real light is "Rocco Ceiling" (fan-integrated pair, same deferred
+  // cleanup as other ceiling-fan light pairs this session — just using
+  // one of the two here).
+  bedroom3: {
+    lighting: [
+      "light.rocco_ceiling_1",
+    ],
+  },
 };

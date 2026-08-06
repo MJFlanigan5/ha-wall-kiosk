@@ -578,7 +578,7 @@
      fills one line exactly, bottom row (one merged light+presence card per
      real room) starts fresh underneath it. */
   .ambient-actions {
-    display: grid; grid-template-columns: repeat(8, 130px); grid-auto-rows: auto;
+    display: grid; grid-template-columns: repeat(9, 130px); grid-auto-rows: auto;
     gap: 12px; justify-content: center; max-width: 90vw;
   }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
@@ -960,9 +960,27 @@ const ROOMS = {
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     security: [], shades: [],
   },
+  bedroom4: {
+    name: "Bedroom 4",
+    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "", scenes: [], activeScene: "",
+    lighting: [],
+    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
+    media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
+    security: [], shades: [],
+  },
+  bedroom3: {
+    name: "Bedroom 3",
+    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "", scenes: [], activeScene: "",
+    lighting: [],
+    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
+    media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
+    security: [], shades: [],
+  },
 };
 
-const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
+const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
 let currentRoom = "living";
 let currentService = "lighting";     // lighting | climate | media | security
 let lightingView = "slider";         // slider | scenes | global
@@ -2708,7 +2726,7 @@ let entityLocations = new Map();
 // entity_id -> roomId for the single media_player each room can have
 // (media is one object per room, not an array like lighting)
 let mediaEntityLocations = new Map();
-let AMBIENT_ROOMS = ["living", "kitchen", "utility", "office", "master", "dining"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
+let AMBIENT_ROOMS = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
 
 // Whole-home Energy Flow card for Ambient Mode (2026-08-06 redesign) — real
 // Tesla Powerwall entities, all confirmed to exist via live search before
@@ -2835,6 +2853,8 @@ const PRESENCE_ENTITY_BY_ROOM = {
   office: "binary_sensor.magic_areas_presence_tracking_office_area_state",
   master: "binary_sensor.magic_areas_presence_tracking_master_bedroom_area_state",
   dining: "binary_sensor.magic_areas_presence_tracking_dining_room_area_state",
+  bedroom4: "binary_sensor.magic_areas_presence_tracking_bedroom_4_area_state",
+  bedroom3: "binary_sensor.magic_areas_presence_tracking_bedroom_3_area_state",
 };
 let ambientPresenceStates = {};
 
@@ -3059,6 +3079,7 @@ async function initLiveData() {
         if (entityId === WATER_HEATER_FLOW_ENTITY) waterHeaterFlowState = newState;
         refreshWaterHeaterFromHA();
         if (currentRoom === "power" && powerTab === "waterheater") renderPowerContent();
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
       const presenceRoom = Object.keys(PRESENCE_ENTITY_BY_ROOM).find(r => PRESENCE_ENTITY_BY_ROOM[r] === entityId);
@@ -3442,6 +3463,16 @@ function renderAmbientActions() {
     <div class="ambient-card-sub">kWh · Home Usage</div>
   </div>`;
 
+  // Water Heater tile (2026-08-06) — the extra top-row card to balance out
+  // the grid against the newly-expanded 8-room bottom row. Real Rinnai
+  // tankless data, already fully wired for the Energy screen (set temp,
+  // mode) — nothing new to fetch, just a second place to glance at it.
+  const waterHeaterCard = `<div class="ambient-card" data-ambient-nav="power">
+    ${ico("droplet", "ambient-card-icon")}
+    <div class="ambient-card-primary" style="margin-top:12px">${POWER.waterHeater.setTemp != null ? POWER.waterHeater.setTemp + "°" : "—"}</div>
+    <div class="ambient-card-sub">Water Heater</div>
+  </div>`;
+
   // Music: whichever room's assigned media_player is actively playing, if
   // any — falls back to the first room with a media_player assigned at all
   // so the card (and its "open Music" nav) still shows when nothing's
@@ -3509,15 +3540,15 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
-  // Two-row layout (2026-08-06): system/status cards on top (8 columns:
-  // Music spans 2, then Comfort/Security/Energy Flow/Packages/CO2/Energy
-  // Produced), every real room's merged light+presence card on the bottom
-  // row (6 rooms now — see ROOM_ENTITY_MAP). Comfort sits right after
-  // Music per Mike's direction. Grid is 8 columns wide so the top row
-  // fills exactly one line and the bottom row starts fresh under it.
+  // Two-row layout (2026-08-06, rebalanced): system/status row now has 8
+  // tiles (Music, Comfort, Security, Energy Flow, Packages, CO2, Energy
+  // Produced, Water Heater — Water Heater added specifically to balance
+  // the count against the bottom row after expanding to 8 rooms). Comfort
+  // sits right after Music per Mike's direction. Grid is 9 columns (Music
+  // spans 2 + 7 singles = 9 units) so the top row fills one line cleanly.
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
   el.innerHTML = musicCard + comfortCard + securityCard + energyCard + packagesCard + co2Card + energyProducedCard
-    + roomCards;
+    + waterHeaterCard + roomCards;
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
