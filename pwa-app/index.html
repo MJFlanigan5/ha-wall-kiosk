@@ -405,20 +405,6 @@
   }
   .camera-tile-live::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #FF453A; flex-shrink: 0; }
 
-  /* ---------- Entry — garage OPEN/CLOSE toggle pairs (matches the real Garage
-     Door Entry screen) + a Front Door camera/intercom quick panel. ---------- */
-  .toggle-pair { display: flex; gap: 8px; }
-  .toggle-pair-btn {
-    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--hairline);
-    background: transparent; color: var(--text-dim); font-family: var(--font-mono); font-size: 11px;
-    letter-spacing: 0.5px; cursor: pointer;
-  }
-  .toggle-pair-btn.active { background: var(--accent-dim); border-color: rgba(255,255,255,0.35); color: var(--text); }
-  .garage-row { padding: 14px 0; border-bottom: 1px solid var(--hairline-soft); display: flex; flex-direction: column; gap: 10px; }
-  .garage-row:last-child { border-bottom: none; }
-  .garage-row-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-  .garage-status { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
-
   /* ---------- RGB color wheel — deeper sub-screen below the Lighting dock for
      color-capable fixtures (LIFX, Govee RGB strips). ---------- */
   .color-swatch-btn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hairline); cursor: pointer; flex-shrink: 0; padding: 0; }
@@ -430,31 +416,6 @@
   .color-wheel::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%); }
   .color-wheel-cursor { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); transform: translate(-50%,-50%); z-index: 2; pointer-events: none; }
   .color-hex { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); text-align: center; letter-spacing: 1px; }
-
-  /* ---------- Apple TV 10-foot UI reference — horizontal carousels with a
-     focused center card, the real navigation model for a D-pad remote. Built
-     as one representative screen, not every existing screen re-done in
-     carousel form (Mike flagged this as lowest priority). ---------- */
-  .tv-frame { background: #050506; border-radius: 8px; padding: 24px 28px; border: 1px solid var(--hairline); }
-  .tv-row-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--text-faint); margin: 20px 0 10px; text-transform: uppercase; }
-  .tv-row-label:first-child { margin-top: 0; }
-  .tv-carousel { display: flex; gap: 12px; overflow-x: auto; padding: 4px 4px 10px; }
-  .tv-card {
-    flex-shrink: 0; width: 130px; height: 80px; border-radius: 10px; background: var(--base-raised);
-    border: 1px solid var(--hairline); display: flex; align-items: flex-end; padding: 10px; position: relative;
-    overflow: hidden; transition: transform 0.15s ease, border-color 0.15s ease; cursor: pointer;
-  }
-  .tv-card.focused { transform: scale(1.08); border-color: rgba(255,255,255,0.6); z-index: 1; }
-  .tv-card-current { border-color: var(--accent); }
-  .tv-card-current .tv-card-name { color: var(--accent); }
-  .tv-card-bg { position: absolute; inset: 0; background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%); }
-  .tv-card-name { position: relative; font-size: 12px; font-weight: 600; }
-  .tv-card-icon {
-    flex-shrink: 0; width: 64px; height: 64px; border-radius: 10px; background: var(--base-raised);
-    border: 1px solid var(--hairline); display: flex; align-items: center; justify-content: center;
-    color: var(--text-dim); cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease;
-  }
-  .tv-card-icon.focused { transform: scale(1.12); border-color: rgba(255,255,255,0.6); color: var(--text); }
 
   /* ---------- Settings — Notifications (name+description+toggle, matches the
      real pattern) + Users + About. ---------- */
@@ -789,16 +750,6 @@
 // (one "Cable Favorites" list, surfaced per-room), not fabricated per-device variation.
 const FAVORITE_CHANNELS = ["ESPN", "HBO", "Local News", "Apple TV", "Netflix", "FX"];
 const CAMERAS = ["Front Door", "Driveway", "Back Door", "Backyard"];
-// Real Savant has two separate screens here — "DOOR LOCKS / HOME" and "GARAGE /
-// HOME" — not one combined "Entry" screen (confirmed directly against the Entry
-// Services brochure screenshots, not assumed).
-const GARAGE = [
-  { name: "Garage Bay Right", open: true },
-  { name: "Garage Bay Left", open: false },
-];
-const DOORLOCKS = [
-  { name: "Front Door", locked: true },
-];
 const NOTIFICATIONS = [
   { name: "Climate", desc: "The temperature is below 40° or above 78° in the home.", on: true },
   { name: "Door Entry", desc: "If an entry ring is detected at the front door.", on: true },
@@ -819,22 +770,6 @@ const WHITE_PRESETS = [
   { name: "Early Morning", k: 4200, hex: "#FFE3BE" },
   { name: "Sunrise", k: 3700, hex: "#FFD3A0" },
 ];
-// Pool & Spa — confirmed as its own distinct pattern (dial + a separate equipment
-// toggle list), not just "reuses the Climate dial" as first assumed.
-const POOLSPA = {
-  pool: { temp: 71, target: 70 },
-  spa: { temp: 105, target: 104 },
-  controls: [
-    { name: "Pool Lights", on: false },
-    { name: "Pool Jets", on: false },
-    { name: "Pool Waterfall", on: false },
-    { name: "Spa Lights", on: true },
-    { name: "Spa Jets", on: false },
-    { name: "Water Feature", on: true },
-    { name: "Walkway Lights", on: true },
-    { name: "Pool Cover", on: true },
-  ],
-};
 
 const ROOMS = {
   living: {
@@ -962,13 +897,9 @@ let securityFilter = "all";          // all | ready | notready
 let armState = "disarmed";           // stay | disarmed | away (whole-home, matches real Savant)
 let mediaView = "now";               // now | favorites
 let securityCameraFullscreen = null; // index into CAMERAS expanded fullscreen, or null
-let entryCameraFullscreen = false;   // Front Door camera expanded on the Entry screen
 let colorWheelIndex = null;          // room.lighting index whose color wheel is open, or null
-let tvFocused = { row: "scenes", index: 0 }; // Apple TV 10-foot UI carousel focus
 let energyMode = "eco";              // eco | storm — Storm Watch is a variant of the Eco Mode template
 let colorSubView = "wheel";          // wheel | white — dock inside the color screen
-let poolSpaZone = "pool";            // pool | spa
-let poolSpaView = "dial";            // dial | controls
 
 const GOOD_STATUSES = new Set(["Locked", "Clear", "Good", "Still", "Idle"]);
 function isFault(s) { return !GOOD_STATUSES.has(s.status); }
@@ -1043,18 +974,12 @@ function renderRail() {
   const powerHtml = `<button class="rail-item ${powerActive}" data-room="power"><span class="stem"></span><span class="label">Energy</span></button>`;
   const securityActive = currentRoom === "security" ? "active" : "";
   const securityHtml = `<button class="rail-item ${securityActive}" data-room="security"><span class="stem"></span><span class="label">Security</span></button>`;
-  const poolActive = currentRoom === "poolspa" ? "active" : "";
-  const poolHtml = `<button class="rail-item ${poolActive}" data-room="poolspa"><span class="stem"></span><span class="label">Pool & Spa</span></button>`;
   const musicActive = currentRoom === "music" ? "active" : "";
   const musicHtml = `<button class="rail-item ${musicActive}" data-room="music"><span class="stem"></span><span class="label">Music</span></button>`;
-  const entryActive = currentRoom === "entry" ? "active" : "";
-  const entryHtml = `<button class="rail-item ${entryActive}" data-room="entry"><span class="stem"></span><span class="label">Entry</span></button>`;
-  const tvActive = currentRoom === "appletv" ? "active" : "";
-  const tvHtml = `<button class="rail-item ${tvActive}" data-room="appletv"><span class="stem"></span><span class="label">Apple TV</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
   const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
-  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + poolHtml + musicHtml + entryHtml + tvHtml + `<div class="rail-divider"></div>` + settingsHtml);
-  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + poolHtml + musicHtml + entryHtml + tvHtml + settingsHtml);
+  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + `<div class="rail-divider"></div>` + settingsHtml);
+  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + settingsHtml);
 
   document.querySelectorAll("[data-room]").forEach(el => {
     el.addEventListener("click", () => goToRoom(el.dataset.room));
@@ -1069,7 +994,7 @@ function renderRail() {
 function goToRoom(id) {
   currentRoom = id; currentService = "lighting"; lightingView = "slider"; colorWheelIndex = null;
   mediaView = "now"; powerTab = "overview"; securityView = "arm"; securityFilter = "all";
-  poolSpaZone = "pool"; poolSpaView = "dial"; render();
+  render();
 }
 
 function wattsOf(str) {
@@ -1871,74 +1796,6 @@ function renderSecurityContent() {
   });
 }
 
-function renderPoolSpaDial() {
-  const zone = POOLSPA[poolSpaZone];
-  return `
-    <div class="panel climate-face">
-      <div class="climate-temp">${zone.temp}°</div>
-      <div class="climate-mode-badge">${poolSpaZone.toUpperCase()}</div>
-      <div class="climate-target-row">
-        <button class="stepper" data-pooltarget="down">−</button>
-        <div class="climate-target-label" id="poolTargetLabel">TARGET ${zone.target}°</div>
-        <button class="stepper" data-pooltarget="up">+</button>
-      </div>
-    </div>`;
-}
-
-function renderPoolSpaControls() {
-  return `<div class="light-list">${POOLSPA.controls.map((c, i) => `
-    <div class="switch-row">
-      <div class="light-row-name">${c.name}</div>
-      <button class="switch-btn ${c.on ? "on" : ""}" data-poolcontrol="${i}">${c.on ? "ON" : "OFF"}</button>
-    </div>`).join("")}</div>`;
-}
-
-function renderPoolSpaContent() {
-  const content = document.getElementById("content");
-  const subnav = `
-    <div class="subnav">
-      <button class="subnav-btn ${poolSpaView === "dial" ? "active" : ""}" data-poolview="dial" title="Temperature">${ico("thermometer", "i18")}</button>
-      <button class="subnav-btn ${poolSpaView === "controls" ? "active" : ""}" data-poolview="controls" title="Controls">${ico("sliders-horizontal", "i18")}</button>
-    </div>`;
-  const zoneToggle = `
-    <div class="climate-tabs">
-      <button class="climate-tab-btn ${poolSpaZone === "pool" ? "active" : ""}" data-poolzone="pool">POOL</button>
-      <button class="climate-tab-btn ${poolSpaZone === "spa" ? "active" : ""}" data-poolzone="spa">SPA</button>
-    </div>`;
-  const body = poolSpaView === "controls" ? renderPoolSpaControls() : `${zoneToggle}${renderPoolSpaDial()}`;
-  content.innerHTML = `
-    <div class="header">
-      <div class="header-title-row"><span>${ico("waves", "i24")}</span><h1>Pool &amp; Spa</h1></div>
-      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Pool &amp; spa control</div></div>
-    </div>
-    ${subnav}
-    ${body}
-  `;
-  updateClock();
-  icons();
-
-  document.querySelectorAll("[data-poolview]").forEach(el => {
-    el.addEventListener("click", () => { poolSpaView = el.dataset.poolview; renderPoolSpaContent(); });
-  });
-  document.querySelectorAll("[data-poolzone]").forEach(el => {
-    el.addEventListener("click", () => { poolSpaZone = el.dataset.poolzone; renderPoolSpaContent(); });
-  });
-  document.querySelectorAll("[data-pooltarget]").forEach(el => {
-    el.addEventListener("click", () => {
-      const zone = POOLSPA[poolSpaZone];
-      zone.target += el.dataset.pooltarget === "up" ? 1 : -1;
-      renderPoolSpaContent();
-    });
-  });
-  document.querySelectorAll("[data-poolcontrol]").forEach(el => {
-    el.addEventListener("click", () => {
-      const c = POOLSPA.controls[+el.dataset.poolcontrol];
-      c.on = !c.on;
-      renderPoolSpaContent();
-    });
-  });
-}
-
 function renderMusicContent() {
   const content = document.getElementById("content");
   const activeRooms = ROOM_ORDER.filter(id => ROOMS[id].media.playing);
@@ -1997,148 +1854,6 @@ function renderMusicContent() {
   });
 }
 
-function renderEntryContent() {
-  const content = document.getElementById("content");
-  const frontDoorPanel = entryCameraFullscreen
-    ? `
-      <div class="video-fullscreen-wrap">
-        <div class="video-tile-bg"></div>
-        <button class="video-fullscreen-close" data-entry-camera-close>${ico("minimize-2", "i16")}</button>
-        <div class="video-fullscreen-name">Front Door</div>
-      </div>`
-    : `
-      <div class="camera-grid" style="grid-template-columns:1fr">
-        <div class="camera-tile" style="aspect-ratio:16/9" data-entry-camera>
-          <div class="camera-tile-live">LIVE</div>
-          <div class="camera-tile-bg"></div>
-          <div class="camera-tile-name">Front Door</div>
-        </div>
-      </div>`;
-
-  content.innerHTML = `
-    <div class="header">
-      <div class="header-title-row"><span>${ico("door-open", "i24")}</span><h1>Entry</h1></div>
-      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Doors &amp; garage</div></div>
-    </div>
-    <div class="section-label-sm">${ico("lock", "i14")}Door Locks</div>
-    ${frontDoorPanel}
-    <div class="kv-section" style="margin-top:10px">
-      ${DOORLOCKS.map((d, i) => `
-        <div class="garage-row">
-          <div class="garage-row-top">
-            <div class="kv-name">${d.name}</div>
-            <div class="toggle-pair" style="width:150px">
-              <button class="toggle-pair-btn ${d.locked ? "active" : ""}" data-lock="${i}:lock">LOCK</button>
-              <button class="toggle-pair-btn ${!d.locked ? "active" : ""}" data-lock="${i}:unlock">UNLOCKED</button>
-            </div>
-          </div>
-          <div class="garage-status">The ${d.name.toLowerCase()} is ${d.locked ? "locked" : "unlocked"}.</div>
-        </div>`).join("")}
-    </div>
-    <div class="section-label-sm" style="margin-top:24px">${ico("warehouse", "i14")}Garage</div>
-    <div class="kv-section">
-      ${GARAGE.map((g, i) => `
-        <div class="garage-row">
-          <div class="garage-row-top">
-            <div class="kv-name">${g.name}</div>
-            <div class="toggle-pair" style="width:150px">
-              <button class="toggle-pair-btn ${!g.open ? "active" : ""}" data-garage="${i}:close">CLOSE</button>
-              <button class="toggle-pair-btn ${g.open ? "active" : ""}" data-garage="${i}:open">OPEN</button>
-            </div>
-          </div>
-          <div class="garage-status">${g.name} is ${g.open ? "open" : "closed"}.</div>
-        </div>`).join("")}
-    </div>
-    <div class="quick-grid" style="margin-top:14px">
-      <button class="quick-btn" data-quick="lights">Front Lights</button>
-      <button class="quick-btn" data-quick="disarm">Disarm</button>
-      <button class="quick-btn" data-quick="mute">Mute Chime</button>
-    </div>
-  `;
-  updateClock();
-  icons();
-
-  document.querySelectorAll("[data-lock]").forEach(el => {
-    el.addEventListener("click", () => {
-      const [idx, action] = el.dataset.lock.split(":");
-      DOORLOCKS[+idx].locked = action === "lock";
-      renderEntryContent();
-    });
-  });
-  document.querySelectorAll("[data-garage]").forEach(el => {
-    el.addEventListener("click", () => {
-      const [idx, action] = el.dataset.garage.split(":");
-      GARAGE[+idx].open = action === "open";
-      renderEntryContent();
-    });
-  });
-  const camTile = document.querySelector("[data-entry-camera]");
-  if (camTile) camTile.addEventListener("click", () => { entryCameraFullscreen = true; renderEntryContent(); });
-  const camClose = document.querySelector("[data-entry-camera-close]");
-  if (camClose) camClose.addEventListener("click", () => { entryCameraFullscreen = false; renderEntryContent(); });
-}
-
-function renderAppleTVContent() {
-  const content = document.getElementById("content");
-  const room = ROOMS.living;
-  const appleTvApps = (appleTvState && appleTvState.attributes && appleTvState.attributes.source_list) || [];
-  const services = [
-    ["lighting", "Lighting", "sliders-horizontal"],
-    ["climate", "Climate", "thermometer"],
-    ["media", "Media", "music"],
-    ["security", "Security", "shield"],
-    ["energy", "Energy", "zap"],
-  ];
-  content.innerHTML = `
-    <div class="header">
-      <div class="header-title-row"><span>${ico("tv", "i24")}</span><h1>Apple TV</h1></div>
-      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">10-foot UI reference</div></div>
-    </div>
-    <div class="notif-desc" style="margin-bottom:18px; max-width:520px">
-      Savant's Apple TV app uses a different navigation model entirely — horizontal carousels
-      with a focused center card, driven by a remote D-pad, not touch. This is a visual reference
-      for that pattern, not every screen rebuilt in carousel form.
-    </div>
-    <div class="tv-frame">
-      <div class="tv-row-label">Scenes</div>
-      <div class="tv-carousel">
-        ${room.scenes.map((s, i) => `
-          <div class="tv-card ${tvFocused.row === "scenes" && tvFocused.index === i ? "focused" : ""}" data-tv="scenes:${i}">
-            <div class="tv-card-bg"></div>
-            <div class="tv-card-name">${s}</div>
-          </div>`).join("")}
-      </div>
-      <div class="tv-row-label">Services</div>
-      <div class="tv-carousel">
-        ${services.map(([id, name, icon], i) => `
-          <div class="tv-card-icon ${tvFocused.row === "services" && tvFocused.index === i ? "focused" : ""}" data-tv="services:${i}" title="${name}">
-            ${ico(icon, "i24")}
-          </div>`).join("")}
-      </div>
-      <div class="tv-row-label">Apps</div>
-      <div class="tv-carousel">
-        ${appleTvApps.length ? appleTvApps.map((appName, i) => `
-          <div class="tv-card ${tvFocused.row === "apps" && tvFocused.index === i ? "focused" : ""} ${appleTvState && appleTvState.attributes && appleTvState.attributes.source === appName ? "tv-card-current" : ""}" data-tv="apps:${i}" data-tv-app="${appName}" style="height:64px">
-            <div class="tv-card-bg"></div>
-            <div class="tv-card-name">${appName}</div>
-          </div>`).join("") : `<div class="notif-desc">No apps found — check that ${APPLETV_ENTITY} is connected in Home Assistant.</div>`}
-      </div>
-    </div>
-  `;
-  updateClock();
-  icons();
-  document.querySelectorAll("[data-tv]").forEach(el => {
-    el.addEventListener("click", () => {
-      const [row, idx] = el.dataset.tv.split(":");
-      tvFocused = { row, index: +idx };
-      if (el.dataset.tvApp && window.haClient && window.haClient.connected) {
-        window.haClient.callService("media_player", "select_source", APPLETV_ENTITY, { source: el.dataset.tvApp }).catch(console.error);
-      }
-      renderAppleTVContent();
-    });
-  });
-}
-
 function renderSettingsContent() {
   const content = document.getElementById("content");
   content.innerHTML = `
@@ -2178,10 +1893,7 @@ function renderSettingsContent() {
 function renderContent() {
   if (currentRoom === "power") { renderPowerContent(); return; }
   if (currentRoom === "security") { renderSecurityContent(); return; }
-  if (currentRoom === "poolspa") { renderPoolSpaContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
-  if (currentRoom === "entry") { renderEntryContent(); return; }
-  if (currentRoom === "appletv") { renderAppleTVContent(); return; }
   if (currentRoom === "settings") { renderSettingsContent(); return; }
   const room = ROOMS[currentRoom];
   const content = document.getElementById("content");
@@ -2522,10 +2234,8 @@ function haStateToMediaItem(entityId, state) {
 }
 
 // Per-room TV wiring (2026-08-06, pilot room: Kitchen) — power state only,
-// not a full remote. Apple TV already has its own dedicated remote-style
-// screen; a second full remote per room would duplicate that, so this is
-// deliberately just on/off, matching how little most of these room TVs
-// need day-to-day (source switching happens on the TV/box itself).
+// not a full remote, matching how little most of these room TVs need
+// day-to-day (source switching happens on the TV/box itself).
 function haStateToTvItem(entityId, state) {
   const attrs = state.attributes || {};
   return {
@@ -2676,14 +2386,6 @@ const PRESENCE_ENTITY_BY_ROOM = {
   bedroom3: "binary_sensor.magic_areas_presence_tracking_bedroom_3_area_state",
 };
 let ambientPresenceStates = {};
-
-// Apple TV screen (2026-08-06) — real installed-apps list pulled from HA's
-// source_list attribute (Homey's Apple TV integration bridged in), not the
-// old fabricated FAVORITE_CHANNELS list. Confirmed live: 27 real apps
-// (Netflix, Plex, Disney+, YouTube, Spotify, Infuse, etc.) with
-// select_source supported.
-const APPLETV_ENTITY = "media_player.living_room_2";
-let appleTvState = null;
 
 // Day/night theme shift (2026-08-06, roadmap item 3) — uses HA's real
 // sun.sun entity (state: above_horizon/below_horizon) rather than a
@@ -2848,7 +2550,6 @@ async function initLiveData() {
     for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
       ambientPresenceStates[roomId] = stateById.get(entityId) || null;
     }
-    appleTvState = stateById.get(APPLETV_ENTITY) || null;
     const sunState = stateById.get(SUN_ENTITY);
     if (sunState) applyNightMode(sunState.state === "below_horizon");
 
@@ -2925,11 +2626,6 @@ async function initLiveData() {
       if (presenceRoom) {
         ambientPresenceStates[presenceRoom] = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
-        return;
-      }
-      if (entityId === APPLETV_ENTITY) {
-        appleTvState = newState;
-        if (currentRoom === "appletv") renderAppleTVContent();
         return;
       }
       if (entityId === SUN_ENTITY) {
