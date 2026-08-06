@@ -16,6 +16,14 @@ content.
 - State stays live via HA's `state_changed` WebSocket subscription — if
   you turn a light on with a switch/Homey/voice, the app updates without
   a refresh.
+- **Music, all 3 rooms** (2026-08-06): each room's real device assigned
+  via Admin Mode — Living Room → `media_player.ht_a3000`, Kitchen →
+  `media_player.utility_room` (odd entity_id, real friendly_name/area is
+  Kitchen), Utility Room → `media_player.utility_room_tv_2`. All three had
+  duplicate/unavailable siblings sharing the same friendly_name — same
+  mess as the light duplicates, caught and resolved by hand for each one,
+  not just Living Room. Confirmed live: every room's Music section renders
+  and is interactive, not just Living Room's.
 
 ## Ambient Mode (v2, updated 2026-08-05)
 
