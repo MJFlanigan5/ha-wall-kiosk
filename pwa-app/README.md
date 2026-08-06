@@ -27,6 +27,40 @@ content.
   Living Room, and Living Room has no other real speaker entity right now
   — its Music section is intentionally unassigned until one exists.
 
+## Ambient Mode (v7, all rooms + merged presence 2026-08-06)
+
+Reworked one more time per Mike's direction: room cards merged with
+presence (one card per room again, a small dot next to the room name
+carries presence instead of a separate tile), the vertical pill is now the
+only lighting control (removed the chevron button — dragging to the
+bottom turns the light off, no redundant toggle next to the slider), and
+expanded from 3 rooms to all 6 with real wired lighting: Living Room,
+Kitchen, Utility Room, **Office** (`light.floor_lamp_office`), **Master
+Bedroom** (`light.h612d_1746` — picked over the older `light.master_under_bed`
+duplicate because it has a real `area_id`, same duplicate-entity pattern as
+earlier tonight), **Dining Room** (`light.dining_room_right`). All three new
+rooms also got real Magic Areas presence entities and were added to
+`ROOM_ORDER` so they're reachable from the main rail nav too, not just
+Ambient.
+
+Layout is now two rows: system/status cards on top (Music, Comfort,
+Security, Energy Flow, Packages, CO2, Energy Produced — 8 grid units, Music
+spans 2), every room's merged card on the bottom row (6 units). Comfort
+sits immediately after Music per explicit direction. Grid widened to 8
+columns to fit this.
+
+**Real bug found while adding these rooms:** `getRoomEntityMap()` returns
+the Admin Mode localStorage override *wholesale* if one exists at all — it
+does not merge with `rooms.config.js`. A stale override from earlier Admin
+Mode testing on this dev browser (only living/kitchen/utility) completely
+shadowed the 3 new rooms until the override was cleared. This is a latent
+gotcha for anyone editing `rooms.config.js` after ever having touched Admin
+Mode on that device — the file change won't appear until the override is
+cleared or Admin Mode re-saves a fresh snapshot. Not fixed at the root
+(would mean redesigning how overrides layer on the static config, a real
+decision, not a quick patch) — documented here so it isn't a mystery next
+time.
+
 ## Ambient Mode (v6, exact 1:1 grid match to reference 2026-08-06)
 
 v5 still picked which tile *types* to show based on what data existed.

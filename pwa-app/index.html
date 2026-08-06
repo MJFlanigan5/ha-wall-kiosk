@@ -573,13 +573,12 @@
     font-family: var(--font-mono); font-size: 15px; color: var(--text-dim);
     letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
   }
-  /* Grid rebuilt 2026-08-06 to literally match the real Loxone screenshot's
-     layout, not just each card's own anatomy: a fixed 6-column grid (not a
-     wrapped flex row), same column width as the reference's single-cell
-     tiles, media card spans 2 columns exactly like Loxone's "Best of 90s"
-     tile does. */
+  /* Grid widened 2026-08-06 to 8 columns so the two-row layout lines up
+     cleanly: top row (Music spanning 2 + 6 single status cards = 8 units)
+     fills one line exactly, bottom row (one merged light+presence card per
+     real room) starts fresh underneath it. */
   .ambient-actions {
-    display: grid; grid-template-columns: repeat(6, 130px); grid-auto-rows: auto;
+    display: grid; grid-template-columns: repeat(8, 130px); grid-auto-rows: auto;
     gap: 12px; justify-content: center; max-width: 90vw;
   }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
@@ -624,12 +623,15 @@
   }
   .ambient-vpill-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--text-dim); border-radius: 999px; }
   .ambient-card.is-on .ambient-vpill-fill { background: var(--on); }
-  .ambient-more-btn {
-    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--hairline);
-    background: var(--base); color: var(--text-dim); display: flex; align-items: center;
-    justify-content: center; cursor: pointer; flex-shrink: 0;
+
+  /* Presence dot (2026-08-06) — folded into the room card header instead
+     of a separate presence tile. Bare dot next to the room name, green
+     when present. */
+  .ambient-presence-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-faint); margin-left: 6px; vertical-align: middle;
   }
-  .ambient-card.is-on .ambient-more-btn { color: var(--on); border-color: var(--on-dim); background: var(--on-dim); }
+  .ambient-presence-dot.is-present { background: var(--on); }
   .ambient-hint {
     margin-top: 18px; font-size: 12px; color: var(--text-dim);
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
@@ -945,9 +947,22 @@ const ROOMS = {
     security: [ { name: "MSR-2 Radar", status: "Clear" }, { name: "Washer", status: "Idle" } ],
     shades: [ { name: "Utility Window", position: 100 } ],
   },
+  // Dining Room (added 2026-08-06) — no mock entry existed for this room
+  // before (only living/kitchen/master/office/utility were in the original
+  // mockup). Uses the same safe-default shape Admin Mode gives brand-new
+  // rooms (see defaultRoomShape()) since only lighting is wired here.
+  dining: {
+    name: "Dining Room",
+    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "", scenes: [], activeScene: "",
+    lighting: [],
+    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
+    media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
+    security: [], shades: [],
+  },
 };
 
-const ROOM_ORDER = ["living", "kitchen", "utility"]; // MVP scope 2026-08-05 — only rooms with real wired entities (see rooms.config.js). Add more once entities are curated for them.
+const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
 let currentRoom = "living";
 let currentService = "lighting";     // lighting | climate | media | security
 let lightingView = "slider";         // slider | scenes | global
@@ -2693,7 +2708,7 @@ let entityLocations = new Map();
 // entity_id -> roomId for the single media_player each room can have
 // (media is one object per room, not an array like lighting)
 let mediaEntityLocations = new Map();
-let AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
+let AMBIENT_ROOMS = ["living", "kitchen", "utility", "office", "master", "dining"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
 
 // Whole-home Energy Flow card for Ambient Mode (2026-08-06 redesign) — real
 // Tesla Powerwall entities, all confirmed to exist via live search before
@@ -2817,6 +2832,9 @@ const PRESENCE_ENTITY_BY_ROOM = {
   living: "binary_sensor.magic_areas_presence_tracking_living_room_area_state",
   kitchen: "binary_sensor.magic_areas_presence_tracking_kitchen_area_state",
   utility: "binary_sensor.magic_areas_presence_tracking_utility_room_area_state",
+  office: "binary_sensor.magic_areas_presence_tracking_office_area_state",
+  master: "binary_sensor.magic_areas_presence_tracking_master_bedroom_area_state",
+  dining: "binary_sensor.magic_areas_presence_tracking_dining_room_area_state",
 };
 let ambientPresenceStates = {};
 
@@ -3337,25 +3355,27 @@ function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
 
-  // Individual favorite light cards (rebuilt 2026-08-06) — the real Loxone
-  // screen doesn't show whole-room lighting summaries at all; it shows
-  // specific favorited devices, one named light per tile. Every room is
-  // already one tap away via nav, so a redundant per-room aggregate card
-  // doesn't match what the reference actually does. One representative
-  // light per room here: icon top-left, room name top-right, one bold
-  // brightness word, the light's own device name as subtext — same
-  // vertical pill + power toggle as before, now scoped to that one light
-  // instead of the whole room.
+  // Room cards (2026-08-06, merged) — one card per room now, combining
+  // what were two separate tiles: the room's representative light and its
+  // Magic Areas presence state. A small dot next to the room name carries
+  // presence (green = present) so the primary/sub stay dedicated to
+  // lighting. The vertical pill is the only control now — no separate
+  // power button; dragging to the bottom turns the light off, matching
+  // "slider IS the toggle" instead of a redundant button next to it.
   function lightCard(id) {
     const r = ROOMS[id];
     if (!r || !r.lighting.length) return "";
     const light = r.lighting[0];
     const pct = light.on ? (light.brightness || 100) : 0;
     const key = `${id}:0`;
+    const pState = ambientPresenceStates[id];
+    const isPresent = pState && pState.state === "on";
+    const presenceDot = PRESENCE_ENTITY_BY_ROOM[id]
+      ? `<span class="ambient-presence-dot ${isPresent ? "is-present" : ""}" title="${isPresent ? "Presence" : "No presence"}"></span>` : "";
     return `<div class="ambient-card ${light.on ? "is-on" : ""}" data-ambient-nav="${id}">
       <div class="ambient-card-header">
         ${ico("lightbulb", "ambient-card-icon")}
-        <div class="ambient-card-roomlabel">${r.name}</div>
+        <div class="ambient-card-roomlabel">${r.name}${presenceDot}</div>
       </div>
       <div class="ambient-card-primary">${ambientBrightnessWord(pct)}</div>
       <div class="ambient-card-sub">${light.name}</div>
@@ -3363,22 +3383,7 @@ function renderAmbientActions() {
         <div class="ambient-vpill-track" data-ambient-vpill-light="${key}">
           <div class="ambient-vpill-fill" style="height:${pct}%"></div>
         </div>
-        <button class="ambient-more-btn" data-ambient-toggle-light="${key}">${ico("chevron-down", "i14")}</button>
       </div>
-    </div>`;
-  }
-
-  // Presence — its own tile per room, matching the reference's dedicated
-  // "No Presence / Bed room" tile. Real Magic Areas per-room sensor,
-  // read-only.
-  function presenceCard(id) {
-    const r = ROOMS[id];
-    const pState = ambientPresenceStates[id];
-    const isPresent = pState && pState.state === "on";
-    return `<div class="ambient-card ${isPresent ? "is-on" : ""}" style="cursor:default">
-      ${ico("user", "ambient-card-icon")}
-      <div class="ambient-card-primary" style="margin-top:12px">${isPresent ? "Presence" : "No Presence"}</div>
-      <div class="ambient-card-sub">${r.name}</div>
     </div>`;
   }
 
@@ -3504,17 +3509,15 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
-  // Order matches the reference grid: media tile first (same position as
-  // Loxone's double-wide "Best of 90s" tile), then lights, then Security in
-  // the row-1-end slot (Night Mode's position), then presence + energy on
-  // row 2 — same reading order as the screenshot, not alphabetical or
-  // insertion order.
-  // Exact 1:1 grid match to the reference screenshot (2026-08-06): same 11
-  // tiles, same row/column positions. Row 1 = media(2col) + Living light +
-  // Kitchen Comfort + Kitchen light + Security (Night Mode's slot). Row 2 =
-  // Cover + Energy Flow + CO2 + Energy Produced + Presence + Utility light.
-  el.innerHTML = musicCard + lightCard("living") + comfortCard + lightCard("kitchen") + securityCard
-    + packagesCard + energyCard + co2Card + energyProducedCard + presenceCard("utility") + lightCard("utility");
+  // Two-row layout (2026-08-06): system/status cards on top (8 columns:
+  // Music spans 2, then Comfort/Security/Energy Flow/Packages/CO2/Energy
+  // Produced), every real room's merged light+presence card on the bottom
+  // row (6 rooms now — see ROOM_ENTITY_MAP). Comfort sits right after
+  // Music per Mike's direction. Grid is 8 columns wide so the top row
+  // fills exactly one line and the bottom row starts fresh under it.
+  const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
+  el.innerHTML = musicCard + comfortCard + securityCard + energyCard + packagesCard + co2Card + energyProducedCard
+    + roomCards;
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
@@ -3522,18 +3525,6 @@ function renderAmbientActions() {
       e.stopPropagation();
       hideAmbient();
       goToRoom(card.dataset.ambientNav);
-    });
-  });
-
-  el.querySelectorAll("[data-ambient-toggle-light]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const [id, idx] = btn.dataset.ambientToggleLight.split(":");
-      const light = ROOMS[id].lighting[idx];
-      light.on = !light.on;
-      light.brightness = light.on ? 100 : 0;
-      haSyncLight(light);
-      renderAmbientActions();
     });
   });
 
