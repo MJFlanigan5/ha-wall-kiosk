@@ -24,11 +24,21 @@ const ROOM_ENTITY_MAP = {
       "light.floor",
     ],
   },
+  // media_player added 2026-08-06 — pilot room for wiring real per-room
+  // speakers/TVs. Kitchen's Sonos speaker is oddly entity-id'd
+  // "media_player.utility_room" (friendly_name "Kitchen") — a real house
+  // naming quirk, not a mistake; confirmed live (area_id: kitchen,
+  // volume_level 0.77, idle). TV picked from several near-duplicate
+  // "Kitchen TV 2" entities — this one has no numeric HA-generated
+  // suffix, the others (_2, _airplay) are Cast/AirPlay bridge duplicates
+  // of the same physical set.
   kitchen: {
     lighting: [
       "light.kitchen_lifx_ceiling",
       "light.cob_kitchen_sink_2",
     ],
+    media_player: "media_player.utility_room",
+    tv: "media_player.kitchen_tv_2",
   },
   utility: {
     lighting: [
