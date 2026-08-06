@@ -28,6 +28,7 @@ const ROOM_ENTITY_MAP = {
       "light.floor",
     ],
     tv: "media_player.living_room_2",
+    airQuality: { aqi: "sensor.living_room_living_room_aq_air_quality", temp: "sensor.h5106_3136_temperature", humidity: "sensor.h5106_3136_humidity" },
   },
   // media_player added 2026-08-06 — pilot room for wiring real per-room
   // speakers/TVs. Kitchen's Sonos speaker is oddly entity-id'd
@@ -44,6 +45,10 @@ const ROOM_ENTITY_MAP = {
     ],
     media_player: "media_player.utility_room",
     tv: "media_player.kitchen_tv_2",
+    // AQI only — the Smart Air Purifier reports air quality but has no
+    // matching temp/humidity sensor pair like the other rooms' Govee AQ
+    // monitors do.
+    airQuality: { aqi: "sensor.kitchen_smart_air_purifier_air_quality" },
   },
   // No speaker/TV added here — the only media_player candidates in Utility
   // Room's area are appliance-adjacent, not a real listening device.
@@ -53,6 +58,7 @@ const ROOM_ENTITY_MAP = {
       "light.entry_smells_diffuser_nightlight",
     ],
     tv: "media_player.utility_room_tv_2",
+    airQuality: { aqi: "sensor.utility_room_aq_air_quality", temp: "sensor.utility_room_aq_temperature", humidity: "sensor.utility_room_aq_humidity" },
   },
   // Speaker is "Veda" (a real house nickname for this room's Google Home,
   // not a mistake) — not area-tagged in HA's registry the way Kitchen's
@@ -64,6 +70,7 @@ const ROOM_ENTITY_MAP = {
       "light.floor_lamp_office",
     ],
     media_player: "media_player.veda",
+    airQuality: { aqi: "sensor.office_office_aq_air_quality", temp: "sensor.h5106_1378_temperature", humidity: "sensor.h5106_1378_humidity" },
   },
   // Speaker is the Google Home Mini (master_bedroom_speaker), not the
   // HT-A3000 soundbar (that's TV-paired audio, not an independent music
@@ -74,11 +81,15 @@ const ROOM_ENTITY_MAP = {
     ],
     media_player: "media_player.master_bedroom_speaker",
     tv: "media_player.master_bedroom_tv_2",
+    airQuality: { aqi: "sensor.master_aq_air_quality", temp: "sensor.h5106_568d_temperature", humidity: "sensor.h5106_568d_humidity" },
   },
   // TV picked as the Cast-bridge entity (dining_room_tcl_tv, matches the
   // same supported_features scheme as Kitchen/Utility's working Cast
   // entities) over the native-integration duplicate (55a300w_television)
   // for consistency with the pattern already verified live in Kitchen.
+  // No airQuality here — this room's Qingping CGS1 sensor is uncalibrated
+  // (temperature reads 181, humidity/CO2/PM2.5 all "unknown"), same known
+  // issue already noted for its CO2 reading elsewhere in this app.
   dining: {
     lighting: [
       "light.dining_room_right",
@@ -96,6 +107,7 @@ const ROOM_ENTITY_MAP = {
     ],
     media_player: "media_player.bedroom_4_speaker",
     tv: "media_player.guest_bedroom_tv_2",
+    airQuality: { aqi: "sensor.bedroom_bedroom_4_aq_air_quality", temp: "sensor.h5106_2a62_temperature", humidity: "sensor.h5106_2a62_humidity" },
   },
   // Bedroom 3 — area_id "bedroom" in HA's Area registry is actually named
   // "Bedroom 3" (confusingly, not "bedroom_3"). First search missed this;
@@ -107,5 +119,6 @@ const ROOM_ENTITY_MAP = {
       "light.rocco_ceiling_1",
     ],
     media_player: "media_player.bedroom_3_speaker",
+    airQuality: { aqi: "sensor.bedroom_bedroom_3_aq_air_quality", temp: "sensor.bedroom_3_air_quality_temperature", humidity: "sensor.bedroom_3_air_quality_humidity" },
   },
 };

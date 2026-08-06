@@ -1442,7 +1442,19 @@ function renderHero(room) {
     <div class="ambient-card-value">${room.tv.on ? "On" : "Off"}</div>
   </div>` : "";
 
-  return `<div class="hero-status-row">${lightingCard}${mediaCard}${tvCard}</div>`;
+  // Read-only status, no matching section to jump to — plain cursor:default
+  // like the hero cards were before the jump-to-section behavior existed.
+  const aq = room.airQuality;
+  const aqSub = aq && (aq.temp != null || aq.humidity != null)
+    ? `<div class="ambient-card-sub">${aq.temp != null ? Math.round(aq.temp) + "°" : ""}${aq.temp != null && aq.humidity != null ? " · " : ""}${aq.humidity != null ? Math.round(aq.humidity) + "% humidity" : ""}</div>` : "";
+  const aqCard = (aq && aq.aqi != null) ? `<div class="ambient-card hero-status-card" style="cursor:default">
+    ${ico("wind", "ambient-card-icon")}
+    <div class="ambient-card-label">Air Quality</div>
+    <div class="ambient-card-value">AQI ${aq.aqi}</div>
+    ${aqSub}
+  </div>` : "";
+
+  return `<div class="hero-status-row">${lightingCard}${mediaCard}${tvCard}${aqCard}</div>`;
 }
 
 function renderLightingSlider(room) {
@@ -2255,6 +2267,9 @@ let mediaEntityLocations = new Map();
 // entity_id -> roomId for the single TV a room can have (power-only, see
 // haStateToTvItem)
 let tvEntityLocations = new Map();
+// entity_id -> { roomId, field } where field is "aqi" | "temp" | "humidity" —
+// up to 3 separate real sensor entities per room feed one airQuality object.
+let airQualityEntityLocations = new Map();
 let AMBIENT_ROOMS = ["living", "kitchen", "dining", "office", "master", "bedroom3", "bedroom4"]; // exact order/set dictated by Mike 2026-08-06 — Utility Room isn't shown on Ambient; new rooms from Admin Mode get appended
 
 // Whole-home Energy Flow card for Ambient Mode (2026-08-06 redesign) — real
@@ -2454,6 +2469,7 @@ function populateRoomsFromMap(map, statesById) {
   entityLocations = new Map();
   mediaEntityLocations = new Map();
   tvEntityLocations = new Map();
+  airQualityEntityLocations = new Map();
   for (const roomId of Object.keys(map)) {
     if (!ROOMS[roomId] && map[roomId].name) {
       // room created via Admin Mode on a previous visit — recreate it from
@@ -2494,6 +2510,20 @@ function populateRoomsFromMap(map, statesById) {
     } else {
       ROOMS[roomId].tv = null;
     }
+
+    const aq = map[roomId].airQuality;
+    if (aq && aq.aqi) {
+      const aqObj = { aqi: null, temp: null, humidity: null };
+      ["aqi", "temp", "humidity"].forEach(field => {
+        if (!aq[field]) return;
+        airQualityEntityLocations.set(aq[field], { roomId, field });
+        const s = statesById && statesById.get(aq[field]);
+        if (s) aqObj[field] = parseFloat(s.state);
+      });
+      ROOMS[roomId].airQuality = aqObj;
+    } else {
+      ROOMS[roomId].airQuality = null;
+    }
   }
 }
 
@@ -2527,6 +2557,10 @@ async function initLiveData() {
     for (const [entityId, roomId] of tvEntityLocations) {
       const state = stateById.get(entityId);
       if (state) ROOMS[roomId].tv = haStateToTvItem(entityId, state);
+    }
+    for (const [entityId, loc] of airQualityEntityLocations) {
+      const state = stateById.get(entityId);
+      if (state && ROOMS[loc.roomId].airQuality) ROOMS[loc.roomId].airQuality[loc.field] = parseFloat(state.state);
     }
     ambientPowerState = stateById.get(AMBIENT_POWER_ENTITY) || null;
     ambientSolarState = stateById.get(AMBIENT_SOLAR_ENTITY) || null;
@@ -2571,6 +2605,12 @@ async function initLiveData() {
       if (tvRoomId) {
         ROOMS[tvRoomId].tv = haStateToTvItem(entityId, newState);
         if (currentRoom === tvRoomId) renderContent();
+        return;
+      }
+      const aqLoc = airQualityEntityLocations.get(entityId);
+      if (aqLoc) {
+        if (ROOMS[aqLoc.roomId].airQuality) ROOMS[aqLoc.roomId].airQuality[aqLoc.field] = parseFloat(newState.state);
+        if (currentRoom === aqLoc.roomId) renderContent();
         return;
       }
       if (entityId === AMBIENT_POWER_ENTITY || entityId === AMBIENT_SOLAR_ENTITY ||
@@ -2680,6 +2720,7 @@ function defaultRoomShape(name) {
     climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     tv: null,
+    airQuality: null,
     security: [], shades: [],
   };
 }
