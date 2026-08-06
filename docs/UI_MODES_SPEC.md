@@ -241,8 +241,22 @@ In priority order, per Mike's confirmed sequencing:
    just the app's own look — needs a decision on what that control
    actually does (a scene? a service call pattern?) before building —
    not started
-6. **Admin accent-color personalization** — a setting, probably in Admin
-   Mode, to change the app's own UI accent color — not started
+6. ~~**Admin accent-color personalization**~~ — done 2026-08-06. New
+   "Appearance" block at the top of Admin Mode, a native
+   `<input type="color">` (no extra library needed) plus a Reset button.
+   Applied via `--accent` CSS custom property, saved to `localStorage`
+   (same per-device pattern as everything else in Admin Mode), and applied
+   immediately at script load — before any HA connection — so there's no
+   flash of the default color on reload. Verified live: set it, confirmed
+   the computed CSS variable actually changed, reset it back to default.
+
+## Roadmap status: all 6 items done (2026-08-06)
+
+Everything in this list is now built and verified live end-to-end, not
+just written to code. What's left is real-world use — put it in front of
+Mike on an actual device for a while and see what surfaces, same
+discipline as the native Pi app's "first real run is a debugging pass, not
+'should just work'" approach.
 
 ## Physical install note (context, not a change here)
 

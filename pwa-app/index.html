@@ -685,6 +685,19 @@
       <input class="admin-add-select" id="adminNewRoomName" placeholder="New room name (e.g. Office)" />
       <button class="admin-add-btn" id="adminNewRoomBtn">Add Room</button>
     </div>
+    <div class="admin-room-block">
+      <h3>Appearance</h3>
+      <div class="admin-entity-row">
+        <span>Accent color</span>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input type="color" id="adminAccentColor" style="width:36px; height:28px; border:none; border-radius:6px; background:none; cursor:pointer;" />
+          <button class="admin-remove-btn" id="adminAccentReset" style="color:var(--text-dim); font-size:12px;" title="Reset to default">Reset</button>
+        </div>
+      </div>
+      <div class="admin-note" style="margin-top:8px;">
+        Saved to this device only, same as everything else in Admin Mode.
+      </div>
+    </div>
     <div id="adminRoomList"></div>
   </div>
 
@@ -2590,6 +2603,17 @@ function applyNightMode(isNight) {
   document.body.classList.toggle("night-mode", isNight);
 }
 
+// --- Accent color personalization (2026-08-06, roadmap item 6) ---
+// Same per-device localStorage pattern as everything else in Admin Mode.
+// Applied immediately at script load (not gated behind HA connecting) so
+// there's no flash of the default color before the saved one kicks in.
+const ACCENT_COLOR_KEY = "ha_accent_color";
+const DEFAULT_ACCENT = "#FFFFFF";
+function applyAccentColor(hex) {
+  document.documentElement.style.setProperty("--accent", hex);
+}
+applyAccentColor(localStorage.getItem(ACCENT_COLOR_KEY) || DEFAULT_ACCENT);
+
 // --- Admin Mode config layer (2026-08-05) ---
 // rooms.config.js's ROOM_ENTITY_MAP is the shipped default. Admin Mode
 // changes persist as a localStorage override on top of it — the browser
@@ -2916,6 +2940,18 @@ document.getElementById("adminOpenBtn").innerHTML = ico("settings", "i18");
 document.getElementById("adminCloseBtn").innerHTML = ico("x", "i22");
 document.getElementById("ambientAdminOpenBtn").innerHTML = ico("settings", "i16");
 icons();
+
+const adminAccentInput = document.getElementById("adminAccentColor");
+adminAccentInput.value = localStorage.getItem(ACCENT_COLOR_KEY) || DEFAULT_ACCENT;
+adminAccentInput.addEventListener("input", () => {
+  localStorage.setItem(ACCENT_COLOR_KEY, adminAccentInput.value);
+  applyAccentColor(adminAccentInput.value);
+});
+document.getElementById("adminAccentReset").addEventListener("click", () => {
+  localStorage.removeItem(ACCENT_COLOR_KEY);
+  adminAccentInput.value = DEFAULT_ACCENT;
+  applyAccentColor(DEFAULT_ACCENT);
+});
 
 // --- Ambient Mode (2026-08-05) ---
 // Loxone-inspired idle/glanceable state: after a period of no touch, drop
