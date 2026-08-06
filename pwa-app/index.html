@@ -729,6 +729,22 @@
         Saved to this device only, same as everything else in Admin Mode.
       </div>
     </div>
+    <div class="admin-room-block">
+      <h3>Homey</h3>
+      <div class="admin-note" style="margin-bottom:10px;">
+        Optional — powers the thermostat control and room moods. Local
+        Personal Access Token from Homey's app: profile &rarr; Settings &rarr;
+        General &rarr; API Keys.
+      </div>
+      <div class="admin-add-row" style="margin-bottom:8px;">
+        <input class="admin-add-select" id="homeyUrlInput" placeholder="http://192.168.3.159" />
+      </div>
+      <div class="admin-add-row">
+        <input class="admin-add-select" id="homeyTokenInput" placeholder="Personal Access Token" />
+        <button class="admin-add-btn" id="homeySaveBtn">Save</button>
+      </div>
+      <div class="admin-note" id="homeyStatus" style="margin-top:8px;"></div>
+    </div>
     <div id="adminRoomList"></div>
   </div>
 
@@ -744,6 +760,7 @@
 
 <script src="config.js"></script>
 <script src="ha-client.js"></script>
+<script src="homey-client.js"></script>
 <script src="rooms.config.js"></script>
 <script>
 // Shared favorites list — real Savant favorites are largely shared across the house
@@ -1950,6 +1967,17 @@ function renderRoomSections(room) {
   if (room.tv && room.tv.entityId) {
     sections += `<div class="section-label-sm" id="section-tv" style="margin-top:32px">${ico("tv", "i14")}TV</div>${renderTv(room)}`;
   }
+  // Moods — real Homey moods, only exist for these 2 rooms (Goodnight is
+  // whole-home, not room-specific, so it's not shown here).
+  if (window.homeyClient && (currentRoom === "living" || currentRoom === "dining")) {
+    const moodId = currentRoom === "living" ? MOOD_MOVIE_NIGHT_ID : MOOD_DINNER_GUESTS_ID;
+    const moodName = currentRoom === "living" ? "Movie Night" : "Dinner / Guests";
+    sections += `<div class="section-label-sm" id="section-moods" style="margin-top:32px">${ico("sparkles", "i14")}Moods</div>
+      <div class="light-list"><div class="switch-row">
+        <div class="light-row-name">${moodName}</div>
+        <button class="switch-btn" data-mood="${moodId}">Activate</button>
+      </div></div>`;
+  }
   return sections;
 }
 
@@ -2031,6 +2059,13 @@ function wireInteractions(room) {
   if (tvToggleBtn) tvToggleBtn.addEventListener("click", () => {
     if (!room.tv || !room.tv.entityId || !window.haClient || !window.haClient.connected) return;
     window.haClient.callService("media_player", room.tv.on ? "turn_off" : "turn_on", room.tv.entityId).catch(console.error);
+  });
+
+  document.querySelectorAll("[data-mood]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!window.homeyClient) return;
+      window.homeyClient.triggerMood(btn.dataset.mood).catch(console.error);
+    });
   });
 
   document.querySelectorAll("[data-slider]").forEach(track => {
@@ -2330,6 +2365,21 @@ const AMBIENT_THERMOSTAT_TEMP_ENTITY = "sensor.thermostat_temperature";
 const AMBIENT_THERMOSTAT_COOL_ENTITY = "sensor.thermostat_cool_temperature";
 let ambientThermostatTempState = null;
 let ambientThermostatCoolState = null;
+// Set right after a Homey write (2026-08-06) — confirmed live that HA's
+// mirrored sensors lag well behind the real device (15+ seconds, possibly
+// longer/never depending on the MQTT bridge's own poll cycle), so the
+// card reads from here first when present instead of waiting on that
+// separate, slower path.
+let homeyThermostatOverride = null; // { temp, cool }
+
+// Homey device/mood IDs (2026-08-06) — thermostat writes and moods, both
+// confirmed real but unreachable through HA (climate.hallway is a dead
+// "restored" entity from the disabled Nest integration; moods were never
+// bridged into HA at all). Read via window.homeyClient, HomeyConfig
+// permitting — see homey-client.js.
+const NEST_THERMOSTAT_DEVICE_ID = "7d030c67-4001-483b-8765-75f7d34efa59";
+const MOOD_MOVIE_NIGHT_ID = "ff9f13b2-7aa4-4cbf-861a-860d2cdc9ab0"; // Living Room
+const MOOD_DINNER_GUESTS_ID = "800dd834-bb68-44e0-af0b-e5964ecc605c"; // Dining Room
 
 // Water Usage tile (2026-08-06) — swapped in for the old CO2/grid-intensity
 // tile per Mike's direction. Real Flo shutoff valve sensor, confirmed live
@@ -2687,6 +2737,11 @@ if (HAConfig.isConfigured()) {
   showOnboarding(initLiveData);
 }
 
+if (HomeyConfig.isConfigured()) {
+  const { url, token } = HomeyConfig.get();
+  window.homeyClient = new HomeyClient(url, token);
+}
+
 setInterval(updateClock, 1000 * 15);
 
 // --- Admin Mode (2026-08-05) ---
@@ -2959,6 +3014,30 @@ document.getElementById("adminAccentReset").addEventListener("click", () => {
   applyAccentColor(DEFAULT_ACCENT);
 });
 
+const homeyUrlInput = document.getElementById("homeyUrlInput");
+const homeyTokenInput = document.getElementById("homeyTokenInput");
+const homeyStatusEl = document.getElementById("homeyStatus");
+homeyUrlInput.value = HomeyConfig.get().url;
+homeyTokenInput.value = HomeyConfig.get().token;
+if (HomeyConfig.isConfigured()) homeyStatusEl.textContent = "Connected.";
+document.getElementById("homeySaveBtn").addEventListener("click", async () => {
+  const url = homeyUrlInput.value.trim();
+  const token = homeyTokenInput.value.trim();
+  if (!url || !token) { homeyStatusEl.textContent = "Both fields are required."; return; }
+  homeyStatusEl.textContent = "Checking...";
+  try {
+    const client = new HomeyClient(url, token);
+    await client.getDevice(NEST_THERMOSTAT_DEVICE_ID);
+    HomeyConfig.set(url, token);
+    window.homeyClient = client;
+    homeyStatusEl.textContent = "Connected.";
+    if (currentRoom === "living" || currentRoom === "dining") renderContent();
+  } catch (e) {
+    homeyStatusEl.textContent = "Couldn't connect — check the URL and token.";
+    console.error(e);
+  }
+});
+
 // --- Ambient Mode (2026-08-05) ---
 // Loxone-inspired idle/glanceable state: after a period of no touch, drop
 // the active room screen for a simple clock + curated quick actions. Any
@@ -3039,8 +3118,22 @@ function renderAmbientActions() {
   // tile (was excluded from the bridge before). Shows the thermostat's own
   // current reading and cool setpoint — a real climate device, not a proxy
   // room sensor.
-  const thermoTemp = ambientThermostatTempState ? parseFloat(ambientThermostatTempState.state) : null;
-  const thermoCool = ambientThermostatCoolState ? parseFloat(ambientThermostatCoolState.state) : null;
+  const thermoTemp = homeyThermostatOverride ? homeyThermostatOverride.temp
+    : ambientThermostatTempState ? parseFloat(ambientThermostatTempState.state) : null;
+  const thermoCool = homeyThermostatOverride ? homeyThermostatOverride.cool
+    : ambientThermostatCoolState ? parseFloat(ambientThermostatCoolState.state) : null;
+  // +/- writes go through Homey directly (2026-08-06), not HA — verified
+  // live that climate.hallway is a dead restored entity with no real
+  // backing. Homey's own local API write works (confirmed via curl), the
+  // thermostat was just stuck in Eco mode blocking every write attempt
+  // tonight regardless of path; turning Eco off is now part of the write
+  // itself (see wireInteractions' data-comfort-temp handler) rather than a
+  // separate step, per Mike's direction.
+  const comfortControls = (window.homeyClient && thermoCool != null) ? `
+    <div class="ambient-card-controls">
+      <button class="ambient-stepper-btn" data-comfort-temp="down" style="flex:1">−</button>
+      <button class="ambient-stepper-btn" data-comfort-temp="up" style="flex:1">+</button>
+    </div>` : "";
   const comfortCard = `<div class="ambient-card" style="cursor:default">
     <div class="ambient-card-header">
       ${ico("thermometer", "ambient-card-icon")}
@@ -3048,6 +3141,7 @@ function renderAmbientActions() {
     </div>
     <div class="ambient-card-primary">${thermoTemp != null ? Math.round(thermoTemp) + "°" : "—"}</div>
     <div class="ambient-card-sub">${thermoCool != null ? "Comfort · cools to " + Math.round(thermoCool) + "°" : "Comfort"}</div>
+    ${comfortControls}
   </div>`;
 
   // The reference's Cover and CO2/Energy Produced tiles have no real
@@ -3289,6 +3383,38 @@ function renderAmbientActions() {
       window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(console.error);
     });
   }
+
+  el.querySelectorAll("[data-comfort-temp]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!window.homeyClient || thermoCool == null) return;
+      const target = Math.round(thermoCool) + (btn.dataset.comfortTemp === "up" ? 1 : -1);
+      // Eco mode blocks every manual write (confirmed live tonight) — turn
+      // it off as part of the same action. Best-effort and separately
+      // caught: confirmed live that Nest's API 500s this exact call as an
+      // invalid no-op transition when eco is already off (real error:
+      // "SetMode command not allowed in current thermostat mode"), which
+      // must not block the actual temperature write below it.
+      try {
+        await window.homeyClient.setCapability(NEST_THERMOSTAT_DEVICE_ID, "nest_thermostat_eco", false);
+      } catch (err) { /* already off — expected, ignore */ }
+      try {
+        await window.homeyClient.setCapability(NEST_THERMOSTAT_DEVICE_ID, "target_temperature.cool", target);
+        // Read the real device back directly instead of waiting on HA's
+        // mirrored sensors, confirmed live to lag well behind (still stale
+        // 15+ seconds after a write).
+        const device = await window.homeyClient.getDevice(NEST_THERMOSTAT_DEVICE_ID);
+        const caps = device.capabilitiesObj || {};
+        homeyThermostatOverride = {
+          temp: caps.measure_temperature ? caps.measure_temperature.value : thermoTemp,
+          cool: caps["target_temperature.cool"] ? caps["target_temperature.cool"].value : target,
+        };
+        renderAmbientActions();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  });
 }
 
 // Quick-jump row (2026-08-06) — real navigation to a few rail-nav

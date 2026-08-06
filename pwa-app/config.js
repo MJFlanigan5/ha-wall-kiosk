@@ -20,6 +20,28 @@ const HAConfig = {
   },
 };
 
+// Optional second connection, separate from HA (2026-08-06) — Homey's
+// local API for the few real things HA can't reach: this thermostat
+// (climate.hallway is a dead "restored" entity from the disabled native
+// Nest integration) and moods (never bridged into HA at all). Same
+// per-device, nothing-committed pattern as HAConfig.
+const HomeyConfig = {
+  get() {
+    return {
+      url: localStorage.getItem("homey_url") || "",
+      token: localStorage.getItem("homey_token") || "",
+    };
+  },
+  set(url, token) {
+    localStorage.setItem("homey_url", url);
+    localStorage.setItem("homey_token", token);
+  },
+  isConfigured() {
+    const { url, token } = this.get();
+    return Boolean(url && token);
+  },
+};
+
 function showOnboarding(onDone) {
   const overlay = document.createElement("div");
   overlay.style.cssText = `
