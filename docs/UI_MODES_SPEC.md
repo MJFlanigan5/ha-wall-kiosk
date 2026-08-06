@@ -217,9 +217,16 @@ In priority order, per Mike's confirmed sequencing:
    `<div>` so it could validly nest the new inline `<button>` controls.
    Verified live: clicked +, watched the card go to "3 of 3 on" and the
    icon turn on-color, confirmed real lights changed, turned back off.
-3. **Day/night theme shift** — the app's own visual appearance
-   (dimmer/warmer at night, brighter by day) should change automatically
-   with time of day — cosmetic, self-contained, not started
+3. ~~**Day/night theme shift**~~ — done 2026-08-06. Driven by HA's real
+   `sun.sun` entity (`state: above_horizon`/`below_horizon`), not a
+   guessed clock cutoff — correct for wherever this is actually installed
+   and shifts with the seasons automatically, no manual sunrise/sunset
+   tuning needed. A single global CSS filter (`brightness(0.78)
+   saturate(0.92) sepia(0.06)`) toggled via a `night-mode` class on
+   `<body>`, not a rewrite of every color token — simpler and can't drift
+   out of sync with the rest of the palette. Verified live at 5:51am
+   (genuinely before sunrise): `night-mode` class present, visibly dimmer/
+   warmer in the screenshot.
 4. **Color presets surfaced in Ambient** — the White Presets/color wheel
    already built into the interior Lighting screen should be reachable as
    a quick action from Ambient Mode too, not only from inside a room —

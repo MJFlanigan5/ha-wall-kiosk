@@ -41,7 +41,11 @@
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
   html, body { height: 100%; background: var(--base); color: var(--text); font-family: var(--font-body); overflow: hidden; }
-  body { display: flex; -webkit-font-smoothing: antialiased; }
+  body { display: flex; -webkit-font-smoothing: antialiased; transition: filter 2s ease; }
+  /* Day/night theme shift — driven by HA's real sun.sun entity, not a
+     guessed clock cutoff. Global filter (dim + slight warm tint) instead
+     of redefining every color token — see applyNightMode(). */
+  body.night-mode { filter: brightness(0.78) saturate(0.92) sepia(0.06); }
 
   /* ---------- Elevation rail (kept — deliberate adaptation for an always-on wall
      tablet, not literally from Savant's phone-app nav. See dashboard-design-spec.md) --- */
@@ -2574,6 +2578,18 @@ let AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.
 const AMBIENT_POWER_ENTITY = "sensor.my_home_load_power";
 let ambientPowerState = null;
 
+// Day/night theme shift (2026-08-06, roadmap item 3) — uses HA's real
+// sun.sun entity (state: above_horizon/below_horizon) rather than a
+// guessed clock cutoff, so it's correct for wherever this is actually
+// installed and shifts with the seasons automatically. A global CSS
+// filter (dim + slight warm tint) rather than redefining every color
+// token individually — simpler, safer, can't drift out of sync with the
+// rest of the palette.
+const SUN_ENTITY = "sun.sun";
+function applyNightMode(isNight) {
+  document.body.classList.toggle("night-mode", isNight);
+}
+
 // --- Admin Mode config layer (2026-08-05) ---
 // rooms.config.js's ROOM_ENTITY_MAP is the shipped default. Admin Mode
 // changes persist as a localStorage override on top of it — the browser
@@ -2651,6 +2667,8 @@ async function initLiveData() {
       if (state) ROOMS[roomId].media = haStateToMediaItem(entityId, state);
     }
     ambientPowerState = stateById.get(AMBIENT_POWER_ENTITY) || null;
+    const sunState = stateById.get(SUN_ENTITY);
+    if (sunState) applyNightMode(sunState.state === "below_horizon");
 
     client.onStateChanged((entityId, newState) => {
       if (!newState) return;
@@ -2669,6 +2687,10 @@ async function initLiveData() {
       if (entityId === AMBIENT_POWER_ENTITY) {
         ambientPowerState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === SUN_ENTITY) {
+        applyNightMode(newState.state === "below_horizon");
       }
     });
   } catch (err) {
