@@ -3426,10 +3426,15 @@ function renderAmbientActions() {
     <div class="ambient-card-primary" style="margin-top:12px">${co2Intensity != null ? Math.round(co2Intensity) : "—"}</div>
     <div class="ambient-card-sub">g CO2/kWh · Grid</div>
   </div>`;
+  // No solar panels installed yet, so there's no real "Energy Produced"
+  // number to show (Mike's call: solar's coming eventually, use general
+  // home energy usage for now instead of a dash). Real Powerwall home-usage
+  // total (kWh, cumulative) — already wired for the Energy screen.
+  const homeUsage = ambientHomeUsageState ? parseFloat(ambientHomeUsageState.state) : null;
   const energyProducedCard = `<div class="ambient-card" style="cursor:default">
     ${ico("sprout", "ambient-card-icon")}
-    <div class="ambient-card-primary" style="margin-top:12px">—</div>
-    <div class="ambient-card-sub">Energy Produced</div>
+    <div class="ambient-card-primary" style="margin-top:12px">${homeUsage != null ? homeUsage.toFixed(1) : "—"}</div>
+    <div class="ambient-card-sub">kWh · Home Usage</div>
   </div>`;
 
   // Music: whichever room's assigned media_player is actively playing, if
