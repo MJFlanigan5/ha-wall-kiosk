@@ -17,6 +17,11 @@
 // original 3 (many devices in this house have a dead/unavailable twin).
 
 const ROOM_ENTITY_MAP = {
+  // No media_player/tv here — the only speaker in this area is the Home
+  // Assistant Voice PE, confirmed defective this session (zero streamed
+  // output audio, refund requested); the TV is the Apple TV, which
+  // already has its own dedicated remote-style screen, so adding it here
+  // too would just duplicate that.
   living: {
     lighting: [
       "light.living_room_couch",
@@ -40,26 +45,46 @@ const ROOM_ENTITY_MAP = {
     media_player: "media_player.utility_room",
     tv: "media_player.kitchen_tv_2",
   },
+  // No speaker/TV added here — the only media_player candidates in Utility
+  // Room's area are appliance-adjacent, not a real listening device.
   utility: {
     lighting: [
       "light.h61b3_785f",
       "light.entry_smells_diffuser_nightlight",
     ],
+    tv: "media_player.utility_room_tv_2",
   },
+  // Speaker is "Veda" (a real house nickname for this room's Google Home,
+  // not a mistake) — not area-tagged in HA's registry the way Kitchen's
+  // was, confirmed instead by cross-referencing the device list (device
+  // "Google Home Veda" -> area_id office) plus get_state (live, Music
+  // Assistant Queue). No TV device exists in this room.
   office: {
     lighting: [
       "light.floor_lamp_office",
     ],
+    media_player: "media_player.veda",
   },
+  // Speaker is the Google Home Mini (master_bedroom_speaker), not the
+  // HT-A3000 soundbar (that's TV-paired audio, not an independent music
+  // zone) and not "Master Bathroom" (a different physical room's Sonos).
   master: {
     lighting: [
       "light.h612d_1746",
     ],
+    media_player: "media_player.master_bedroom_speaker",
+    tv: "media_player.master_bedroom_tv_2",
   },
+  // TV picked as the Cast-bridge entity (dining_room_tcl_tv, matches the
+  // same supported_features scheme as Kitchen/Utility's working Cast
+  // entities) over the native-integration duplicate (55a300w_television)
+  // for consistency with the pattern already verified live in Kitchen.
   dining: {
     lighting: [
       "light.dining_room_right",
     ],
+    media_player: "media_player.dining_room_speaker",
+    tv: "media_player.dining_room_tcl_tv",
   },
   // Bedroom 4 (guest bedroom) — only fan-integrated lights exist right now
   // (the category Mike said is getting replaced with Inovelli switches +
@@ -69,15 +94,18 @@ const ROOM_ENTITY_MAP = {
     lighting: [
       "light.bedroom_4_fan_1",
     ],
+    media_player: "media_player.bedroom_4_speaker",
+    tv: "media_player.guest_bedroom_tv_2",
   },
   // Bedroom 3 — area_id "bedroom" in HA's Area registry is actually named
   // "Bedroom 3" (confusingly, not "bedroom_3"). First search missed this;
   // real light is "Rocco Ceiling" (fan-integrated pair, same deferred
   // cleanup as other ceiling-fan light pairs this session — just using
-  // one of the two here).
+  // one of the two here). No TV device exists in this room.
   bedroom3: {
     lighting: [
       "light.rocco_ceiling_1",
     ],
+    media_player: "media_player.bedroom_3_speaker",
   },
 };
