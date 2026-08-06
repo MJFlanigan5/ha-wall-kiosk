@@ -2950,6 +2950,11 @@ function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
 
+  // A compact subset of WHITE_PRESETS (already built for the interior
+  // color wheel screen) — full 6 presets don't fit a 168px card, these 3
+  // span cool to warm. Roadmap item 4, docs/UI_MODES_SPEC.md.
+  const AMBIENT_PRESETS = WHITE_PRESETS.filter(p => ["Cool White", "Natural White", "Sunrise"].includes(p.name));
+
   const roomCards = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
     const r = ROOMS[id];
     const onCount = r.lighting.filter(l => l.on).length;
@@ -2960,11 +2965,17 @@ function renderAmbientActions() {
         <button class="ambient-stepper-btn" data-ambient-dim="${id}">${ico("minus", "i14")}</button>
         <button class="ambient-stepper-btn" data-ambient-bright="${id}">${ico("plus", "i14")}</button>
       </div>` : "";
+    const hasColor = r.lighting.some(l => l.color);
+    const presets = hasColor ? `
+      <div class="ambient-card-controls">
+        ${AMBIENT_PRESETS.map(p => `<button class="color-swatch-btn" style="background:${p.hex}" data-ambient-preset="${id}:${p.k}" title="${p.name}"></button>`).join("")}
+      </div>` : "";
     return `<div class="ambient-card ${anyOn ? "is-on" : ""}" data-ambient-room="${id}">
       ${ico("lightbulb", "ambient-card-icon")}
       <div class="ambient-card-label">${r.name}</div>
       <div class="ambient-card-value">${value}</div>
       ${steppers}
+      ${presets}
     </div>`;
   });
 
@@ -3033,6 +3044,24 @@ function renderAmbientActions() {
       if (window.haClient && window.haClient.connected) {
         window.haClient.callService("media_player", r.media.playing ? "media_play" : "media_pause", r.media.entityId).catch(console.error);
       }
+      renderAmbientActions();
+    });
+  });
+
+  el.querySelectorAll("[data-ambient-preset]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const [id, kelvin] = btn.dataset.ambientPreset.split(":");
+      const r = ROOMS[id];
+      r.lighting.filter(l => l.color).forEach(l => {
+        l.on = true;
+        if (!l.brightness) l.brightness = 100;
+        if (l.entityId && window.haClient && window.haClient.connected) {
+          window.haClient.callService("light", "turn_on", l.entityId, {
+            brightness_pct: l.brightness, color_temp_kelvin: +kelvin,
+          }).catch(console.error);
+        }
+      });
       renderAmbientActions();
     });
   });

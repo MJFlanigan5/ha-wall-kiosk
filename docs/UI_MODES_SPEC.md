@@ -227,10 +227,15 @@ In priority order, per Mike's confirmed sequencing:
    out of sync with the rest of the palette. Verified live at 5:51am
    (genuinely before sunrise): `night-mode` class present, visibly dimmer/
    warmer in the screenshot.
-4. **Color presets surfaced in Ambient** — the White Presets/color wheel
-   already built into the interior Lighting screen should be reachable as
-   a quick action from Ambient Mode too, not only from inside a room —
-   not started
+4. ~~**Color presets surfaced in Ambient**~~ — done 2026-08-06. Each room
+   card gets 3 of the 6 `WHITE_PRESETS` already built for the interior
+   color wheel (Cool White, Natural White, Sunrise — cool to warm, all 6
+   didn't fit a 168px card), same swatch component reused from the
+   interior screen. Tapping one turns all of that room's color-capable
+   lights on at the preset's `color_temp_kelvin`. Verified live end to
+   end: tapped Sunrise, confirmed via direct HA state read that
+   `color_temp_kelvin: 3703` actually landed on the real device (not just
+   the UI), turned back off.
 5. **Real day/night lighting control** — a control (Ambient or interior)
    that actually changes the house's lighting state for day/night, not
    just the app's own look — needs a decision on what that control
