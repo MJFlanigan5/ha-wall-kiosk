@@ -79,6 +79,11 @@
   .content { flex: 1; overflow-y: auto; padding: 32px 40px 20px; }
 
   .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+  /* Icon-left/label-right pattern (2026-08-06) — matches Ambient Mode's
+     card headers, so the interior screens read as the same design
+     language instead of a plain text title. */
+  .header-title-row { display: flex; align-items: center; gap: 10px; }
+  .header-title-row > span { display: flex; color: var(--text-dim); }
   .header h1 { font-family: var(--font-head); font-weight: 600; font-size: 32px; letter-spacing: -0.2px; }
   .header .meta { text-align: right; }
   .header .clock { font-family: var(--font-head); font-size: 22px; font-weight: 600; letter-spacing: -0.2px; font-variant-numeric: tabular-nums; }
@@ -186,7 +191,14 @@
     background: rgba(255,255,255,0.06); padding: 4px 12px; border-radius: 999px; margin-top: 10px;
   }
   .climate-target-row { display: flex; align-items: center; gap: 16px; margin-top: 22px; }
-  .stepper { width: 38px; height: 38px; border-radius: 10px; background: var(--base-raised); border: 1px solid var(--hairline); color: var(--text); font-family: var(--font-mono); font-size: 17px; cursor: pointer; }
+  /* Bare icon chrome (2026-08-06) — no button background/border, matching
+     Ambient Mode's plain-glyph buttons instead of a boxed control. */
+  .stepper {
+    width: 38px; height: 38px; border-radius: 10px; background: none; border: none;
+    color: var(--text-dim); font-family: var(--font-mono); font-size: 17px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stepper:active { color: var(--text); }
   .climate-target-label { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); min-width: 110px; text-align: center; }
 
   /* ---------- Music playback — album art, scrubber, full transport, source pill.
@@ -208,8 +220,8 @@
   .music-transport { display: flex; align-items: center; gap: 22px; margin: 18px 0 22px; }
   .music-btn-sm { width: 34px; height: 34px; border-radius: 999px; background: none; color: var(--text-dim); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .music-btn-sm.active { color: var(--on); }
-  .media-btn-lg { width: 52px; height: 52px; border-radius: 999px; background: var(--accent-dim); color: var(--text); border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .media-vol-row { width: 100%; display: flex; align-items: center; gap: 10px; margin-top: 22px; }
+  .media-btn-lg { width: 52px; height: 52px; border-radius: 999px; background: none; color: var(--text); border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .media-vol-row { width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 22px; }
   .music-source-pill {
     font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px; color: var(--text-dim);
     background: var(--base-raised); border: 1px solid var(--hairline); padding: 5px 14px; border-radius: 999px; margin-top: 18px;
@@ -293,7 +305,10 @@
   .ring-center .kw { font-family: var(--font-mono); font-size: 26px; font-weight: 500; }
   .ring-center .label { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 0.4px; text-transform: uppercase; margin-top: 2px; }
 
-  .section-label-sm { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; }
+  .section-label-sm {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+  }
   .section-empty { color: var(--text-dim); font-size: 13px; opacity: 0.7; padding: 8px 0; }
   .consumer-list { display: flex; flex-direction: column; }
   .consumer-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--hairline-soft); }
@@ -1405,15 +1420,15 @@ function renderPowerOverview() {
   return `
     <div class="energy-phone">
       ${renderEnergyModeCard()}
-      <div class="section-label-sm">Power Flow</div>
+      <div class="section-label-sm">${ico("activity", "i14")}Power Flow</div>
       ${renderFlowDiagram()}
       ${renderRing()}
-      <div class="section-label-sm" style="margin-top:26px">Live Consumption</div>
+      <div class="section-label-sm" style="margin-top:26px">${ico("trending-up", "i14")}Live Consumption</div>
       <div class="ev-stats-row" style="margin-bottom:10px">
         <div class="ev-stat"><div class="ev-stat-val">${POWER.liveConsumption.current} kW</div><div class="ev-stat-label">Current Usage</div></div>
         <div class="ev-stat"><div class="ev-stat-val">${POWER.liveConsumption.totalToday} kWh</div><div class="ev-stat-label">Total Today</div></div>
       </div>
-      <div class="section-label-sm" style="margin-top:26px">Battery</div>
+      <div class="section-label-sm" style="margin-top:26px">${ico("battery-charging", "i14")}Battery</div>
       <div class="kv-section">
         <div class="kv-row">
           <div class="kv-left"><div class="kv-icon">${ico("battery-charging", "i18")}</div><div class="kv-name">Powerwall</div></div>
@@ -1428,7 +1443,7 @@ function renderWaterHeater() {
   const wh = POWER.waterHeater;
   return `
     <div class="kv-section">
-      <div class="section-label-sm">Status</div>
+      <div class="section-label-sm">${ico("info", "i14")}Status</div>
       <div class="kv-row">
         <div class="kv-left"><div class="kv-icon">${ico("thermometer", "i18")}</div><div class="kv-name">Set Temp</div></div>
         <div class="kv-value">${wh.setTemp}°F</div>
@@ -1443,7 +1458,7 @@ function renderWaterHeater() {
       </div>
     </div>
     <div class="kv-section">
-      <div class="section-label-sm">Settings</div>
+      <div class="section-label-sm">${ico("settings", "i14")}Settings</div>
       <div class="kv-row">
         <div class="kv-left"><div class="kv-icon">${ico("settings", "i18")}</div><div class="kv-name">Mode</div></div>
         <div class="kv-value linked">${wh.mode} <span class="kv-chevron">›</span></div>
@@ -1474,7 +1489,7 @@ function renderPowerContent() {
   };
   content.innerHTML = `
     <div class="header">
-      <h1>Energy</h1>
+      <div class="header-title-row"><span>${ico("zap", "i24")}</span><h1>Energy</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Home energy</div></div>
     </div>
     <div class="service-tabs">
@@ -1763,10 +1778,10 @@ function renderMediaNowPlaying(room) {
       </div>
       <div class="media-vol-row">
         <div style="color:var(--text-faint)">${ico("volume-1", "i16")}</div>
-        <div class="slider-track" style="flex:1" data-volume>
-          <div class="slider-fill" style="width:${m.volume}%"></div>
-          <div class="slider-thumb" style="left:${m.volume}%"></div>
+        <div class="ambient-vpill-track" data-volume style="width:13px; height:40px">
+          <div class="ambient-vpill-fill" style="height:${m.volume}%; background:var(--text-dim)"></div>
         </div>
+        <div style="color:var(--text-faint)">${ico("volume-2", "i16")}</div>
       </div>
       <div class="music-source-pill">${m.source.toUpperCase()}</div>
     </div>`;
@@ -1888,7 +1903,7 @@ function renderSecurityContent() {
   else body = renderSecurityArm();
   content.innerHTML = `
     <div class="header">
-      <h1>Security</h1>
+      <div class="header-title-row"><span>${ico("shield", "i24")}</span><h1>Security</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Home security</div></div>
     </div>
     ${subnav}
@@ -2021,11 +2036,11 @@ function renderVideoContent() {
 
   content.innerHTML = `
     <div class="header">
-      <h1>Video</h1>
+      <div class="header-title-row"><span>${ico("video", "i24")}</span><h1>Video</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Multi-source tiling</div></div>
     </div>
     <div class="video-phone-note">
-      <div class="section-label-sm">Video Tiling</div>
+      <div class="section-label-sm">${ico("layout-grid", "i14")}Video Tiling</div>
       <div style="color:var(--text-dim); font-size:13.5px; line-height:1.5;">
         Video Tiling is an iPad and larger-display feature — multiple live sources composed
         on one screen. On phone, control one source at a time from each room's Media tab.
@@ -2125,7 +2140,7 @@ function renderPoolSpaContent() {
   const body = poolSpaView === "controls" ? renderPoolSpaControls() : `${zoneToggle}${renderPoolSpaDial()}`;
   content.innerHTML = `
     <div class="header">
-      <h1>Pool &amp; Spa</h1>
+      <div class="header-title-row"><span>${ico("waves", "i24")}</span><h1>Pool &amp; Spa</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Pool &amp; spa control</div></div>
     </div>
     ${subnav}
@@ -2180,7 +2195,7 @@ function renderMusicContent() {
 
   content.innerHTML = `
     <div class="header">
-      <h1>Music</h1>
+      <div class="header-title-row"><span>${ico("music", "i24")}</span><h1>Music</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">${activeRooms.length} room${activeRooms.length === 1 ? "" : "s"} playing</div></div>
     </div>
     <div class="kv-section">${rows}</div>
@@ -2234,10 +2249,10 @@ function renderEntryContent() {
 
   content.innerHTML = `
     <div class="header">
-      <h1>Entry</h1>
+      <div class="header-title-row"><span>${ico("door-open", "i24")}</span><h1>Entry</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Doors &amp; garage</div></div>
     </div>
-    <div class="section-label-sm">Door Locks</div>
+    <div class="section-label-sm">${ico("lock", "i14")}Door Locks</div>
     ${frontDoorPanel}
     <div class="kv-section" style="margin-top:10px">
       ${DOORLOCKS.map((d, i) => `
@@ -2252,7 +2267,7 @@ function renderEntryContent() {
           <div class="garage-status">The ${d.name.toLowerCase()} is ${d.locked ? "locked" : "unlocked"}.</div>
         </div>`).join("")}
     </div>
-    <div class="section-label-sm" style="margin-top:24px">Garage</div>
+    <div class="section-label-sm" style="margin-top:24px">${ico("warehouse", "i14")}Garage</div>
     <div class="kv-section">
       ${GARAGE.map((g, i) => `
         <div class="garage-row">
@@ -2308,7 +2323,7 @@ function renderAppleTVContent() {
   ];
   content.innerHTML = `
     <div class="header">
-      <h1>Apple TV</h1>
+      <div class="header-title-row"><span>${ico("tv", "i24")}</span><h1>Apple TV</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">10-foot UI reference</div></div>
     </div>
     <div class="notif-desc" style="margin-bottom:18px; max-width:520px">
@@ -2360,10 +2375,10 @@ function renderSettingsContent() {
   const content = document.getElementById("content");
   content.innerHTML = `
     <div class="header">
-      <h1>Settings</h1>
+      <div class="header-title-row"><span>${ico("settings", "i24")}</span><h1>Settings</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Notifications, users &amp; about</div></div>
     </div>
-    <div class="section-label-sm">Notifications</div>
+    <div class="section-label-sm">${ico("bell", "i14")}Notifications</div>
     <div class="kv-section">
       ${NOTIFICATIONS.map((n, i) => `
         <div class="notif-row">
@@ -2371,7 +2386,7 @@ function renderSettingsContent() {
           <button class="notif-check ${n.on ? "on" : ""}" data-notif="${i}">${ico("check", "i14")}</button>
         </div>`).join("")}
     </div>
-    <div class="section-label-sm" style="margin-top:24px">Users</div>
+    <div class="section-label-sm" style="margin-top:24px">${ico("users", "i14")}Users</div>
     <div class="kv-section">
       ${USERS.map(u => `
         <div class="kv-row">
@@ -2379,7 +2394,7 @@ function renderSettingsContent() {
           <div class="kv-value">${u.role} <span class="kv-chevron">›</span></div>
         </div>`).join("")}
     </div>
-    <div class="section-label-sm" style="margin-top:24px">About</div>
+    <div class="section-label-sm" style="margin-top:24px">${ico("info", "i14")}About</div>
     <div class="kv-section">
       <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("info", "i18")}</div><div class="kv-name">Version</div></div><div class="kv-value">2026.8.3</div></div>
       <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("store", "i18")}</div><div class="kv-name">Home Store</div></div><div class="kv-value linked">Browse <span class="kv-chevron">›</span></div></div>
@@ -2406,7 +2421,7 @@ function renderContent() {
 
   content.innerHTML = `
     <div class="header">
-      <h1>${room.name}</h1>
+      <div class="header-title-row"><span>${ico("home", "i24")}</span><h1>${room.name}</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">${room.outdoor}</div></div>
     </div>
 
@@ -2426,9 +2441,9 @@ function renderContent() {
 // entities exist in this HA instance yet (verified live, not assumed),
 // and shades were never wired. Only real domains get a section.
 function renderRoomSections(room) {
-  let sections = `<div class="section-label-sm" style="margin-top:24px">Lighting</div>${renderLighting(room)}`;
+  let sections = `<div class="section-label-sm" style="margin-top:24px">${ico("lightbulb", "i14")}Lighting</div>${renderLighting(room)}`;
   if (room.media && room.media.entityId) {
-    sections += `<div class="section-label-sm" style="margin-top:32px">Music</div>${renderMedia(room)}`;
+    sections += `<div class="section-label-sm" style="margin-top:32px">${ico("music", "i14")}Music</div>${renderMedia(room)}`;
   }
   return sections;
 }
@@ -2579,18 +2594,16 @@ function wireInteractions(room) {
   const volTrack = document.querySelector("[data-volume]");
   if (volTrack) {
     let dragging = false;
-    const fill = volTrack.querySelector(".slider-fill");
-    const thumb = volTrack.querySelector(".slider-thumb");
-    function setFromEvent(clientX) {
+    const fill = volTrack.querySelector(".ambient-vpill-fill");
+    function setFromEvent(clientY) {
       const rect = volTrack.getBoundingClientRect();
-      let pct = Math.round(((clientX - rect.left) / rect.width) * 100);
+      let pct = Math.round(((rect.bottom - clientY) / rect.height) * 100);
       pct = Math.max(0, Math.min(100, pct));
       room.media.volume = pct;
-      fill.style.width = pct + "%";
-      thumb.style.left = pct + "%";
+      fill.style.height = pct + "%";
     }
-    volTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); volTrack.setPointerCapture(e.pointerId); });
-    volTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
+    volTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientY); volTrack.setPointerCapture(e.pointerId); });
+    volTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientY); });
     volTrack.addEventListener("pointerup", () => dragging = false);
   }
 
