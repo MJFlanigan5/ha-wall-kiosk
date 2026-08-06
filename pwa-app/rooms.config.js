@@ -97,14 +97,12 @@ const ROOM_ENTITY_MAP = {
     media_player: "media_player.dining_room_speaker",
     tv: "media_player.dining_room_tcl_tv",
   },
-  // Bedroom 4 (guest bedroom) — only fan-integrated lights exist right now
-  // (the category Mike said is getting replaced with Inovelli switches +
-  // plain fixtures soon). Using it now, flagged to swap the entity_id
-  // once real fixtures land.
+  // Bedroom 4 (guest bedroom) — fan-integrated light physically removed
+  // (2026-08-06, Mike's call). No real light for this room right now;
+  // real switches + fixtures (and eventually the fan itself) are coming
+  // later. Add the new light entity_id here once installed.
   bedroom4: {
-    lighting: [
-      "light.bedroom_4_fan_1",
-    ],
+    lighting: [],
     media_player: "media_player.bedroom_4_speaker",
     tv: "media_player.guest_bedroom_tv_2",
     airQuality: { aqi: "sensor.bedroom_bedroom_4_aq_air_quality", temp: "sensor.h5106_2a62_temperature", humidity: "sensor.h5106_2a62_humidity" },
