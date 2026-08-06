@@ -3090,14 +3090,27 @@ function renderAmbientActions() {
   // "slider IS the toggle" instead of a redundant button next to it.
   function lightCard(id) {
     const r = ROOMS[id];
-    if (!r || !r.lighting.length) return "";
-    const light = r.lighting[0];
-    const pct = light.on ? (light.brightness || 100) : 0;
-    const key = `${id}:0`;
+    if (!r) return "";
     const pState = ambientPresenceStates[id];
     const isPresent = pState && pState.state === "on";
     const presenceDot = PRESENCE_ENTITY_BY_ROOM[id]
       ? `<span class="ambient-presence-dot ${isPresent ? "is-present" : ""}" title="${isPresent ? "Presence" : "No presence"}"></span>` : "";
+    // No light assigned (2026-08-06, Guest West) — still shows on Ambient
+    // instead of dropping off the grid entirely; fixture's being replaced,
+    // not gone for good. No vpill since there's nothing to control yet.
+    if (!r.lighting.length) {
+      return `<div class="ambient-card" data-ambient-nav="${id}">
+        <div class="ambient-card-header">
+          ${ico("lightbulb", "ambient-card-icon")}
+          <div class="ambient-card-roomlabel">${r.name}${presenceDot}</div>
+        </div>
+        <div class="ambient-card-primary">No light</div>
+        <div class="ambient-card-sub">Fixture pending</div>
+      </div>`;
+    }
+    const light = r.lighting[0];
+    const pct = light.on ? (light.brightness || 100) : 0;
+    const key = `${id}:0`;
     return `<div class="ambient-card ${light.on ? "is-on" : ""}" data-ambient-nav="${id}">
       <div class="ambient-card-header">
         ${ico("lightbulb", "ambient-card-icon")}
