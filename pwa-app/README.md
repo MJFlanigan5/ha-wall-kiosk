@@ -27,6 +27,33 @@ content.
   Living Room, and Living Room has no other real speaker entity right now
   — its Music section is intentionally unassigned until one exists.
 
+## Ambient Mode (v5, room cards replaced with individual favorites 2026-08-06)
+
+v4 (below) still put one card per configured room, showing that room's
+aggregate lighting state. That's not what the Loxone reference actually
+shows — its screen has no "whole room lighting" tiles at all, it favorites
+specific individual devices (one named light, a temp reading, a cover). On
+reflection, a per-room aggregate is also redundant here: every room is
+already one tap away via the rail nav, so a summary card that just repeats
+"which rooms have lights on" doesn't add anything Loxone's own design
+doesn't already skip.
+
+Replaced the 3 room cards with 3 individual light-favorite cards — one
+representative light per room (Living Room's couch light, Kitchen's LIFX
+ceiling, Utility Room's main strip), each showing that specific light's own
+name as the subtext instead of the room name. Header/primary/vertical-pill/
+toggle mechanics are otherwise identical to v4, just re-scoped from "the
+whole room's lighting array" to "this one light" (`roomId:lightIndex` key
+instead of `roomId`). Verified live: toggled `light.living_room_couch`
+via the new per-light power button, confirmed `light.turn_on` landed at
+100% brightness by reading HA state directly, restored to off after.
+
+No cover or CO2 entities exist in this HA instance (checked via
+`search_entities` — the only "cover" match is an unrelated HA statistics
+sensor, not a real cover domain entity), so those two tile types from the
+reference aren't represented here — consistent with the project's standing
+rule against fabricating tiles for data that doesn't exist.
+
 ## Ambient Mode (v4, tile anatomy rebuilt 2026-08-06)
 
 After 90 seconds of no touch, the app drops into a full-screen idle view.

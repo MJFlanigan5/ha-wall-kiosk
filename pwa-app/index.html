@@ -3260,36 +3260,33 @@ function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
 
-  // Room cards (rebuilt 2026-08-06 to literally match the Loxone
-  // screenshot's light-tile anatomy): icon top-left, room name top-right,
-  // one bold word, "Lighting" subtext, vertical pill + power button.
-  // Tapping the card body navigates into that room's real screen
-  // (goToRoom + hideAmbient); the pill and power button are separate inner
-  // controls that stop propagation and stay on Ambient. Color presets
-  // (roadmap item 4) are dropped from this card for now — they don't
-  // appear on Loxone's tile at all, and the interior room screen's color
-  // wheel still has them, so the feature isn't lost, just not duplicated
-  // here.
-  const roomCards = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
+  // Individual favorite light cards (rebuilt 2026-08-06) — the real Loxone
+  // screen doesn't show whole-room lighting summaries at all; it shows
+  // specific favorited devices, one named light per tile. Every room is
+  // already one tap away via nav, so a redundant per-room aggregate card
+  // doesn't match what the reference actually does. One representative
+  // light per room here: icon top-left, room name top-right, one bold
+  // brightness word, the light's own device name as subtext — same
+  // vertical pill + power toggle as before, now scoped to that one light
+  // instead of the whole room.
+  const lightCards = AMBIENT_ROOMS.filter(id => ROOMS[id] && ROOMS[id].lighting.length).map(id => {
     const r = ROOMS[id];
-    const anyOn = r.lighting.some(l => l.on);
-    const avgPct = r.lighting.length ? avgBrightness(r) : 0;
-    const primary = r.lighting.length ? ambientBrightnessWord(avgPct) : "No lights";
-    const vpill = r.lighting.length ? `
-      <div class="ambient-vpill-row">
-        <div class="ambient-vpill-track" data-ambient-vpill="${id}">
-          <div class="ambient-vpill-fill" style="height:${avgPct}%"></div>
-        </div>
-        <button class="ambient-more-btn" data-ambient-toggle="${id}">${ico("power", "i14")}</button>
-      </div>` : "";
-    return `<div class="ambient-card ${anyOn ? "is-on" : ""}" data-ambient-nav="${id}">
+    const light = r.lighting[0];
+    const pct = light.on ? (light.brightness || 100) : 0;
+    const key = `${id}:0`;
+    return `<div class="ambient-card ${light.on ? "is-on" : ""}" data-ambient-nav="${id}">
       <div class="ambient-card-header">
         ${ico("lightbulb", "ambient-card-icon")}
         <div class="ambient-card-roomlabel">${r.name}</div>
       </div>
-      <div class="ambient-card-primary">${primary}</div>
-      <div class="ambient-card-sub">Lighting</div>
-      ${vpill}
+      <div class="ambient-card-primary">${ambientBrightnessWord(pct)}</div>
+      <div class="ambient-card-sub">${light.name}</div>
+      <div class="ambient-vpill-row">
+        <div class="ambient-vpill-track" data-ambient-vpill-light="${key}">
+          <div class="ambient-vpill-fill" style="height:${pct}%"></div>
+        </div>
+        <button class="ambient-more-btn" data-ambient-toggle-light="${key}">${ico("power", "i14")}</button>
+      </div>
     </div>`;
   });
 
@@ -3374,7 +3371,7 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
-  el.innerHTML = roomCards.join("") + presenceCards.join("") + musicCard + energyCard + securityCard;
+  el.innerHTML = lightCards.join("") + presenceCards.join("") + musicCard + energyCard + securityCard;
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
@@ -3385,17 +3382,14 @@ function renderAmbientActions() {
     });
   });
 
-  el.querySelectorAll("[data-ambient-toggle]").forEach(btn => {
+  el.querySelectorAll("[data-ambient-toggle-light]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const id = btn.dataset.ambientToggle;
-      const r = ROOMS[id];
-      const anyOn = r.lighting.some(l => l.on);
-      r.lighting.forEach(l => {
-        l.on = !anyOn;
-        l.brightness = anyOn ? 0 : 100;
-        haSyncLight(l);
-      });
+      const [id, idx] = btn.dataset.ambientToggleLight.split(":");
+      const light = ROOMS[id].lighting[idx];
+      light.on = !light.on;
+      light.brightness = light.on ? 100 : 0;
+      haSyncLight(light);
       renderAmbientActions();
     });
   });
@@ -3403,22 +3397,24 @@ function renderAmbientActions() {
   // Vertical pill (2026-08-06) — matches Loxone's real brightness
   // indicator: a tall capsule that fills from the bottom. Dragging sets
   // fill height from the pointer's position within the track, inverted
-  // (higher on the pill = brighter, since screen Y grows downward).
-  el.querySelectorAll("[data-ambient-vpill]").forEach(track => {
-    const id = track.dataset.ambientVpill;
-    const r = ROOMS[id];
+  // (higher on the pill = brighter, since screen Y grows downward). Scoped
+  // to one specific light (roomId:lightIndex), not the whole room.
+  el.querySelectorAll("[data-ambient-vpill-light]").forEach(track => {
+    const [id, idx] = track.dataset.ambientVpillLight.split(":");
+    const light = ROOMS[id].lighting[idx];
     let dragging = false;
     const fill = track.querySelector(".ambient-vpill-fill");
     function setFromEvent(clientY) {
       const rect = track.getBoundingClientRect();
       let pct = Math.round(((rect.bottom - clientY) / rect.height) * 100);
       pct = Math.max(0, Math.min(100, pct));
-      r.lighting.forEach(l => { l.brightness = pct; l.on = pct > 0; });
+      light.brightness = pct;
+      light.on = pct > 0;
       fill.style.height = pct + "%";
     }
     track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; setFromEvent(e.clientY); track.setPointerCapture(e.pointerId); });
     track.addEventListener("pointermove", e => { e.stopPropagation(); if (dragging) setFromEvent(e.clientY); });
-    track.addEventListener("pointerup", e => { e.stopPropagation(); dragging = false; r.lighting.forEach(haSyncLight); renderAmbientActions(); });
+    track.addEventListener("pointerup", e => { e.stopPropagation(); dragging = false; haSyncLight(light); renderAmbientActions(); });
     track.addEventListener("pointercancel", e => { e.stopPropagation(); dragging = false; });
     track.addEventListener("click", e => e.stopPropagation());
   });
