@@ -604,6 +604,67 @@
   }
   .ambient-wholehouse-btn svg { width: 16px; height: 16px; }
 
+  /* Ambient light theme (2026-08-06, roadmap item — full palette swap, not
+     just the dimming filter used elsewhere). Scoped entirely to
+     #ambientOverlay via CSS custom-property overrides so it never touches
+     the interior room screens — those stay our one dark palette. */
+  .ambient-overlay.ambient-light {
+    --base: #F4F4F5; --base-raised: #FFFFFF; --hairline: #E2E2E5; --hairline-soft: #ECECEE;
+    --text: #1C1C1E; --text-dim: #6E6E73; --text-faint: #A0A0A5;
+    --accent-dim: rgba(0, 0, 0, 0.06);
+  }
+  .ambient-theme-toggle {
+    position: absolute; top: 40px; right: 40px; background: var(--base-raised);
+    border: 1px solid var(--hairline); border-radius: 999px; width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center; color: var(--text-dim); cursor: pointer;
+  }
+
+  /* Room card tap-to-navigate (2026-08-06) — the card body enters that
+     room's real screen; the power toggle / slider / presets are separate
+     inner controls that stop propagation and stay on Ambient. */
+  .ambient-room-card { display: flex; flex-direction: column; gap: 10px; }
+  .ambient-card-top { display: flex; align-items: flex-start; justify-content: space-between; }
+  .ambient-power-btn {
+    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--hairline);
+    background: var(--base); color: var(--text-dim); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .ambient-card.is-on .ambient-power-btn { color: var(--on); border-color: var(--on-dim); background: var(--on-dim); }
+  .ambient-card .slider-track { margin-top: 2px; }
+  .ambient-presence-row {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px;
+  }
+  .ambient-presence-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; }
+  .ambient-presence-row.is-present .ambient-presence-dot { background: var(--on); }
+  .ambient-presence-row.is-present { color: var(--text-dim); }
+
+  /* Media card — album art background + real transport/volume controls */
+  .ambient-media-card { position: relative; overflow: hidden; }
+  .ambient-media-art {
+    position: absolute; inset: 0; background-size: cover; background-position: center;
+    opacity: 0.22; filter: blur(1px);
+  }
+  .ambient-media-card > * { position: relative; }
+  .ambient-media-transport { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .ambient-media-volume { margin-top: 10px; }
+
+  /* Energy Flow card — real Powerwall solar/battery/grid/home breakdown */
+  .ambient-energy-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .ambient-energy-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+  .ambient-energy-row .label { color: var(--text-dim); }
+  .ambient-energy-row .value { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .ambient-nightmode-card { display: flex; flex-direction: column; gap: 12px; }
+  .ambient-nightmode-buttons { display: flex; gap: 8px; }
+  .ambient-nightmode-btn {
+    flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid var(--hairline);
+    background: var(--base); color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 600;
+  }
+  .ambient-nightmode-btn svg { width: 14px; height: 14px; }
+  .ambient-nightmode-btn:active { background: var(--accent-dim); color: var(--text); }
+
   /* Room header status row — same .ambient-card component as Ambient
      Mode, just laid out inline instead of centered full-screen. See
      renderHero(). */
@@ -711,11 +772,11 @@
   </div>
 
   <div class="ambient-overlay" id="ambientOverlay">
+    <button class="ambient-theme-toggle" id="ambientThemeToggle" title="Light / dark"></button>
     <div class="ambient-clock" id="ambientClock">--:--</div>
     <div class="ambient-date" id="ambientDate"></div>
     <div class="ambient-actions" id="ambientActions"></div>
-    <div class="ambient-wholehouse-row" id="ambientWholeHouseRow"></div>
-    <div class="ambient-hint">Tap anywhere to wake</div>
+    <div class="ambient-hint">Tap a card to open that room · tap anywhere else to wake</div>
     <button class="admin-btn ambient-admin-btn" id="ambientAdminOpenBtn" title="Admin"></button>
   </div>
 
@@ -993,8 +1054,16 @@ function renderRail() {
   mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + videoHtml + poolHtml + musicHtml + entryHtml + tvHtml + settingsHtml);
 
   document.querySelectorAll("[data-room]").forEach(el => {
-    el.addEventListener("click", () => { currentRoom = el.dataset.room; currentService = "lighting"; lightingView = "slider"; colorWheelIndex = null; mediaView = "now"; powerTab = "overview"; securityView = "arm"; securityFilter = "all"; poolSpaZone = "pool"; poolSpaView = "dial"; render(); });
+    el.addEventListener("click", () => goToRoom(el.dataset.room));
   });
+}
+
+// Shared by the rail nav and Ambient Mode's card-tap-to-enter (2026-08-06) —
+// same reset-state list either path used to duplicate inline.
+function goToRoom(id) {
+  currentRoom = id; currentService = "lighting"; lightingView = "slider"; colorWheelIndex = null;
+  mediaView = "now"; powerTab = "overview"; securityView = "arm"; securityFilter = "all";
+  poolSpaZone = "pool"; poolSpaView = "dial"; render();
 }
 
 function wattsOf(str) {
@@ -2576,6 +2645,15 @@ function haSyncLight(lightItem) {
 // the scrubber won't move), no shuffle/repeat/volume service calls, no
 // supported_features gating. Those stay MUSIC_SPEC.md's dedicated scope —
 // this is deliberately the minimum that's honestly wireable in this pass.
+// entity_picture from HA is a relative path (proxied through the HA server
+// itself) — needs the real HA base URL prepended to resolve from this app's
+// own origin. Converts the stored ws(s):// websocket URL to http(s)://.
+function haImageUrl(relativePath) {
+  const { url } = HAConfig.get();
+  const base = url.replace(/^ws/, "http").replace(/\/api\/websocket$/, "");
+  return base + relativePath;
+}
+
 function haStateToMediaItem(entityId, state) {
   const attrs = state.attributes || {};
   return {
@@ -2587,6 +2665,7 @@ function haStateToMediaItem(entityId, state) {
     volume: attrs.volume_level != null ? Math.round(attrs.volume_level * 100) : 0,
     elapsed: 0, duration: 0, // not interpolated yet, see MUSIC_SPEC.md
     shuffle: false, repeat: false, favorites: [],
+    art: attrs.entity_picture ? haImageUrl(attrs.entity_picture) : null, // real album art, used by Ambient Mode's media card (2026-08-06)
     entityId,
   };
 }
@@ -2600,10 +2679,28 @@ let entityLocations = new Map();
 let mediaEntityLocations = new Map();
 let AMBIENT_ROOMS = ["living", "kitchen", "utility"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
 
-// Whole-home power card for Ambient Mode — real Tesla Powerwall entity,
-// confirmed to exist via live search before adding this (not fabricated).
+// Whole-home Energy Flow card for Ambient Mode (2026-08-06 redesign) — real
+// Tesla Powerwall entities, all confirmed to exist via live search before
+// adding them (not fabricated). Solar/battery/grid breakdown alongside the
+// load figure already shown pre-redesign.
 const AMBIENT_POWER_ENTITY = "sensor.my_home_load_power";
+const AMBIENT_SOLAR_ENTITY = "sensor.my_home_solar_power";
+const AMBIENT_BATTERY_ENTITY = "sensor.my_home_battery_power";
+const AMBIENT_GRID_ENTITY = "sensor.my_home_grid_power";
 let ambientPowerState = null;
+let ambientSolarState = null;
+let ambientBatteryState = null;
+let ambientGridState = null;
+
+// Per-room presence for Ambient Mode cards (2026-08-06) — real Magic Areas
+// aggregate presence sensors (per-room automation config already confirmed
+// these entity_ids live tonight while fixing the Utility Room automation).
+const PRESENCE_ENTITY_BY_ROOM = {
+  living: "binary_sensor.magic_areas_presence_tracking_living_room_area_state",
+  kitchen: "binary_sensor.magic_areas_presence_tracking_kitchen_area_state",
+  utility: "binary_sensor.magic_areas_presence_tracking_utility_room_area_state",
+};
+let ambientPresenceStates = {};
 
 // Apple TV screen (2026-08-06) — real installed-apps list pulled from HA's
 // source_list attribute (Homey's Apple TV integration bridged in), not the
@@ -2635,6 +2732,26 @@ function applyAccentColor(hex) {
   document.documentElement.style.setProperty("--accent", hex);
 }
 applyAccentColor(localStorage.getItem(ACCENT_COLOR_KEY) || DEFAULT_ACCENT);
+
+// Ambient light/dark theme toggle (2026-08-06 redesign) — a real second
+// palette (not just the brightness-dim filter above), scoped entirely to
+// #ambientOverlay so the interior room screens keep our one dark palette,
+// per Mike's call to leave those as-is. Persisted per device, same pattern
+// as the accent color.
+const AMBIENT_THEME_KEY = "ha_ambient_theme";
+function applyAmbientTheme(theme) {
+  const overlay = document.getElementById("ambientOverlay");
+  overlay.classList.toggle("ambient-light", theme === "light");
+  const btn = document.getElementById("ambientThemeToggle");
+  if (btn) { btn.innerHTML = ico(theme === "light" ? "moon" : "sun", "i18"); icons(); }
+}
+document.getElementById("ambientThemeToggle").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const next = localStorage.getItem(AMBIENT_THEME_KEY) === "light" ? "dark" : "light";
+  localStorage.setItem(AMBIENT_THEME_KEY, next);
+  applyAmbientTheme(next);
+});
+applyAmbientTheme(localStorage.getItem(AMBIENT_THEME_KEY) || "dark");
 
 // --- Admin Mode config layer (2026-08-05) ---
 // rooms.config.js's ROOM_ENTITY_MAP is the shipped default. Admin Mode
@@ -2681,6 +2798,14 @@ function populateRoomsFromMap(map, statesById) {
       const mState = statesById && statesById.get(mediaId);
       ROOMS[roomId].media = mState ? haStateToMediaItem(mediaId, mState) :
         { name: mediaId, track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [], entityId: mediaId };
+    } else {
+      // No media_player assigned (or just unassigned via Admin Mode) —
+      // clear any stale data so the room doesn't keep showing whatever was
+      // last there. Real bug found 2026-08-06: after removing HT-A3000 from
+      // Living Room, this branch didn't exist, so ROOMS.living.media stayed
+      // frozen on its original fabricated placeholder ("Evening Mix — KEXP")
+      // and the Music screen displayed it as if genuinely playing.
+      ROOMS[roomId].media = { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [], entityId: null };
     }
   }
 }
@@ -2713,6 +2838,12 @@ async function initLiveData() {
       if (state) ROOMS[roomId].media = haStateToMediaItem(entityId, state);
     }
     ambientPowerState = stateById.get(AMBIENT_POWER_ENTITY) || null;
+    ambientSolarState = stateById.get(AMBIENT_SOLAR_ENTITY) || null;
+    ambientBatteryState = stateById.get(AMBIENT_BATTERY_ENTITY) || null;
+    ambientGridState = stateById.get(AMBIENT_GRID_ENTITY) || null;
+    for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
+      ambientPresenceStates[roomId] = stateById.get(entityId) || null;
+    }
     appleTvState = stateById.get(APPLETV_ENTITY) || null;
     const sunState = stateById.get(SUN_ENTITY);
     if (sunState) applyNightMode(sunState.state === "below_horizon");
@@ -2731,8 +2862,18 @@ async function initLiveData() {
         if (currentRoom === mediaRoomId) renderContent();
         return;
       }
-      if (entityId === AMBIENT_POWER_ENTITY) {
-        ambientPowerState = newState;
+      if (entityId === AMBIENT_POWER_ENTITY || entityId === AMBIENT_SOLAR_ENTITY ||
+          entityId === AMBIENT_BATTERY_ENTITY || entityId === AMBIENT_GRID_ENTITY) {
+        if (entityId === AMBIENT_POWER_ENTITY) ambientPowerState = newState;
+        if (entityId === AMBIENT_SOLAR_ENTITY) ambientSolarState = newState;
+        if (entityId === AMBIENT_BATTERY_ENTITY) ambientBatteryState = newState;
+        if (entityId === AMBIENT_GRID_ENTITY) ambientGridState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      const presenceRoom = Object.keys(PRESENCE_ENTITY_BY_ROOM).find(r => PRESENCE_ENTITY_BY_ROOM[r] === entityId);
+      if (presenceRoom) {
+        ambientPresenceStates[presenceRoom] = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
@@ -3010,6 +3151,14 @@ function updateAmbientClock() {
 // <button> can't validly contain another <button>. Matches Loxone's
 // Central screen, which had inline +/- chevrons directly on cards instead
 // of tap-the-whole-card-only.
+// Whole-house Night/Day kelvin targets — manual only, per
+// docs/UI_MODES_SPEC.md's confirmed direction, this deliberately does NOT
+// auto-trigger on sun.sun the way the app's own theme filter does. "When to
+// change real lights" stays a decision Mike makes by tapping a button, not
+// automation logic baked into the app.
+const WHOLE_HOUSE_NIGHT_KELVIN = WHITE_PRESETS.find(p => p.name === "Sunrise").k;
+const WHOLE_HOUSE_DAY_KELVIN = WHITE_PRESETS.find(p => p.name === "Cool White").k;
+
 function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
@@ -3019,60 +3168,116 @@ function renderAmbientActions() {
   // span cool to warm. Roadmap item 4, docs/UI_MODES_SPEC.md.
   const AMBIENT_PRESETS = WHITE_PRESETS.filter(p => ["Cool White", "Natural White", "Sunrise"].includes(p.name));
 
+  // Room cards (2026-08-06 redesign): tapping the card body now navigates
+  // into that room's real screen (goToRoom + hideAmbient) — the power
+  // toggle, slider, and presets are separate inner controls that stop
+  // propagation and stay on Ambient. Replaces the old "tap card to toggle
+  // lights" behavior, which left no way to actually get into a room from
+  // here.
   const roomCards = AMBIENT_ROOMS.filter(id => ROOMS[id]).map(id => {
     const r = ROOMS[id];
     const onCount = r.lighting.filter(l => l.on).length;
     const anyOn = onCount > 0;
+    const avgPct = r.lighting.length ? avgBrightness(r) : 0;
     const value = r.lighting.length ? (anyOn ? `${onCount} of ${r.lighting.length} on` : "All off") : "No lights";
-    const steppers = r.lighting.length ? `
-      <div class="ambient-card-controls">
-        <button class="ambient-stepper-btn" data-ambient-dim="${id}">${ico("minus", "i14")}</button>
-        <button class="ambient-stepper-btn" data-ambient-bright="${id}">${ico("plus", "i14")}</button>
+    const slider = r.lighting.length ? `
+      <div class="slider-track" data-ambient-slider="${id}">
+        <div class="slider-fill" style="width:${avgPct}%"></div>
+        <div class="slider-thumb" style="left:${avgPct}%"></div>
       </div>` : "";
     const hasColor = r.lighting.some(l => l.color);
     const presets = hasColor ? `
       <div class="ambient-card-controls">
         ${AMBIENT_PRESETS.map(p => `<button class="color-swatch-btn" style="background:${p.hex}" data-ambient-preset="${id}:${p.k}" title="${p.name}"></button>`).join("")}
       </div>` : "";
-    return `<div class="ambient-card ${anyOn ? "is-on" : ""}" data-ambient-room="${id}">
-      ${ico("lightbulb", "ambient-card-icon")}
+    const presence = PRESENCE_ENTITY_BY_ROOM[id] ? (() => {
+      const pState = ambientPresenceStates[id];
+      const isPresent = pState && pState.state === "on";
+      return `<div class="ambient-presence-row ${isPresent ? "is-present" : ""}">
+        <span class="ambient-presence-dot"></span>${isPresent ? "Presence" : "No presence"}
+      </div>`;
+    })() : "";
+    return `<div class="ambient-card ambient-room-card ${anyOn ? "is-on" : ""}" data-ambient-nav="${id}">
+      <div class="ambient-card-top">
+        ${ico("lightbulb", "ambient-card-icon")}
+        ${r.lighting.length ? `<button class="ambient-power-btn" data-ambient-toggle="${id}">${ico("power", "i14")}</button>` : ""}
+      </div>
       <div class="ambient-card-label">${r.name}</div>
       <div class="ambient-card-value">${value}</div>
-      ${steppers}
+      ${slider}
       ${presets}
+      ${presence}
     </div>`;
   });
 
-  // Music: whichever room's assigned media_player is actively playing, if any
-  const playingRoom = AMBIENT_ROOMS.map(id => ROOMS[id]).find(r => r && r.media && r.media.entityId && r.media.playing);
-  const musicPlayPause = playingRoom ? `
-    <div class="ambient-card-controls">
-      <button class="ambient-stepper-btn" data-ambient-playpause="${AMBIENT_ROOMS.find(id => ROOMS[id] === playingRoom)}">${ico("pause", "i14")}</button>
+  // Music: whichever room's assigned media_player is actively playing, if
+  // any — falls back to the first room with a media_player assigned at all
+  // so the card (and its "open Music" nav) still shows when nothing's
+  // playing, matching how the other cards behave when idle.
+  const mediaRooms = AMBIENT_ROOMS.map(id => ROOMS[id]).filter(r => r && r.media && r.media.entityId);
+  const playingRoom = mediaRooms.find(r => r.media.playing) || mediaRooms[0] || null;
+  const playingRoomId = playingRoom ? AMBIENT_ROOMS.find(id => ROOMS[id] === playingRoom) : null;
+  const art = playingRoom && playingRoom.media.art ? `<div class="ambient-media-art" style="background-image:url('${playingRoom.media.art}')"></div>` : "";
+  const transport = playingRoom ? `
+    <div class="ambient-media-transport">
+      <button class="ambient-stepper-btn" data-ambient-prev="${playingRoomId}">${ico("skip-back", "i14")}</button>
+      <button class="ambient-stepper-btn" data-ambient-playpause="${playingRoomId}">${ico(playingRoom.media.playing ? "pause" : "play", "i14")}</button>
+      <button class="ambient-stepper-btn" data-ambient-next="${playingRoomId}">${ico("skip-forward", "i14")}</button>
+    </div>
+    <div class="slider-track ambient-media-volume" data-ambient-volume="${playingRoomId}">
+      <div class="slider-fill" style="width:${playingRoom.media.volume}%"></div>
+      <div class="slider-thumb" style="left:${playingRoom.media.volume}%"></div>
     </div>` : "";
-  const musicCard = `<div class="ambient-card ${playingRoom ? "is-on" : ""}">
+  const musicCard = `<div class="ambient-card ambient-media-card ${playingRoom && playingRoom.media.playing ? "is-on" : ""}" data-ambient-nav="music">
+    ${art}
     ${ico("music", "ambient-card-icon")}
     <div class="ambient-card-label">Music</div>
-    <div class="ambient-card-value">${playingRoom ? playingRoom.media.track : "Nothing playing"}</div>
-    ${musicPlayPause}
+    <div class="ambient-card-value">${playingRoom ? (playingRoom.media.playing ? playingRoom.media.track : "Paused") : "Nothing playing"}</div>
+    ${transport}
   </div>`;
 
-  // Power: real Tesla Powerwall load sensor, kW — informational only, no
-  // control possible on a sensor, matches how Loxone's own energy tiles
-  // are read-only too
-  const powerValue = ambientPowerState ? `${parseFloat(ambientPowerState.state).toFixed(2)} kW` : "—";
-  const powerCard = `<div class="ambient-card" style="cursor:default;">
+  // Energy Flow: real Tesla Powerwall breakdown — solar/battery/grid feed
+  // alongside the home load figure. Read-only (sensors, not controls),
+  // tapping opens the real Power screen for the fuller view.
+  const kw = (state) => state && !isNaN(parseFloat(state.state)) ? `${parseFloat(state.state).toFixed(2)} kW` : "—";
+  const energyCard = `<div class="ambient-card" data-ambient-nav="power">
     ${ico("zap", "ambient-card-icon")}
-    <div class="ambient-card-label">Home Power</div>
-    <div class="ambient-card-value">${powerValue}</div>
+    <div class="ambient-card-label">Energy Flow</div>
+    <div class="ambient-card-value">${kw(ambientPowerState)} home</div>
+    <div class="ambient-energy-rows">
+      <div class="ambient-energy-row"><span class="label">Solar</span><span class="value">${kw(ambientSolarState)}</span></div>
+      <div class="ambient-energy-row"><span class="label">Battery</span><span class="value">${kw(ambientBatteryState)}</span></div>
+      <div class="ambient-energy-row"><span class="label">Grid</span><span class="value">${kw(ambientGridState)}</span></div>
+    </div>
   </div>`;
 
-  el.innerHTML = roomCards.join("") + musicCard + powerCard;
+  // Night Mode: folded into the grid as its own tile (was a separate row
+  // below the grid) — same manual, non-auto-triggering Day/Night action
+  // pair, just laid out like every other card now.
+  const nightModeCard = `<div class="ambient-card ambient-nightmode-card" style="cursor:default;">
+    ${ico("moon", "ambient-card-icon")}
+    <div class="ambient-card-label">Night Mode</div>
+    <div class="ambient-nightmode-buttons">
+      <button class="ambient-nightmode-btn" data-wholehouse="night">${ico("moon", "i14")} Night</button>
+      <button class="ambient-nightmode-btn" data-wholehouse="day">${ico("sun", "i14")} Day</button>
+    </div>
+  </div>`;
+
+  el.innerHTML = roomCards.join("") + musicCard + energyCard + nightModeCard;
   icons();
 
-  el.querySelectorAll("[data-ambient-room]").forEach(card => {
+  el.querySelectorAll("[data-ambient-nav]").forEach(card => {
     card.addEventListener("click", (e) => {
-      e.stopPropagation(); // don't also trigger the overlay's wake-on-tap
-      const id = card.dataset.ambientRoom;
+      e.stopPropagation();
+      hideAmbient();
+      goToRoom(card.dataset.ambientNav);
+    });
+  });
+
+  el.querySelectorAll("[data-ambient-toggle]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.ambientToggle;
       const r = ROOMS[id];
       const anyOn = r.lighting.some(l => l.on);
       r.lighting.forEach(l => {
@@ -3084,32 +3289,80 @@ function renderAmbientActions() {
     });
   });
 
-  function nudgeRoomBrightness(id, delta) {
+  el.querySelectorAll("[data-ambient-slider]").forEach(track => {
+    const id = track.dataset.ambientSlider;
     const r = ROOMS[id];
-    r.lighting.forEach(l => {
-      const next = Math.max(0, Math.min(100, (l.on ? l.brightness : 0) + delta));
-      l.brightness = next;
-      l.on = next > 0;
-      haSyncLight(l);
-    });
-    renderAmbientActions();
-  }
-  el.querySelectorAll("[data-ambient-dim]").forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); nudgeRoomBrightness(btn.dataset.ambientDim, -10); });
+    let dragging = false;
+    const fill = track.querySelector(".slider-fill");
+    const thumb = track.querySelector(".slider-thumb");
+    function setFromEvent(clientX) {
+      const rect = track.getBoundingClientRect();
+      let pct = Math.round(((clientX - rect.left) / rect.width) * 100);
+      pct = Math.max(0, Math.min(100, pct));
+      r.lighting.forEach(l => { l.brightness = pct; l.on = pct > 0; });
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+    }
+    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointermove", e => { e.stopPropagation(); if (dragging) setFromEvent(e.clientX); });
+    track.addEventListener("pointerup", e => { e.stopPropagation(); dragging = false; r.lighting.forEach(haSyncLight); renderAmbientActions(); });
+    track.addEventListener("pointercancel", e => { e.stopPropagation(); dragging = false; });
+    track.addEventListener("click", e => e.stopPropagation());
   });
-  el.querySelectorAll("[data-ambient-bright]").forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); nudgeRoomBrightness(btn.dataset.ambientBright, 10); });
-  });
+
   el.querySelectorAll("[data-ambient-playpause]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const r = ROOMS[btn.dataset.ambientPlaypause];
       r.media.playing = !r.media.playing;
-      if (window.haClient && window.haClient.connected) {
+      if (r.media.entityId && window.haClient && window.haClient.connected) {
         window.haClient.callService("media_player", r.media.playing ? "media_play" : "media_pause", r.media.entityId).catch(console.error);
       }
       renderAmbientActions();
     });
+  });
+
+  el.querySelectorAll("[data-ambient-prev]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const r = ROOMS[btn.dataset.ambientPrev];
+      if (r.media.entityId && window.haClient && window.haClient.connected) {
+        window.haClient.callService("media_player", "media_previous_track", r.media.entityId).catch(console.error);
+      }
+    });
+  });
+  el.querySelectorAll("[data-ambient-next]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const r = ROOMS[btn.dataset.ambientNext];
+      if (r.media.entityId && window.haClient && window.haClient.connected) {
+        window.haClient.callService("media_player", "media_next_track", r.media.entityId).catch(console.error);
+      }
+    });
+  });
+
+  el.querySelectorAll("[data-ambient-volume]").forEach(track => {
+    const id = track.dataset.ambientVolume;
+    const r = ROOMS[id];
+    let dragging = false;
+    const fill = track.querySelector(".slider-fill");
+    const thumb = track.querySelector(".slider-thumb");
+    function setFromEvent(clientX) {
+      const rect = track.getBoundingClientRect();
+      let pct = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+      r.media.volume = pct;
+      fill.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+    }
+    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointermove", e => { e.stopPropagation(); if (dragging) setFromEvent(e.clientX); });
+    track.addEventListener("pointerup", e => {
+      e.stopPropagation(); dragging = false;
+      if (r.media.entityId && window.haClient && window.haClient.connected) {
+        window.haClient.callService("media_player", "volume_set", r.media.entityId, { volume_level: r.media.volume / 100 }).catch(console.error);
+      }
+    });
+    track.addEventListener("click", e => e.stopPropagation());
   });
 
   el.querySelectorAll("[data-ambient-preset]").forEach(btn => {
@@ -3129,34 +3382,7 @@ function renderAmbientActions() {
       renderAmbientActions();
     });
   });
-}
 
-function showAmbient() {
-  updateAmbientClock();
-  renderAmbientActions();
-  renderWholeHouseButtons();
-  document.getElementById("ambientOverlay").classList.add("visible");
-}
-
-// Whole-house Night/Day (2026-08-06, roadmap item 5). Manual only — per
-// docs/UI_MODES_SPEC.md's confirmed direction, this deliberately does NOT
-// auto-trigger on sun.sun the way the app's own theme does. "When to
-// change real lights" stays a decision Mike makes by tapping a button,
-// not automation logic baked into the app (same principle already applied
-// in NOTIFICATIONS_SPEC.md — automations live in HA, the app renders/
-// triggers, it doesn't decide on its own). Reuses the exact color-preset
-// mechanism from item 4, just applied to every room instead of one.
-const WHOLE_HOUSE_NIGHT_KELVIN = WHITE_PRESETS.find(p => p.name === "Sunrise").k;
-const WHOLE_HOUSE_DAY_KELVIN = WHITE_PRESETS.find(p => p.name === "Cool White").k;
-
-function renderWholeHouseButtons() {
-  const el = document.getElementById("ambientWholeHouseRow");
-  if (!el) return;
-  el.innerHTML = `
-    <button class="ambient-wholehouse-btn" data-wholehouse="night">${ico("moon", "i16")} Night</button>
-    <button class="ambient-wholehouse-btn" data-wholehouse="day">${ico("sun", "i16")} Day</button>
-  `;
-  icons();
   el.querySelectorAll("[data-wholehouse]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -3177,6 +3403,12 @@ function renderWholeHouseButtons() {
       renderAmbientActions();
     });
   });
+}
+
+function showAmbient() {
+  updateAmbientClock();
+  renderAmbientActions();
+  document.getElementById("ambientOverlay").classList.add("visible");
 }
 
 function hideAmbient() {

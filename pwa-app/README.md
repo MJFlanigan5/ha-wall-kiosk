@@ -27,21 +27,52 @@ content.
   Living Room, and Living Room has no other real speaker entity right now
   — its Music section is intentionally unassigned until one exists.
 
-## Ambient Mode (v2, updated 2026-08-05)
+## Ambient Mode (v3, redesigned 2026-08-06)
 
-After 90 seconds of no touch, the app drops into a full-screen idle view —
-clock, date, and status cards: one per wired room (icon, name, "N of M
-lights on"), a Music card (whichever room's assigned player is actively
-playing, if any), and a Home Power card (real Tesla Powerwall load sensor,
-`sensor.my_home_load_power` — confirmed to exist live before adding it,
-not fabricated). Styled after Loxone's Favorites card pattern but merged
-directly into the ambient/idle view rather than a separate screen, in our
-own dark palette rather than Loxone's. Tapping a room card toggles its
-lights; Music/Power cards are read-only for now. Tapping anywhere else
-wakes back to whatever screen was showing before. See
-[`docs/UI_MODES_SPEC.md`](../docs/UI_MODES_SPEC.md) for the full design
-reasoning. Not tested on a real device yet, same caveat as everything else
-below.
+After 90 seconds of no touch, the app drops into a full-screen idle view.
+Redesigned directly against a real screenshot of Loxone's live Favorites
+screen (not the marketing hero image) to close the "not enough on there"
+gap from v2 — richer per-card controls, plus new card types, still our own
+dark palette by default:
+
+- **Room cards** — icon/label/status same as before, but the +/− steppers
+  are now a real drag slider (reuses the exact `.slider-track` component
+  already proven on interior room screens), a dedicated power-toggle button
+  replaces "tap card to toggle", and a presence line (real Magic Areas
+  per-room sensor) is shown under the status text.
+- **Tap-to-navigate** — tapping a card's body now opens that room's real
+  screen and exits Ambient (`goToRoom()`, shared with the rail nav). The
+  slider, power toggle, and presets are separate inner controls that stop
+  propagation and stay on Ambient. Previously there was no way to actually
+  get into a room from here at all.
+- **Music card** — real album art (`entity_picture`, resolved against the
+  HA base URL), prev/next transport, and a real volume slider
+  (`media_player.volume_set` — this is genuinely wired, unlike the interior
+  music screen's still-mock volume control).
+- **Energy Flow card** — real Tesla Powerwall solar/battery/grid breakdown
+  alongside the home-load figure (previously just the one load number).
+  Tapping it opens the Energy screen — which is still mock data end to end,
+  a real inconsistency this surfaced, not yet fixed.
+- **Night Mode** — folded into a grid tile instead of a separate row below
+  the cards; same manual (non-auto-triggering) Day/Night actions as before.
+- **Light/dark theme toggle** — a real second palette (moon/sun icon, top
+  right), not just the brightness-dim filter used for the app's own
+  day/night shift. Scoped entirely to `.ambient-overlay.ambient-light` via
+  CSS custom-property overrides, so it never touches the interior room
+  screens — those stay on our one dark palette per explicit direction.
+
+**Real bug found and fixed during this redesign:** removing HT-A3000 from
+Living Room's Music assignment earlier the same night left
+`ROOMS.living.media` frozen on its original fabricated placeholder data
+("Evening Mix — KEXP") — `populateRoomsFromMap()` only touched `.media` when
+a `media_player` was assigned, never cleared it when one was removed. The
+Music screen was displaying that stale mock data as if it were genuinely
+playing. Fixed by explicitly resetting `.media` to an empty/inert shape
+when no player is assigned.
+
+See [`docs/UI_MODES_SPEC.md`](../docs/UI_MODES_SPEC.md) for the original
+v1/v2 design reasoning. Not tested on a real device yet, same caveat as
+everything else below.
 
 **Service worker fixed (2026-08-05):** it was shipping cache-first with a
 cache name that never got bumped across any of tonight's pushes — every
