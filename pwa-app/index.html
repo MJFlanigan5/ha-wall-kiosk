@@ -594,6 +594,13 @@
     position: absolute; bottom: 40px; font-size: 12px; color: var(--text-dim);
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
   }
+  .ambient-wholehouse-row { display: flex; gap: 12px; margin-top: 28px; }
+  .ambient-wholehouse-btn {
+    padding: 12px 26px; border-radius: 12px; border: 1px solid var(--hairline);
+    background: var(--base-raised); color: var(--text); font-size: 13px; font-weight: 600;
+    letter-spacing: 0.3px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  }
+  .ambient-wholehouse-btn svg { width: 16px; height: 16px; }
 
   /* Room header status row — same .ambient-card component as Ambient
      Mode, just laid out inline instead of centered full-screen. See
@@ -705,6 +712,7 @@
     <div class="ambient-clock" id="ambientClock">--:--</div>
     <div class="ambient-date" id="ambientDate"></div>
     <div class="ambient-actions" id="ambientActions"></div>
+    <div class="ambient-wholehouse-row" id="ambientWholeHouseRow"></div>
     <div class="ambient-hint">Tap anywhere to wake</div>
     <button class="admin-btn ambient-admin-btn" id="ambientAdminOpenBtn" title="Admin"></button>
   </div>
@@ -3106,7 +3114,49 @@ function renderAmbientActions() {
 function showAmbient() {
   updateAmbientClock();
   renderAmbientActions();
+  renderWholeHouseButtons();
   document.getElementById("ambientOverlay").classList.add("visible");
+}
+
+// Whole-house Night/Day (2026-08-06, roadmap item 5). Manual only — per
+// docs/UI_MODES_SPEC.md's confirmed direction, this deliberately does NOT
+// auto-trigger on sun.sun the way the app's own theme does. "When to
+// change real lights" stays a decision Mike makes by tapping a button,
+// not automation logic baked into the app (same principle already applied
+// in NOTIFICATIONS_SPEC.md — automations live in HA, the app renders/
+// triggers, it doesn't decide on its own). Reuses the exact color-preset
+// mechanism from item 4, just applied to every room instead of one.
+const WHOLE_HOUSE_NIGHT_KELVIN = WHITE_PRESETS.find(p => p.name === "Sunrise").k;
+const WHOLE_HOUSE_DAY_KELVIN = WHITE_PRESETS.find(p => p.name === "Cool White").k;
+
+function renderWholeHouseButtons() {
+  const el = document.getElementById("ambientWholeHouseRow");
+  if (!el) return;
+  el.innerHTML = `
+    <button class="ambient-wholehouse-btn" data-wholehouse="night">${ico("moon", "i16")} Night</button>
+    <button class="ambient-wholehouse-btn" data-wholehouse="day">${ico("sun", "i16")} Day</button>
+  `;
+  icons();
+  el.querySelectorAll("[data-wholehouse]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isNight = btn.dataset.wholehouse === "night";
+      const kelvin = isNight ? WHOLE_HOUSE_NIGHT_KELVIN : WHOLE_HOUSE_DAY_KELVIN;
+      const brightnessPct = isNight ? 40 : 100;
+      AMBIENT_ROOMS.filter(id => ROOMS[id]).forEach(id => {
+        ROOMS[id].lighting.filter(l => l.color).forEach(l => {
+          l.on = true;
+          l.brightness = brightnessPct;
+          if (l.entityId && window.haClient && window.haClient.connected) {
+            window.haClient.callService("light", "turn_on", l.entityId, {
+              brightness_pct: brightnessPct, color_temp_kelvin: kelvin,
+            }).catch(console.error);
+          }
+        });
+      });
+      renderAmbientActions();
+    });
+  });
 }
 
 function hideAmbient() {

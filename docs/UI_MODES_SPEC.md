@@ -236,11 +236,20 @@ In priority order, per Mike's confirmed sequencing:
    end: tapped Sunrise, confirmed via direct HA state read that
    `color_temp_kelvin: 3703` actually landed on the real device (not just
    the UI), turned back off.
-5. **Real day/night lighting control** — a control (Ambient or interior)
-   that actually changes the house's lighting state for day/night, not
-   just the app's own look — needs a decision on what that control
-   actually does (a scene? a service call pattern?) before building —
-   not started
+5. ~~**Real day/night lighting control**~~ — done 2026-08-06. Decision:
+   manual only, deliberately not auto-triggered off `sun.sun` the way the
+   app's own theme is. "When to change real lights" stays a decision Mike
+   makes by tapping a button, not automation logic baked into the app —
+   same principle already established in `NOTIFICATIONS_SPEC.md`
+   (automations live in HA, the app renders/triggers, it doesn't decide on
+   its own), and avoids a second lighting-automation system potentially
+   fighting with real HA automations elsewhere in the house (e.g. the
+   Utility Room presence pilot). Two buttons under Ambient Mode's cards —
+   "Night" (Sunrise preset, 40% brightness) and "Day" (Cool White, 100%)
+   — apply to every room's color-capable lights at once via the same real
+   service calls proven in item 4. Verified live: tapped Day, watched all
+   3 rooms go to "N of N on" with green icons, confirmed real lights
+   changed, turned everything back off.
 6. ~~**Admin accent-color personalization**~~ — done 2026-08-06. New
    "Appearance" block at the top of Admin Mode, a native
    `<input type="color">` (no extra library needed) plus a Reset button.
