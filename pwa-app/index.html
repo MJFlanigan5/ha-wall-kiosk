@@ -588,11 +588,13 @@
     font-family: var(--font-mono); font-size: 15px; color: var(--text-dim);
     letter-spacing: 1px; text-transform: uppercase; margin-bottom: 40px;
   }
-  /* 9 columns (2026-08-06) — status row is 8 cards (Music spans 2 + 7
-     singles = 9 units) and the room row is 8 single cards. 9 columns fits
-     both exactly, so the whole screen is exactly 2 rows, not 3. */
+  /* 8 columns (2026-08-06) — exact card set Mike dictated: status row is
+     Music + 6 singles (Comfort, Packages, Energy Flow, CO2, Home Usage,
+     Water Heater) = 2+6 = 8 units; room row is 7 rooms + Security = 8
+     singles. 8 columns fits both exactly, no filler cards added to force
+     a column count. */
   .ambient-actions {
-    display: grid; grid-template-columns: repeat(9, 130px); grid-auto-rows: auto;
+    display: grid; grid-template-columns: repeat(8, 130px); grid-auto-rows: auto;
     gap: 12px; justify-content: center; max-width: 90vw;
   }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
@@ -975,7 +977,7 @@ const ROOMS = {
     security: [], shades: [],
   },
   bedroom4: {
-    name: "Bedroom 4",
+    name: "Guest West",
     photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
@@ -984,7 +986,7 @@ const ROOMS = {
     security: [], shades: [],
   },
   bedroom3: {
-    name: "Bedroom 3",
+    name: "Guest East",
     photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
@@ -2738,7 +2740,7 @@ let entityLocations = new Map();
 // entity_id -> roomId for the single media_player each room can have
 // (media is one object per room, not an array like lighting)
 let mediaEntityLocations = new Map();
-let AMBIENT_ROOMS = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3"]; // curated, matches rooms.config.js; new rooms from Admin Mode get appended
+let AMBIENT_ROOMS = ["living", "kitchen", "dining", "office", "master", "bedroom3", "bedroom4"]; // exact order/set dictated by Mike 2026-08-06 — Utility Room isn't shown on Ambient; new rooms from Admin Mode get appended
 
 // Whole-home Energy Flow card for Ambient Mode (2026-08-06 redesign) — real
 // Tesla Powerwall entities, all confirmed to exist via live search before
@@ -3560,18 +3562,14 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
-  // Two-row layout (2026-08-06, rebalanced): system/status row now has 8
-  // tiles (Music, Comfort, Security, Energy Flow, Packages, CO2, Energy
-  // Produced, Water Heater — Water Heater added specifically to balance
-  // the count against the bottom row after expanding to 8 rooms). Comfort
-  // sits right after Music per Mike's direction. Grid is 9 columns (Music
-  // spans 2 + 7 singles = 9 units) so the top row fills one line cleanly.
+  // Exact layout dictated by Mike 2026-08-06. Row 1 (status): Music,
+  // Comfort, Packages, Energy Flow, CO2, Home Usage, Water Heater. Row 2
+  // (rooms): Living, Kitchen, Dining, Office, Master, Guest East, Guest
+  // West, then Security last. Security moved out of the status row into
+  // the room row per this spec.
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
-  // Water Heater moved right after Music (2026-08-06) so it lands in the
-  // top row's first 7 units at the new 7-column width, instead of
-  // spilling onto its own line — Mike's explicit ask.
-  el.innerHTML = musicCard + waterHeaterCard + comfortCard + securityCard + energyCard + packagesCard
-    + co2Card + energyProducedCard + roomCards;
+  el.innerHTML = musicCard + comfortCard + packagesCard + energyCard + co2Card + energyProducedCard
+    + waterHeaterCard + roomCards + securityCard;
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
