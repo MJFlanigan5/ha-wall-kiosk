@@ -631,7 +631,7 @@
   }
   .ambient-card.is-on .ambient-more-btn { color: var(--on); border-color: var(--on-dim); background: var(--on-dim); }
   .ambient-hint {
-    position: absolute; bottom: 40px; font-size: 12px; color: var(--text-dim);
+    margin-top: 18px; font-size: 12px; color: var(--text-dim);
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
   }
   .ambient-wholehouse-row { display: flex; gap: 12px; margin-top: 28px; }
@@ -2739,6 +2739,19 @@ let ambientAlarmState = null;
 const AMBIENT_KITCHEN_TEMP_ENTITY = "sensor.apollo_mtr_1_5452d0_dps310_temperature";
 let ambientKitchenTempState = null;
 
+// Packages tile (2026-08-06) — real Mail and Packages integration, replaces
+// the static "Front window" cover placeholder (no cover entity exists in
+// this house). Sums the per-carrier "packages" count sensors — genuinely
+// live data, not fabricated (currently 3 real packages tracked).
+const AMBIENT_PACKAGE_ENTITIES = [
+  "sensor.imap_gmail_com_mail_amazon_packages",
+  "sensor.imap_gmail_com_mail_usps_packages",
+  "sensor.imap_gmail_com_mail_fedex_packages",
+  "sensor.imap_gmail_com_mail_ups_packages",
+  "sensor.imap_gmail_com_mail_dhl_packages",
+];
+let ambientPackageStates = {};
+
 // Recomputes the Energy screen's POWER fields (totalKw/mix/battery/
 // liveConsumption) from the same real Powerwall sensors Ambient Mode's
 // Energy Flow card already uses — the Flow Diagram/Ring/Power Mix/Battery
@@ -2934,6 +2947,9 @@ async function initLiveData() {
     refreshWaterHeaterFromHA();
     ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
     ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
+    for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
+      ambientPackageStates[entityId] = stateById.get(entityId) || null;
+    }
     for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
       ambientPresenceStates[roomId] = stateById.get(entityId) || null;
     }
@@ -2976,6 +2992,11 @@ async function initLiveData() {
       }
       if (entityId === AMBIENT_KITCHEN_TEMP_ENTITY) {
         ambientKitchenTempState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (AMBIENT_PACKAGE_ENTITIES.includes(entityId)) {
+        ambientPackageStates[entityId] = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
@@ -3348,10 +3369,15 @@ function renderAmbientActions() {
   // exact tiles (same icon/label as the reference) with a dash instead of
   // an invented number, so the grid position/shape matches exactly without
   // fabricating data.
-  const coverCard = `<div class="ambient-card" style="cursor:default">
-    ${ico("blinds", "ambient-card-icon")}
-    <div class="ambient-card-primary" style="margin-top:12px">—</div>
-    <div class="ambient-card-sub">Front window</div>
+  const packageCount = AMBIENT_PACKAGE_ENTITIES.reduce((sum, id) => {
+    const s = ambientPackageStates[id];
+    const n = s ? parseInt(s.state, 10) : 0;
+    return sum + (isNaN(n) ? 0 : n);
+  }, 0);
+  const packagesCard = `<div class="ambient-card" style="cursor:default">
+    ${ico("package", "ambient-card-icon")}
+    <div class="ambient-card-primary" style="margin-top:12px">${packageCount}</div>
+    <div class="ambient-card-sub">Packages</div>
   </div>`;
   const co2Card = `<div class="ambient-card" style="cursor:default">
     ${ico("leaf", "ambient-card-icon")}
@@ -3441,7 +3467,7 @@ function renderAmbientActions() {
   // Kitchen Comfort + Kitchen light + Security (Night Mode's slot). Row 2 =
   // Cover + Energy Flow + CO2 + Energy Produced + Presence + Utility light.
   el.innerHTML = musicCard + lightCard("living") + comfortCard + lightCard("kitchen") + securityCard
-    + coverCard + energyCard + co2Card + energyProducedCard + presenceCard("utility") + lightCard("utility");
+    + packagesCard + energyCard + co2Card + energyProducedCard + presenceCard("utility") + lightCard("utility");
   icons();
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
