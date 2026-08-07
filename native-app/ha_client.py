@@ -21,6 +21,31 @@ from PySide6.QtCore import QObject, Signal, Property, Slot, QTimer
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("ha_client")
 
+# Global (non-area) sensors backing Ambient Mode's status row -- exact same
+# entity IDs as pwa-app/index.html's AMBIENT_*_ENTITY constants, so the
+# native app reads the same real devices the PWA already proved out.
+AMBIENT_ENTITY_IDS = {
+    "power": "sensor.my_home_load_power",
+    "solar": "sensor.my_home_solar_power",
+    "battery": "sensor.my_home_battery_power",
+    "grid": "sensor.my_home_grid_power",
+    "battery_pct": "sensor.my_home_percentage_charged",
+    "home_usage": "sensor.my_home_home_usage",
+    "alarm": "alarm_control_panel.alarmo",
+    "thermostat_temp": "sensor.thermostat_temperature",
+    "thermostat_cool": "sensor.thermostat_cool_temperature",
+    "water_usage": "sensor.flo_shutoff_today_s_water_usage",
+    "water_heater": "water_heater.utility_room_water_heater",
+    "water_heater_recirc": "binary_sensor.water_heater_recirculation",
+    "water_heater_flow": "sensor.utility_room_water_flow_rate",
+    "package_amazon": "sensor.imap_gmail_com_mail_amazon_packages",
+    "package_usps": "sensor.imap_gmail_com_mail_usps_packages",
+    "package_fedex": "sensor.imap_gmail_com_mail_fedex_packages",
+    "package_ups": "sensor.imap_gmail_com_mail_ups_packages",
+    "package_dhl": "sensor.imap_gmail_com_mail_dhl_packages",
+}
+AMBIENT_WATCHED = set(AMBIENT_ENTITY_IDS.values())
+
 
 def load_config(path="config.yaml"):
     if not os.path.exists(path):
@@ -47,6 +72,7 @@ def load_config(path="config.yaml"):
 class HAClient(QObject):
     connectionChanged = Signal(bool)
     areasChanged = Signal()
+    ambientChanged = Signal()
 
     def __init__(self, config, parent=None):
         super().__init__(parent)
@@ -57,13 +83,18 @@ class HAClient(QObject):
         self._areas = {}       # area_id -> {"id", "name", "entities": {entity_id: {...}}}
         self._device_area = {} # device_id -> area_id
         self._entity_area = {} # entity_id -> area_id (direct or via device)
+        self._ambient = {}     # AMBIENT_ENTITY_IDS key -> raw HA state dict
 
-        # Debounces areasChanged so a burst of unrelated state_changed
-        # events (common in a real house) collapses into one QML rebuild
-        # instead of one per event -- see _request_areas_update.
+        # Debounces areasChanged/ambientChanged so a burst of unrelated
+        # state_changed events (common in a real house) collapses into one
+        # QML rebuild instead of one per event -- see _request_areas_update.
         self._areas_update_timer = QTimer(self)
         self._areas_update_timer.setSingleShot(True)
-        self._areas_update_timer.timeout.connect(self.areasChanged.emit)
+        self._areas_update_timer.timeout.connect(self._emit_updates)
+
+    def _emit_updates(self):
+        self.areasChanged.emit()
+        self.ambientChanged.emit()
 
     # ---------- Qt-exposed properties ----------
 
@@ -95,6 +126,21 @@ class HAClient(QObject):
             # count) -- the card shows one light's actual name/brightness,
             # same as Ambient Mode's real Loxone-matched anatomy.
             primary = lights[0] if lights else None
+            # Presence dot (matches the PWA's PRESENCE_ENTITY_BY_ROOM) --
+            # Magic Areas names its aggregate sensor after the area itself,
+            # so it's found by convention instead of a hardcoded per-room
+            # map, keeping this config-driven like the rest of _get_areas.
+            presence = next(
+                (e for e in entities
+                 if e["domain"] == "binary_sensor" and "magic_areas_presence_tracking" in e["entity_id"]),
+                None,
+            )
+            # Representative media_player (same "first, not aggregated"
+            # convention as the light card) -- used by the global Music
+            # status card to find whatever's playing anywhere in the house.
+            media = [e for e in entities if e["domain"] == "media_player" and e["state"] != "unavailable"]
+            playing_media = next((e for e in media if e["state"] == "playing"), None)
+            primary_media = playing_media or (media[0] if media else None)
             result.append({
                 "id": area["id"],
                 "name": area["name"],
@@ -106,11 +152,36 @@ class HAClient(QObject):
                 "lightName": primary["name"] if primary else "",
                 "lightOn": primary["state"] == "on" if primary else False,
                 "lightPct": primary["brightnessPct"] if primary and primary["state"] == "on" else 0,
+                "hasPresence": presence is not None,
+                "presenceOn": presence["state"] == "on" if presence else False,
+                "hasMedia": primary_media is not None,
+                "mediaEntityId": primary_media["entity_id"] if primary_media else "",
+                "mediaName": primary_media["name"] if primary_media else "",
+                "mediaPlaying": primary_media["state"] == "playing" if primary_media else False,
+                "mediaTrack": (primary_media.get("mediaTitle") or primary_media["name"]) if primary_media else "",
+                "mediaArt": primary_media.get("mediaArt", "") if primary_media else "",
+                "mediaVolume": primary_media.get("mediaVolume", 0) if primary_media else 0,
             })
         result.sort(key=lambda a: a["name"])
         return result
 
     areas = Property("QVariantList", _get_areas, notify=areasChanged)
+
+    def _get_ambient(self):
+        # Flat key -> {state, attributes} map for the global sensors behind
+        # Ambient Mode's status row (energy, water, packages, alarm, etc.)
+        # -- same shape/keys as AMBIENT_ENTITY_IDS so QML can read
+        # haClient.ambient.power.state directly.
+        result = {}
+        for key, entity_id in AMBIENT_ENTITY_IDS.items():
+            state = self._ambient.get(entity_id)
+            result[key] = {
+                "state": state.get("state") if state else None,
+                "attributes": state.get("attributes", {}) if state else {},
+            }
+        return result
+
+    ambient = Property("QVariantMap", _get_ambient, notify=ambientChanged)
 
     # ---------- connection lifecycle ----------
 
@@ -130,7 +201,7 @@ class HAClient(QObject):
             return
         asyncio.ensure_future(self._call_service(domain, service, entity_ids))
 
-    async def _call_service(self, domain, service, entity_ids):
+    async def _call_service(self, domain, service, entity_ids, data=None):
         msg_id = self._next_id()
         await self._ws.send(json.dumps({
             "id": msg_id,
@@ -138,7 +209,18 @@ class HAClient(QObject):
             "domain": domain,
             "service": service,
             "target": {"entity_id": entity_ids},
+            "service_data": data or {},
         }))
+
+    @Slot(str, str, list, "QVariantMap")
+    def callServiceData(self, domain, service, entity_ids, data):
+        # Same fire-and-forget contract as callService, plus a data payload
+        # -- needed for calls like media_player.volume_set that carry a
+        # value alongside the target entity.
+        if self._ws is None or not self._connected:
+            log.warning("callServiceData(%s.%s) dropped -- not connected", domain, service)
+            return
+        asyncio.ensure_future(self._call_service(domain, service, entity_ids, data))
 
     async def _run_forever(self):
         backoff = 1
@@ -219,7 +301,7 @@ class HAClient(QObject):
         for state in states_resp["result"]:
             self._apply_state(state)
 
-        self.areasChanged.emit()
+        self._emit_updates()
 
     async def _subscribe_state_changed(self, ws):
         await self._send_command(ws, "subscribe_events", event_type="state_changed")
@@ -249,6 +331,13 @@ class HAClient(QObject):
 
     def _apply_state(self, state):
         entity_id = state["entity_id"]
+
+        # Global status-row sensors (no area involved) -- tracked
+        # separately from the per-area grid below.
+        if entity_id in AMBIENT_WATCHED:
+            self._ambient[entity_id] = state
+            return True
+
         area_id = self._entity_area.get(entity_id)
         if area_id is None or area_id not in self._areas:
             return False  # entity not assigned to any known area -- not shown on Overview
@@ -264,5 +353,10 @@ class HAClient(QObject):
             "name": attrs.get("friendly_name", entity_id),
             "state": state.get("state", "unknown"),
             "brightnessPct": round(brightness_attr / 255 * 100) if brightness_attr is not None else 100,
+            # media_player-only fields -- harmless no-ops for every other
+            # domain, same pattern as brightnessPct defaulting for non-lights.
+            "mediaTitle": attrs.get("media_title"),
+            "mediaArt": attrs.get("entity_picture") or "",
+            "mediaVolume": round((attrs.get("volume_level") or 0) * 100),
         }
         return True

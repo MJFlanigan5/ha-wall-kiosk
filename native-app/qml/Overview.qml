@@ -6,27 +6,22 @@ import QtQuick.Layouts
 // module import needed.
 
 // Ambient Mode, ported from the PWA's proven design (pwa-app/index.html,
-// docs/UI_MODES_SPEC.md "Ambient Mode v2") rather than the plain area grid
-// this file started as -- per NATIVE_APP_SPEC.md "Port from the PWA, not
-// the original mockup." This is a bounded first pass, not the full port:
-// clock/date + per-room status cards with tap-to-toggle, the same "one
-// quick-action per room" behavior Ambient Mode v1 shipped with in the PWA.
+// renderAmbientActions()) card for card -- not just the room-grid anatomy
+// from the first pass, but the full status row too (Music, Comfort,
+// Packages, Energy Flow, Water Usage, Home Usage, Water Heater, Security),
+// same real entities/devices the PWA already proved out. Exact entity IDs
+// mirrored from pwa-app/index.html's AMBIENT_*_ENTITY constants into
+// ha_client.py's AMBIENT_ENTITY_IDS -- same real house, same real data.
 //
-// Card anatomy (2026-08-06) updated to match the PWA's current
-// Loxone-matched room card: room label, a brightness word (Off/Dim/On/
-// Bright) as the primary text, the representative light's own name as the
-// sub-text, and a vertical pill on the right showing brightness as a fill
-// height -- same visual language as pwa-app/index.html's lightCard().
-// Two things the PWA's card has that this one deliberately doesn't yet:
-// a lightbulb icon (no SVG/icon-asset pipeline exists in the native app
-// yet -- text-only for now rather than faking one) and the presence dot
-// (no presence-sensor data wired into ha_client.py's model yet). Both are
-// real, scoped follow-ups, not oversights.
+// Deliberately still text-only: no SVG/icon-asset pipeline exists in the
+// native app yet, so every card's icon slot is just omitted rather than
+// faked. Presence dot is now wired (Magic Areas' per-area aggregate
+// sensor, matched by naming convention, not a hardcoded room map).
 //
-// Still deliberately NOT included (real PWA features, just bigger scope):
-// drag-to-set brightness on the pill itself (tap-to-toggle stays as the
-// write action for now), color presets, day/night theme shift, the global
-// Night/Day buttons. Follow-up passes, not this one.
+// Still deliberately NOT included (real PWA features, bigger scope):
+// drag-to-set brightness/volume on the vertical pill or volume bar (tap
+// transport buttons work; dragging doesn't yet), color presets, day/night
+// theme shift, the global Night/Day buttons, the bottom quick-nav row.
 ApplicationWindow {
     id: root
     visible: true
@@ -39,6 +34,59 @@ ApplicationWindow {
     height: appConfig.isPortrait ? 1920 : 1200
     title: "HA Wall Kiosk"
     color: Theme.base
+
+    // Real device, one house -- same hardcoded-constant pattern
+    // pwa-app/index.html uses for NEST_THERMOSTAT_DEVICE_ID. Bridged
+    // Homey -> HA for its display sensors, but written to directly via
+    // Homey's local API (see ha_client.py/homey_client.py comments on
+    // why: HA's mirrored climate entity doesn't accept writes here).
+    readonly property string nestThermostatDeviceId: "7d030c67-4001-483b-8765-75f7d34efa59"
+
+    function brightnessWord(pct) {
+        if (pct <= 0) return "Off"
+        if (pct < 40) return "Dim"
+        if (pct < 75) return "On"
+        return "Bright"
+    }
+
+    function fmtKw(stateObj) {
+        if (!stateObj || stateObj.state === null || stateObj.state === undefined) return "—"
+        var v = parseFloat(stateObj.state)
+        return isNaN(v) ? "—" : v.toFixed(2) + " kW"
+    }
+
+    function packagesTotal() {
+        var a = haClient.ambient
+        var keys = ["package_amazon", "package_usps", "package_fedex", "package_ups", "package_dhl"]
+        var sum = 0
+        for (var i = 0; i < keys.length; i++) {
+            var v = parseInt(a[keys[i]].state, 10)
+            if (!isNaN(v)) sum += v
+        }
+        return sum
+    }
+
+    function isArmed(state) {
+        return !!state && (state.indexOf("armed") === 0 || state === "arming" || state === "pending")
+    }
+
+    function alarmLabel(state) {
+        if (!state) return "—"
+        var s = state.replace("armed_", "Armed ")
+        return s.charAt(0).toUpperCase() + s.slice(1)
+    }
+
+    function findPlayingMedia() {
+        var areas = haClient.areas
+        var withMedia = []
+        for (var i = 0; i < areas.length; i++) {
+            if (areas[i].hasMedia) withMedia.push(areas[i])
+        }
+        for (var j = 0; j < withMedia.length; j++) {
+            if (withMedia[j].mediaPlaying) return withMedia[j]
+        }
+        return withMedia.length > 0 ? withMedia[0] : null
+    }
 
     // Matches the PWA's updateClock interval (setInterval(updateClock,
     // 1000*15)) -- a clock only needs to be accurate to the minute here.
@@ -112,20 +160,337 @@ ApplicationWindow {
                 columnSpacing: 16
                 rowSpacing: 16
 
+                // ---------- Status row (matches renderAmbientActions()'s
+                // row 1: Music, Comfort, Packages, Energy Flow, Water
+                // Usage, Home Usage, Water Heater) ----------
+
+                Rectangle {
+                    id: musicCard
+                    property var playing: root.findPlayingMedia()
+                    Layout.fillWidth: true
+                    Layout.columnSpan: 2
+                    Layout.preferredHeight: 170
+                    radius: Theme.radiusCard
+                    color: (playing && playing.mediaPlaying) ? Theme.onDim : Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+
+                        Text {
+                            text: musicCard.playing ? (musicCard.playing.mediaPlaying ? musicCard.playing.mediaTrack : "Paused") : "Nothing playing"
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: musicCard.playing ? musicCard.playing.mediaName : "Music"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+
+                        Item { Layout.fillHeight: true }
+
+                        RowLayout {
+                            visible: !!musicCard.playing
+                            spacing: 8
+                            Layout.topMargin: 10
+
+                            Rectangle {
+                                width: 40; height: 32; radius: Theme.radiusChip
+                                color: Theme.base; border.color: Theme.hairline; border.width: 1
+                                Text { anchors.centerIn: parent; text: "⏮"; color: Theme.textDim; font.pixelSize: 14 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: haClient.callService("media_player", "media_previous_track", [musicCard.playing.mediaEntityId])
+                                }
+                            }
+                            Rectangle {
+                                width: 40; height: 32; radius: Theme.radiusChip
+                                color: Theme.base; border.color: Theme.hairline; border.width: 1
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: musicCard.playing && musicCard.playing.mediaPlaying ? "⏸" : "⏵"
+                                    color: Theme.textDim; font.pixelSize: 14
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: haClient.callService("media_player", "media_play_pause", [musicCard.playing.mediaEntityId])
+                                }
+                            }
+                            Rectangle {
+                                width: 40; height: 32; radius: Theme.radiusChip
+                                color: Theme.base; border.color: Theme.hairline; border.width: 1
+                                Text { anchors.centerIn: parent; text: "⏭"; color: Theme.textDim; font.pixelSize: 14 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: haClient.callService("media_player", "media_next_track", [musicCard.playing.mediaEntityId])
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: comfortCard
+                    property real thermoTemp: parseFloat(haClient.ambient.thermostat_temp.state)
+                    property real thermoCool: parseFloat(haClient.ambient.thermostat_cool.state)
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 150
+                    radius: Theme.radiusCard
+                    color: Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+
+                        Text {
+                            text: "Hallway"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 11
+                            color: Theme.textDim
+                        }
+                        Text {
+                            text: !isNaN(comfortCard.thermoTemp) ? Math.round(comfortCard.thermoTemp) + "°" : "—"
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: !isNaN(comfortCard.thermoCool) ? "Comfort · cools to " + Math.round(comfortCard.thermoCool) + "°" : "Comfort"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+
+                        Item { Layout.fillHeight: true }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            visible: !isNaN(comfortCard.thermoCool)
+
+                            Rectangle {
+                                Layout.fillWidth: true; height: 32; radius: Theme.radiusChip
+                                color: Theme.base; border.color: Theme.hairline; border.width: 1
+                                Text { anchors.centerIn: parent; text: "−"; color: Theme.textDim; font.pixelSize: 16 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        var target = Math.round(comfortCard.thermoCool) - 1
+                                        homeyClient.setCapabilityBool(root.nestThermostatDeviceId, "nest_thermostat_eco", false)
+                                        homeyClient.setCapabilityNumber(root.nestThermostatDeviceId, "target_temperature.cool", target)
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true; height: 32; radius: Theme.radiusChip
+                                color: Theme.base; border.color: Theme.hairline; border.width: 1
+                                Text { anchors.centerIn: parent; text: "+"; color: Theme.textDim; font.pixelSize: 16 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        var target = Math.round(comfortCard.thermoCool) + 1
+                                        homeyClient.setCapabilityBool(root.nestThermostatDeviceId, "nest_thermostat_eco", false)
+                                        homeyClient.setCapabilityNumber(root.nestThermostatDeviceId, "target_temperature.cool", target)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 110
+                    radius: Theme.radiusCard
+                    color: Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+                        Text {
+                            text: root.packagesTotal()
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: "Packages"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 170
+                    radius: Theme.radiusCard
+                    color: Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+                        Text {
+                            text: root.fmtKw(haClient.ambient.power)
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: "Energy Flow"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+                        ColumnLayout {
+                            Layout.topMargin: 8
+                            spacing: 6
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { text: "Solar"; font.family: Theme.fontBody; font.pixelSize: 12; color: Theme.textDim; Layout.fillWidth: true }
+                                Text { text: root.fmtKw(haClient.ambient.solar); font.family: Theme.fontBody; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.text }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { text: "Battery"; font.family: Theme.fontBody; font.pixelSize: 12; color: Theme.textDim; Layout.fillWidth: true }
+                                Text { text: root.fmtKw(haClient.ambient.battery); font.family: Theme.fontBody; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.text }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { text: "Grid"; font.family: Theme.fontBody; font.pixelSize: 12; color: Theme.textDim; Layout.fillWidth: true }
+                                Text { text: root.fmtKw(haClient.ambient.grid); font.family: Theme.fontBody; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.text }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 110
+                    radius: Theme.radiusCard
+                    color: Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+                        Text {
+                            text: haClient.ambient.water_usage.state != null ? parseFloat(haClient.ambient.water_usage.state).toFixed(1) : "—"
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: "gal · Water Today"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 110
+                    radius: Theme.radiusCard
+                    color: Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+                        Text {
+                            text: haClient.ambient.home_usage.state != null ? parseFloat(haClient.ambient.home_usage.state).toFixed(1) : "—"
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: "kWh · Home Usage"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 150
+                    radius: Theme.radiusCard
+                    color: Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+                        Text {
+                            text: {
+                                var attrs = haClient.ambient.water_heater.attributes
+                                var t = attrs ? attrs.temperature : null
+                                return t !== null && t !== undefined ? Math.round(t) + "°" : "—"
+                            }
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: "Water Heater"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+
+                        Item { Layout.fillHeight: true }
+
+                        Rectangle {
+                            Layout.fillWidth: true; height: 32; radius: Theme.radiusChip
+                            color: Theme.base; border.color: Theme.hairline; border.width: 1
+                            Text { anchors.centerIn: parent; text: "Hot Water"; color: Theme.textDim; font.pixelSize: 12 }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: haClient.callService("script", "turn_on", ["script.shower_prep_now"])
+                            }
+                        }
+                    }
+                }
+
+                // ---------- Room cards ----------
+
                 Repeater {
                     model: haClient.areas
 
                     delegate: Rectangle {
                         required property var modelData
-                        // brightnessWord() mirrors the PWA's
-                        // ambientBrightnessWord() exactly -- same four
-                        // bands, same thresholds.
-                        function brightnessWord(pct) {
-                            if (pct <= 0) return "Off"
-                            if (pct < 40) return "Dim"
-                            if (pct < 75) return "On"
-                            return "Bright"
-                        }
 
                         Layout.fillWidth: true
                         Layout.preferredHeight: 140
@@ -157,17 +522,25 @@ ApplicationWindow {
                                 Layout.fillHeight: true
                                 spacing: 4
 
-                                Text {
-                                    text: modelData.name
-                                    font.family: Theme.fontBody
-                                    font.pixelSize: 11
-                                    color: Theme.textDim
+                                RowLayout {
+                                    spacing: 6
+                                    Text {
+                                        text: modelData.name
+                                        font.family: Theme.fontBody
+                                        font.pixelSize: 11
+                                        color: Theme.textDim
+                                    }
+                                    Rectangle {
+                                        visible: modelData.hasPresence
+                                        width: 6; height: 6; radius: 3
+                                        color: modelData.presenceOn ? Theme.on : Theme.textFaint
+                                    }
                                 }
 
                                 Item { Layout.fillHeight: true }
 
                                 Text {
-                                    text: modelData.hasLight ? brightnessWord(modelData.lightPct) : "No light"
+                                    text: modelData.hasLight ? root.brightnessWord(modelData.lightPct) : "No light"
                                     font.family: Theme.fontHead
                                     font.pixelSize: 17
                                     font.weight: Font.Bold
@@ -205,6 +578,57 @@ ApplicationWindow {
                                     radius: 999
                                     color: modelData.lightOn ? Theme.on : Theme.textDim
                                 }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: securityCard
+                    property var alarmState: haClient.ambient.alarm.state
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 150
+                    radius: Theme.radiusCard
+                    color: root.isArmed(alarmState) ? Theme.onDim : Theme.baseRaised
+                    border.color: Theme.hairline
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 4
+
+                        Text {
+                            text: root.alarmLabel(securityCard.alarmState)
+                            font.family: Theme.fontHead
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                            color: Theme.text
+                        }
+                        Text {
+                            text: "Security"
+                            font.family: Theme.fontBody
+                            font.pixelSize: 12
+                            color: Theme.textDim
+                        }
+
+                        Item { Layout.fillHeight: true }
+
+                        Rectangle {
+                            Layout.fillWidth: true; height: 32; radius: Theme.radiusChip
+                            color: Theme.base; border.color: Theme.hairline; border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: root.isArmed(securityCard.alarmState) ? "Disarm" : "Arm Away"
+                                color: Theme.textDim; font.pixelSize: 12
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: haClient.callService(
+                                    "alarm_control_panel",
+                                    root.isArmed(securityCard.alarmState) ? "alarm_disarm" : "alarm_arm_away",
+                                    ["alarm_control_panel.alarmo"]
+                                )
                             }
                         }
                     }

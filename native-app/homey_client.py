@@ -127,6 +127,14 @@ class HomeyClient(QObject):
     def setOnOff(self, device_id, value):
         asyncio.ensure_future(self._set_capability(device_id, "onoff", value))
 
+    @Slot(str, str, bool)
+    def setCapabilityBool(self, device_id, capability, value):
+        asyncio.ensure_future(self._set_capability(device_id, capability, value))
+
+    @Slot(str, str, float)
+    def setCapabilityNumber(self, device_id, capability, value):
+        asyncio.ensure_future(self._set_capability(device_id, capability, value))
+
     async def _set_capability(self, device_id, capability, value):
         session = await self._get_session()
         try:
