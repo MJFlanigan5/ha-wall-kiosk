@@ -93,20 +93,37 @@ ApplicationWindow {
     // master, bedroom3, bedroom4) -- confirmed against this house's real
     // area registry, not guessed.
     readonly property var ambientRoomNames: ["Living Room", "Kitchen", "Dining Room", "Office", "Master Bedroom", "Bedroom 3", "Bedroom 4"]
+    // pwa-app/index.html's ROOMS object gives bedroom3/bedroom4 display
+    // names of "Guest East"/"Guest West" -- the HA Area registry's own
+    // names ("Bedroom 3"/"Bedroom 4") are only used to find the right
+    // area/entities, not shown on screen. Same index order as above.
+    readonly property var ambientRoomDisplayNames: ["Living Room", "Kitchen", "Dining Room", "Office", "Master Bedroom", "Guest East", "Guest West"]
 
     function ambientRooms() {
         var order = root.ambientRoomNames
+        var display = root.ambientRoomDisplayNames
         var areas = haClient.areas
         var result = []
         for (var i = 0; i < order.length; i++) {
             for (var j = 0; j < areas.length; j++) {
                 if (areas[j].name === order[i]) {
-                    result.push(areas[j])
+                    var room = Object.assign({}, areas[j])
+                    room.displayName = display[i]
+                    result.push(room)
                     break
                 }
             }
         }
         return result
+    }
+
+    // Same "Bedroom 3"/"Bedroom 4" -> "Guest East"/"Guest West" override
+    // used by room cards, applied wherever a raw HA area name is shown to
+    // the user (e.g. the Music card's room label, if a Guest room's media
+    // happens to be the one playing).
+    function displayNameFor(rawName) {
+        var idx = root.ambientRoomNames.indexOf(rawName)
+        return idx >= 0 ? root.ambientRoomDisplayNames[idx] : rawName
     }
 
     // Matches the PWA's updateClock interval (setInterval(updateClock,
@@ -118,8 +135,20 @@ ApplicationWindow {
         triggeredOnStart: true
         onTriggered: {
             var now = new Date()
-            clockText.text = Qt.formatTime(now, "h:mm ap")
-            dateText.text = Qt.formatDate(now, "dddd, MMMM d")
+            // Manual JS date math instead of Qt.formatTime/formatDate --
+            // Qt's "h" token silently switches to 24-hour once no "ap" is
+            // present in the format string, which broke this once already.
+            // This mirrors updateAmbientClock() in pwa-app/index.html
+            // exactly: clock has no am/pm suffix (appended to the date
+            // line instead, e.g. "Thursday, August 6 · PM").
+            var h = now.getHours()
+            var m = now.getMinutes()
+            var ampm = h >= 12 ? "PM" : "AM"
+            h = h % 12 || 12
+            clockText.text = h + ":" + String(m).padStart(2, "0")
+            var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+            var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+            dateText.text = days[now.getDay()] + ", " + months[now.getMonth()] + " " + now.getDate() + " · " + ampm
         }
     }
 
@@ -203,7 +232,7 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
-                            text: musicCard.playing ? musicCard.playing.mediaName : "Music"
+                            text: musicCard.playing ? root.displayNameFor(musicCard.playing.mediaName) : "Music"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
                             color: Theme.textDim
@@ -545,7 +574,7 @@ ApplicationWindow {
                                 RowLayout {
                                     spacing: 6
                                     Text {
-                                        text: modelData.name
+                                        text: modelData.displayName
                                         font.family: Theme.fontBody
                                         font.pixelSize: 11
                                         color: Theme.textDim
@@ -708,10 +737,12 @@ ApplicationWindow {
     }
 
     // Connection status -- this app's own addition, not part of the PWA's
-    // Ambient design (see the comment above the centered clock block).
-    // Anchored to the corner instead of in the main flow so it doesn't
-    // compete with the exact clock/date/grid match.
+    // Ambient design at all. Only shown when something's actually wrong
+    // (not connected), so the normal/expected screen stays text-for-text
+    // identical to the PWA's Ambient overlay -- this only interrupts that
+    // match when there's a real problem to surface.
     RowLayout {
+        visible: !haClient.connected
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: 20

@@ -156,7 +156,10 @@ class HAClient(QObject):
                 "presenceOn": presence["state"] == "on" if presence else False,
                 "hasMedia": primary_media is not None,
                 "mediaEntityId": primary_media["entity_id"] if primary_media else "",
-                "mediaName": primary_media["name"] if primary_media else "",
+                # Matches the PWA's Music card sub-label -- the ROOM name
+                # (r.media.name from rooms.config.js), not the media
+                # entity's own friendly_name.
+                "mediaName": area["name"] if primary_media else "",
                 "mediaPlaying": primary_media["state"] == "playing" if primary_media else False,
                 "mediaTrack": (primary_media.get("mediaTitle") or primary_media["name"]) if primary_media else "",
                 "mediaArt": primary_media.get("mediaArt", "") if primary_media else "",
