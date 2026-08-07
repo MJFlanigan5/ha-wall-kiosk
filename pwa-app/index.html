@@ -1782,6 +1782,20 @@ function haHttpBase() {
 // Camera snapshots are fetched with the Bearer token (an <img src> can't
 // send auth headers) and turned into a blob URL, revoking the previous one
 // each refresh to avoid leaking memory over a long-running kiosk session.
+// Real leak found in audit (2026-08-07): refreshCameraSnapshot only ever
+// revoked a blob URL on the *next* refresh of the *same* <img> element.
+// Toggling fullscreen/grid, switching Security's sub-tabs, or navigating
+// away from Security entirely all discard the current <img> elements
+// (full innerHTML rebuild) without ever revoking whatever blob URL they
+// were holding — the element carrying the only reference to that URL is
+// just gone. Call this right before any of those DOM rebuilds happen,
+// while the old <img> elements are still present to read from.
+function revokeVisibleCameraBlobUrls() {
+  document.querySelectorAll("img[data-blob-url]").forEach(img => {
+    URL.revokeObjectURL(img.dataset.blobUrl);
+  });
+}
+
 async function refreshCameraSnapshot(entityId, imgId) {
   const base = haHttpBase();
   const imgEl = document.getElementById(imgId);
@@ -1870,6 +1884,7 @@ function startCameraRefresh() {
 }
 
 function renderSecurityContent() {
+  revokeVisibleCameraBlobUrls(); // about to discard whatever <img> elements are currently showing
   const content = document.getElementById("content");
   const subnav = `
     <div class="subnav">
@@ -2159,6 +2174,7 @@ async function renderSettingsContent() {
 
 function renderContent() {
   if (currentRoom !== "security" && cameraRefreshTimer) {
+    revokeVisibleCameraBlobUrls(); // old Security DOM is still present here, about to be replaced by whatever's being navigated to
     clearInterval(cameraRefreshTimer);
     cameraRefreshTimer = null;
   }
