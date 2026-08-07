@@ -3,7 +3,7 @@
   "short_name": "Home",
   "description": "Savant-styled Home Assistant control panel",
   "start_url": "./index.html",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "any",
   "background_color": "#0A0A0C",
   "theme_color": "#0A0A0C",

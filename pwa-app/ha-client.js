@@ -16,6 +16,35 @@ class HAClient {
     this.connected = false;
     this.connectionListeners = new Set();
     this._reconnectDelay = 1000;
+    this._reconnectTimer = null;
+    this._setupResumeListeners();
+  }
+
+  // Mobile browsers throttle/suspend timers and WebSockets while
+  // backgrounded, so a phone reopened after sleep can sit on a stale
+  // connection for up to the full backoff delay before the next retry
+  // fires on its own. Force an immediate reconnect attempt as soon as
+  // the tab is visible again or the network comes back, instead of
+  // waiting on the timer.
+  _setupResumeListeners() {
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") this._forceReconnectNow();
+      });
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", () => this._forceReconnectNow());
+    }
+  }
+
+  _forceReconnectNow() {
+    if (this.connected) return;
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    this._reconnectDelay = 1000;
+    this.connect().catch(() => {});
   }
 
   onStateChanged(fn) {
@@ -90,7 +119,8 @@ class HAClient {
   }
 
   _scheduleReconnect() {
-    setTimeout(() => {
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
       this.connect().catch(() => {});
     }, this._reconnectDelay);
     this._reconnectDelay = Math.min(this._reconnectDelay * 2, 30000);
