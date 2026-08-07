@@ -44,4 +44,38 @@ class HomeyClient {
   triggerMood(moodId) {
     return this._fetch(`/api/manager/moods/mood/${moodId}/trigger`, { method: "POST" });
   }
+
+  // Both return an { id: {...} } map, not an array — Homey's own API shape
+  // when no specific ID is given. Used by device discovery (Admin Mode's
+  // Climate picker), not by any always-on polling path.
+  async listDevices() {
+    const map = await this._fetch("/api/manager/devices/device/");
+    return Object.values(map || {});
+  }
+
+  async listZones() {
+    const map = await this._fetch("/api/manager/zones/zone/");
+    return Object.values(map || {});
+  }
+}
+
+// Capability introspection is generic on purpose: it keys off Homey's own
+// standard capability-id vocabulary (target_temperature[.sub], measure_*,
+// setable enum ids containing "mode") rather than any one vendor's device,
+// so any Homey thermostat-class device works here, not just the Nest this
+// was built against (see homeyThermostatCapabilities usage in index.html).
+function isHomeyThermostat(device) {
+  return (device.capabilities || []).some(c => c.startsWith("target_temperature"));
+}
+
+function homeyThermostatCapabilities(device) {
+  const caps = device.capabilitiesObj || {};
+  const all = Object.values(caps);
+  return {
+    measureTemp: caps["measure_temperature"] || null,
+    measureHumidity: caps["measure_humidity"] || null,
+    targets: all.filter(c => c.setable && c.id.startsWith("target_temperature")),
+    modeCap: all.find(c => c.setable && c.type === "enum" && /mode/i.test(c.id)) || null,
+    activityCap: all.find(c => !c.setable && c.type === "enum" && /(hvac|activity)/i.test(c.id)) || null,
+  };
 }

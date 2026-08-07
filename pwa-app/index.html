@@ -807,7 +807,6 @@ const ROOMS = {
       { name: "Floor Lamp", sub: "LIFX", type: "dim", on: false, brightness: 0, color: true, hue: 265, sat: 75 },
       { name: "Fan Light", sub: "Switch", type: "switch", on: false },
     ],
-    climate: { temp: 71, target: 72, mode: "Auto", fan: "Auto", humidity: 52 },
     media: { name: "Sonos Arc", track: "Evening Mix", artist: "KEXP", source: "AirPlay", playing: true, volume: 34, elapsed: 74, duration: 224, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
     shades: [ { name: "Picture Window", position: 40 }, { name: "Sliding Door", position: 0 } ],
   },
@@ -822,7 +821,6 @@ const ROOMS = {
       { name: "LIFX Ceiling", sub: "LIFX", type: "dim", on: true, brightness: 88 },
       { name: "Sink COB", sub: "Govee strip", type: "dim", on: true, brightness: 55 },
     ],
-    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 48 },
     media: { name: "Kitchen Speaker", track: "—", artist: "", source: "AirPlay", playing: false, volume: 20, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
     shades: [ { name: "Sink Window", position: 60 } ],
   },
@@ -837,7 +835,6 @@ const ROOMS = {
       { name: "Ceiling", sub: "Warm dim", type: "dim", on: true, brightness: 18 },
       { name: "Under-Bed", sub: "Govee", type: "dim", on: false, brightness: 0 },
     ],
-    climate: { temp: 68, target: 67, mode: "Sleep", fan: "Auto", humidity: 45 },
     media: { name: "Bedroom Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 12, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
     shades: [ { name: "Bedroom Window", position: 10 }, { name: "Blackout Shade", position: 0 } ],
   },
@@ -852,7 +849,6 @@ const ROOMS = {
       { name: "Floor Lamp", sub: "Govee, segmented", type: "dim", on: true, brightness: 70, color: true, hue: 30, sat: 90 },
       { name: "Window", sub: "Govee", type: "dim", on: true, brightness: 45 },
     ],
-    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "Office Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
     shades: [ { name: "Window", position: 70 } ],
   },
@@ -867,7 +863,6 @@ const ROOMS = {
       { name: "Utility Light", sub: "Govee", type: "dim", on: false, brightness: 0 },
       { name: "Diffuser Nightlight", sub: "Pura", type: "dim", on: true, brightness: 25 },
     ],
-    climate: { temp: 69, target: 69, mode: "Auto", fan: "Auto", humidity: 55 },
     media: { name: "Utility Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
     shades: [ { name: "Utility Window", position: 100 } ],
   },
@@ -880,7 +875,6 @@ const ROOMS = {
     photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
-    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     shades: [],
   },
@@ -889,7 +883,6 @@ const ROOMS = {
     photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
-    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     shades: [],
   },
@@ -898,7 +891,6 @@ const ROOMS = {
     photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
-    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     shades: [],
   },
@@ -921,6 +913,8 @@ let colorSubView = "wheel";          // wheel | white — dock inside the color 
 let cameraRefreshTimer = null;       // live snapshot polling interval while the Cameras tab is open
 let sensorsRefreshTimer = null;      // polling interval while the Sensors page is open
 let sensorsAreaMapCache = null;      // area/device/entity registries rarely change; fetched once per session
+let climateRefreshTimer = null;      // polling interval while a room with an assigned climate device is open
+let climateLiveCache = {};           // { [homeyDeviceId]: full Homey device object }
 
 // Lucide line icons instead of emoji — matches Savant's actual monochrome icon
 // style instead of platform-dependent emoji rendering. `icons()` must run after
@@ -1627,27 +1621,61 @@ function renderLighting(room) {
   return renderLightingSlider(room) + renderLightingGlobal(room);
 }
 
+// Capability-driven, not template-driven (2026-08-07): renders whatever
+// the assigned Homey device actually exposes (see homeyThermostatCapabilities
+// in homey-client.js) instead of a fixed temp/target/mode/fan/humidity
+// shape. The real thermostat this was built against (a Nest, bridged via
+// Homey) has no fan capability at all and two separate heat/cool
+// setpoints — a fixed-shape UI would either crash or fabricate a fan
+// control that doesn't exist.
 function renderClimate(room) {
-  return `
-    <div class="panel climate-face">
-      <div class="climate-temp">${room.climate.temp}°</div>
-      <div class="climate-mode-badge">${room.climate.mode.toUpperCase()}</div>
-      <div class="climate-target-row">
-        <button class="stepper" id="tempDown">−</button>
-        <div class="climate-target-label" id="tempTarget">TARGET ${room.climate.target}°</div>
-        <button class="stepper" id="tempUp">+</button>
-      </div>
-      <div class="climate-row-label">Fan</div>
-      <div class="climate-tabs">
-        <button class="climate-tab-btn ${room.climate.fan === "Auto" ? "active" : ""}" data-fan="Auto">AUTO</button>
-        <button class="climate-tab-btn ${room.climate.fan === "On" ? "active" : ""}" data-fan="On">ON</button>
-      </div>
-      <div class="climate-row-label">Humidity — <span data-humidity-label>${room.climate.humidity}%</span></div>
-      <div class="slider-track" data-humidity style="width:220px; margin:0 auto">
-        <div class="slider-fill" style="width:${room.climate.humidity}%"></div>
-        <div class="slider-thumb" style="left:${room.climate.humidity}%"></div>
-      </div>
-    </div>`;
+  const device = climateLiveCache[room.climateDeviceId];
+  if (!device) {
+    return `<div class="light-list"><div class="switch-row"><div class="light-row-name" style="opacity:0.5">Loading…</div></div></div>`;
+  }
+  const caps = homeyThermostatCapabilities(device);
+  const tempHtml = caps.measureTemp
+    ? `<div class="climate-temp">${caps.measureTemp.value}°</div>` : "";
+  const activityHtml = caps.activityCap
+    ? `<div class="climate-mode-badge">${(caps.activityCap.values.find(v => v.id === caps.activityCap.value) || {}).title || caps.activityCap.value}</div>` : "";
+  const targetsHtml = caps.targets.map(t => `
+    <div class="climate-row-label">${t.title || t.id}</div>
+    <div class="climate-target-row">
+      <button class="stepper" data-climate-target-down="${t.id}">−</button>
+      <div class="climate-target-label" data-climate-target-label="${t.id}">TARGET ${t.value}°</div>
+      <button class="stepper" data-climate-target-up="${t.id}">+</button>
+    </div>`).join("");
+  const modeHtml = caps.modeCap
+    ? `<div class="climate-row-label">Mode</div>
+       <div class="climate-tabs">
+         ${caps.modeCap.values.map(v => `<button class="climate-tab-btn ${v.id === caps.modeCap.value ? "active" : ""}" data-climate-mode="${v.id}">${v.title.toUpperCase()}</button>`).join("")}
+       </div>` : "";
+  const humidityHtml = caps.measureHumidity
+    ? `<div class="climate-row-label">Humidity</div><div class="climate-mode-badge">${caps.measureHumidity.value}%</div>` : "";
+  return `<div class="panel climate-face">${tempHtml}${activityHtml}${targetsHtml}${modeHtml}${humidityHtml}</div>`;
+}
+
+// Homey-only right now (2026-08-07) — no real HA `climate` domain entities
+// exist in this instance yet. Polls on an interval while the assigned
+// room is open, same on-demand-only pattern as Cameras/Sensors, not a
+// standing subscription. Writes go straight to Homey then re-fetch,
+// mirroring Ambient Mode's Comfort card — HA's mirrored sensors for this
+// bridge were confirmed to lag 15s+ behind the real device.
+async function refreshClimateLive(room) {
+  if (!room.climateDeviceId || !window.homeyClient) return;
+  try {
+    const device = await window.homeyClient.getDevice(room.climateDeviceId);
+    climateLiveCache[room.climateDeviceId] = device;
+  } catch (e) { console.error("refreshClimateLive failed", e); }
+  if (ROOMS[currentRoom] === room) renderContent();
+}
+
+async function writeClimateCapability(room, capabilityId, value) {
+  if (!room.climateDeviceId || !window.homeyClient) return;
+  try {
+    await window.homeyClient.setCapability(room.climateDeviceId, capabilityId, value);
+  } catch (e) { console.error("writeClimateCapability failed", e); }
+  await refreshClimateLive(room);
 }
 
 function fmtTime(s) {
@@ -2077,6 +2105,10 @@ function renderContent() {
     clearInterval(sensorsRefreshTimer);
     sensorsRefreshTimer = null;
   }
+  if (climateRefreshTimer) {
+    clearInterval(climateRefreshTimer);
+    climateRefreshTimer = null;
+  }
   if (currentRoom === "power") { renderPowerContent(); return; }
   if (currentRoom === "security") { renderSecurityContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
@@ -2099,6 +2131,11 @@ function renderContent() {
   updateClock();
   icons();
   wireInteractions(room);
+
+  if (room.climateDeviceId) {
+    refreshClimateLive(room);
+    climateRefreshTimer = setInterval(() => refreshClimateLive(room), 20000);
+  }
 }
 
 // Single continuous scroll of real, wired sections — no tabs, matching
@@ -2116,6 +2153,9 @@ function renderTv(room) {
 
 function renderRoomSections(room) {
   let sections = `<div class="section-label-sm" id="section-lighting" style="margin-top:24px">${ico("lightbulb", "i14")}Lighting</div>${renderLighting(room)}`;
+  if (room.climateDeviceId) {
+    sections += `<div class="section-label-sm" id="section-climate" style="margin-top:32px">${ico("thermometer", "i14")}Climate</div>${renderClimate(room)}`;
+  }
   if (room.media && room.media.entityId) {
     sections += `<div class="section-label-sm" id="section-music" style="margin-top:32px">${ico("music", "i14")}Music</div>${renderMedia(room)}`;
   }
@@ -2324,35 +2364,29 @@ function wireInteractions(room) {
     }
   });
 
-  const up = document.getElementById("tempUp");
-  const down = document.getElementById("tempDown");
-  if (up && down) {
-    const label = document.getElementById("tempTarget");
-    up.addEventListener("click", () => { room.climate.target++; label.textContent = `TARGET ${room.climate.target}°`; });
-    down.addEventListener("click", () => { room.climate.target--; label.textContent = `TARGET ${room.climate.target}°`; });
-  }
-
-  document.querySelectorAll("[data-fan]").forEach(el => {
-    el.addEventListener("click", () => { room.climate.fan = el.dataset.fan; renderContent(); });
-  });
-
-  const humidityTrack = document.querySelector("[data-humidity]");
-  if (humidityTrack) {
-    let dragging = false;
-    const fill = humidityTrack.querySelector(".slider-fill");
-    const thumb = humidityTrack.querySelector(".slider-thumb");
-    const label = document.querySelector("[data-humidity-label]");
-    function setFromEvent(clientX) {
-      const rect = humidityTrack.getBoundingClientRect();
-      const pct = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
-      room.climate.humidity = pct;
-      fill.style.width = pct + "%";
-      thumb.style.left = pct + "%";
-      if (label) label.textContent = pct + "%";
-    }
-    humidityTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); humidityTrack.setPointerCapture(e.pointerId); });
-    humidityTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
-    humidityTrack.addEventListener("pointerup", () => dragging = false);
+  // Climate — writes go straight to the assigned Homey device (see
+  // writeClimateCapability); no local-only mock state anymore. Humidity
+  // has no drag control since Homey's measure_humidity capability is
+  // read-only (a sensor reading, not a setpoint).
+  if (room.climateDeviceId) {
+    const device = climateLiveCache[room.climateDeviceId];
+    const caps = device ? homeyThermostatCapabilities(device) : { targets: [] };
+    document.querySelectorAll("[data-climate-target-up]").forEach(el => {
+      const cap = caps.targets.find(t => t.id === el.dataset.climateTargetUp);
+      if (!cap) return;
+      el.addEventListener("click", () => writeClimateCapability(room, cap.id, Math.min(cap.max, cap.value + 1)));
+    });
+    document.querySelectorAll("[data-climate-target-down]").forEach(el => {
+      const cap = caps.targets.find(t => t.id === el.dataset.climateTargetDown);
+      if (!cap) return;
+      el.addEventListener("click", () => writeClimateCapability(room, cap.id, Math.max(cap.min, cap.value - 1)));
+    });
+    document.querySelectorAll("[data-climate-mode]").forEach(el => {
+      el.addEventListener("click", () => {
+        if (!caps.modeCap) return;
+        writeClimateCapability(room, caps.modeCap.id, el.dataset.climateMode);
+      });
+    });
   }
 }
 
@@ -2724,6 +2758,11 @@ function populateRoomsFromMap(map, statesById) {
       ROOMS[roomId].tv = null;
     }
 
+    // Homey-sourced, not an HA entity — nothing to resolve against
+    // statesById, just carry the assignment through so renderRoomSections
+    // knows whether to show the section at all.
+    ROOMS[roomId].climateDeviceId = map[roomId].climateDeviceId || null;
+
     const aq = map[roomId].airQuality;
     if (aq && (aq.pm25 || aq.temp || aq.humidity)) {
       const aqObj = { pm25: null, temp: null, humidity: null };
@@ -2954,7 +2993,6 @@ function defaultRoomShape(name) {
     photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
-    climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     tv: null,
     airQuality: null,
@@ -2993,6 +3031,20 @@ async function renderAdminRoomList() {
       allMediaPlayers = states.filter(s => s.entity_id.startsWith("media_player."));
     } catch (e) { console.error(e); }
   }
+  // Climate — sourced from Homey (no real HA climate-domain entities exist
+  // yet), scanned on-demand only when Admin Mode is opened, not polled in
+  // the background. Devices carry their own capability metadata, so
+  // "is this a thermostat" is a capability check (see isHomeyThermostat),
+  // not a hardcoded device list — any Homey thermostat-class device shows
+  // up here, not just the one this was built against.
+  let allThermostats = [], zoneNameById = new Map();
+  if (window.homeyClient) {
+    try {
+      const [devices, zones] = await Promise.all([window.homeyClient.listDevices(), window.homeyClient.listZones()]);
+      allThermostats = devices.filter(isHomeyThermostat);
+      zoneNameById = new Map(zones.map(z => [z.id, z.name]));
+    } catch (e) { console.error(e); }
+  }
   // Excludes "unavailable" entities from what CAN be picked (real bug found
   // 2026-08-05: the live instance has duplicate entities sharing the same
   // friendly_name, e.g. 4 different "HT-A3000" media_players, one real and
@@ -3009,6 +3061,8 @@ async function renderAdminRoomList() {
   const availableMedia = allMediaPlayers.filter(s => !assignedMediaIds.has(s.entity_id) && s.state !== "unavailable");
   const assignedTvIds = new Set(Object.values(map).map(r => r.tv).filter(Boolean));
   const availableTv = allMediaPlayers.filter(s => !assignedTvIds.has(s.entity_id) && s.state !== "unavailable");
+  const assignedClimateIds = new Set(Object.values(map).map(r => r.climateDeviceId).filter(Boolean));
+  const availableThermostats = allThermostats.filter(d => !assignedClimateIds.has(d.id));
 
   listEl.innerHTML = Object.keys(map).filter(id => ROOMS[id]).map(roomId => {
     const room = ROOMS[roomId];
@@ -3043,6 +3097,24 @@ async function renderAdminRoomList() {
       `<option value="${s.entity_id}">${s.attributes.friendly_name || s.entity_id} (${s.entity_id})</option>`
     ).join("");
 
+    const currentClimateId = map[roomId].climateDeviceId;
+    const currentClimateDevice = currentClimateId ? allThermostats.find(d => d.id === currentClimateId) : null;
+    const currentClimateLabel = currentClimateId ? (currentClimateDevice ? currentClimateDevice.name : currentClimateId) : null;
+    // Auto-suggest by matching the room name against the device's Homey
+    // zone (case-insensitive, either-direction substring) — the "HA/Homey
+    // should help organize it" half of discovery. Sorted first and
+    // pre-selected, but every other unassigned thermostat is still a real
+    // option in the same dropdown — the "user can choose" half.
+    const climateCandidates = [...availableThermostats].sort((a, b) => {
+      const aMatch = roomMatchesZoneName(room.name, zoneNameById.get(a.zone)) ? 0 : 1;
+      const bMatch = roomMatchesZoneName(room.name, zoneNameById.get(b.zone)) ? 0 : 1;
+      return aMatch - bMatch;
+    });
+    const climateOptions = climateCandidates.map((d, i) => {
+      const zoneName = zoneNameById.get(d.zone) || "Unknown zone";
+      return `<option value="${d.id}" ${i === 0 && roomMatchesZoneName(room.name, zoneName) ? "selected" : ""}>${d.name} (${zoneName})</option>`;
+    }).join("");
+
     return `<div class="admin-room-block">
       <h3>${room.name} — Lighting</h3>
       ${rows}
@@ -3052,6 +3124,16 @@ async function renderAdminRoomList() {
         </select>
         <button class="admin-add-btn" data-add-room="${roomId}" ${lightOptions ? "" : "disabled"}>Add</button>
       </div>
+      <h3 style="margin-top:18px;">${room.name} — Climate</h3>
+      ${currentClimateId
+        ? `<div class="admin-entity-row"><span>${currentClimateLabel}</span><button class="admin-remove-btn" data-remove-climate-room="${roomId}">×</button></div>`
+        : `<div class="admin-add-row">
+             <select class="admin-add-select" data-climate-room="${roomId}" ${climateOptions ? "" : "disabled"}>
+               ${climateOptions || '<option>No unassigned thermostats found</option>'}
+             </select>
+             <button class="admin-add-btn" data-add-climate-room="${roomId}" ${climateOptions ? "" : "disabled"}>Add</button>
+           </div>`
+      }
       <h3 style="margin-top:18px;">${room.name} — Music (basic only, see docs/MUSIC_SPEC.md)</h3>
       ${currentMediaId
         ? `<div class="admin-entity-row"><span>${currentMediaLabel}</span><button class="admin-remove-btn" data-remove-media-room="${roomId}">×</button></div>`
@@ -3102,6 +3184,25 @@ async function renderAdminRoomList() {
       if (select && select.value) addTvToRoom(btn.dataset.addTvRoom, select.value);
     });
   });
+  listEl.querySelectorAll("[data-remove-climate-room]").forEach(btn => {
+    btn.addEventListener("click", () => removeClimateFromRoom(btn.dataset.removeClimateRoom));
+  });
+  listEl.querySelectorAll("[data-add-climate-room]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const select = listEl.querySelector(`select[data-climate-room="${btn.dataset.addClimateRoom}"]`);
+      if (select && select.value) addClimateToRoom(btn.dataset.addClimateRoom, select.value);
+    });
+  });
+}
+
+// Case-insensitive, either-direction substring match between a room name
+// and a Homey zone name — deliberately loose (not exact-match) since real
+// naming rarely lines up 1:1 ("Hallway" zone vs. no matching room today,
+// "Living Room" zone vs. "Living" room screen, etc).
+function roomMatchesZoneName(roomName, zoneName) {
+  if (!zoneName) return false;
+  const a = roomName.toLowerCase(), b = zoneName.toLowerCase();
+  return a.includes(b) || b.includes(a);
 }
 
 async function addEntityToRoom(roomId, entityId) {
@@ -3148,6 +3249,22 @@ async function removeTvFromRoom(roomId) {
   const map = getRoomEntityMap();
   if (map[roomId]) delete map[roomId].tv;
   if (ROOMS[roomId]) ROOMS[roomId].tv = null;
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function addClimateToRoom(roomId, deviceId) {
+  const map = getRoomEntityMap();
+  if (!map[roomId]) map[roomId] = { lighting: [] };
+  map[roomId].climateDeviceId = deviceId;
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function removeClimateFromRoom(roomId) {
+  const map = getRoomEntityMap();
+  if (map[roomId]) delete map[roomId].climateDeviceId;
+  if (ROOMS[roomId]) ROOMS[roomId].climateDeviceId = null;
   saveRoomEntityMap(map);
   await refreshAfterAdminChange(map);
 }
