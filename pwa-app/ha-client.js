@@ -150,6 +150,25 @@ class HAClient {
     return this._send({ type: "config/entity_registry/list" });
   }
 
+  // Undocumented on purpose — HA's own frontend energy dashboard uses this
+  // exact WS command, but the project explicitly doesn't document it since
+  // it's subject to change without notice (see home-assistant/core#56052).
+  // Used here for real day-by-day energy totals (Solar/Grid/Battery),
+  // which get_states/get_history can't give — those only cover recent
+  // short-term state changes, not the long-term recorder statistics this
+  // needs. types: ["change"] returns how much accumulated *during* each
+  // period directly, rather than needing to diff cumulative sums by hand.
+  async getStatistics(entityIds, startTime, endTime, period = "day") {
+    return this._send({
+      type: "recorder/statistics_during_period",
+      start_time: startTime,
+      end_time: endTime,
+      statistic_ids: entityIds,
+      period,
+      types: ["change"],
+    });
+  }
+
   async getDeviceRegistry() {
     return this._send({ type: "config/device_registry/list" });
   }

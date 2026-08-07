@@ -929,18 +929,6 @@ function icons() { lucide.createIcons({ attrs: { "stroke-width": 1.75 } }); }
 
 const POWER = {
   totalKw: 17.9,
-  // Categorical colors matched to the real Top Consumers ring gauge (iOS-style palette) —
-  // color is data-identity here, not a brand accent, per how Savant actually uses color.
-  // toggleable consumers (chargers) get an ON/OFF switch in the row; everything
-  // else gets a "..." menu — matches the real Top Consumers screenshot exactly
-  // (Model X Charger / Rivian Charger have toggles, HVAC/Pool/Lighting don't).
-  consumers: [
-    { name: "Tesla Charger", watts: "7.4 kW", color: "#BF5AF2", icon: "car", toggleable: true, on: true },
-    { name: "HVAC", watts: "1.2 kW", color: "#0A84FF", icon: "snowflake", toggleable: false },
-    { name: "Water Heater (Rinnai)", watts: "480 W", color: "#FF9F0A", icon: "flame", toggleable: false },
-    { name: "Kitchen", watts: "310 W", color: "#32D74B", icon: "utensils-crossed", toggleable: false },
-    { name: "Server Rack", watts: "290 W", color: "#FF375F", icon: "server", toggleable: true, on: true },
-  ],
   liveConsumption: { current: 3.2, totalToday: 12 },
   battery: { pct: 92, charging: true, rate: "2.3 kW", eta: "1h 51m" },
   // Source mix — only used by the iPad Energy Dashboard's Power Mix + Overview cards,
@@ -955,24 +943,6 @@ const POWER = {
     setTemp: 120, recirculation: "Active", flow: "Standby",
     mode: "Recirculation + On-Demand", vacationMode: false,
   },
-  history: {
-    days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    series: [
-      { name: "Solar", color: "#FFD60A", kind: "source", on: true, values: [2.1, 3.4, 2.8, 4.0, 3.2, 1.5, 2.9] },
-      { name: "Grid", color: "#FF453A", kind: "source", on: true, values: [5.0, 6.0, 7.0, 6.5, 7.1, 8.0, 6.0] },
-      { name: "Battery", color: "#34C759", kind: "source", on: true, values: [1.0, 2.0, 1.5, 2.5, 2.1, 1.0, 1.8] },
-      { name: "Tesla Charger", color: "#BF5AF2", kind: "consumer", on: false, values: [6.0, 7.0, 8.0, 5.0, 7.4, 6.0, 7.0] },
-      { name: "HVAC", color: "#0A84FF", kind: "consumer", on: false, values: [1.0, 1.1, 1.3, 1.2, 1.2, 1.0, 1.1] },
-    ],
-  },
-  evCharger: { name: "Garage Bay 2", charging: true, sessionKwh: 2.9, remaining: "1.5h", livePower: 1.6, rate: "Max", lastScene: "6:20pm", timeline: [0.8, 1.2, 1.6, 1.4, 1.6, 1.5, 1.6] },
-  events: [
-    { time: "2:01pm", text: "Pull Pump is turned off" },
-    { time: "11:42am", text: "Tesla Charger started charging" },
-    { time: "9:15am", text: "Storm Watch activated" },
-    { time: "7:30am", text: "HVAC mode changed to Auto" },
-  ],
-  dailyTotal: { kwh: 142, changePct: 30, direction: "more" },
 };
 
 function renderRail() {
@@ -1201,15 +1171,68 @@ function renderEnergyModeCard() {
     </div>`;
 }
 
-// History/Automation/EV Charging/Events (below) are NOT wired to real data
-// as of the 2026-08-06 Energy screen pass — Overview and Water Heater are.
-// History would need HA's get_history/get_statistics for real Powerwall
-// time series (real, just not done yet). Automation's pill list has no
-// backing entity to read from. EV Charging has zero real data — no EV
-// charger entity exists anywhere in this HA instance. Events reuses mock
-// POWER.events. Left as-is rather than fabricating a "real" version.
+// History (2026-08-07) — real 7-day daily energy totals via HA's recorder
+// statistics (see HAClient.getStatistics), not mock. Sources only: Solar/
+// Grid/Battery have real cumulative energy sensors (sensor.my_home_*)
+// backing them. Consumers was removed entirely rather than fixed — no
+// per-device wattage/energy data exists anywhere in this HA instance for
+// any consumer (Tesla Charger, HVAC, etc were fabricated names with no
+// backing entity at all), so there was nothing real to wire it to.
+// EV Charging and Message Center (formerly "Events") were also removed
+// entirely for the same reason: zero backing entities, not fixable by
+// wiring, only by fabricating. Automation's pill list still has no
+// backing entity either, but is left as its own known, separately-scoped
+// project (a real rule builder), not simple mock data to remove.
+const ENERGY_HISTORY_SOURCES = [
+  { name: "Solar", color: "#FFD60A", entityId: "sensor.my_home_solar_generated" },
+  { name: "Grid", color: "#FF453A", entityId: "sensor.my_home_grid_imported" },
+  { name: "Battery", color: "#34C759", entityId: "sensor.my_home_battery_charged" },
+];
+let energyHistoryCache = null; // { days: [...], series: [{name, color, values}] }
+let energyHistoryFetchInFlight = false;
+
+async function refreshEnergyHistory() {
+  if (energyHistoryFetchInFlight || !window.haClient || !window.haClient.connected) return;
+  energyHistoryFetchInFlight = true;
+  try {
+    const end = new Date();
+    const start = new Date(end.getTime() - 6 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    const stats = await window.haClient.getStatistics(
+      ENERGY_HISTORY_SOURCES.map(s => s.entityId),
+      start.toISOString(),
+      end.toISOString(),
+      "day"
+    );
+    const dayLabels = [];
+    const dayCount = 7;
+    for (let i = 0; i < dayCount; i++) {
+      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+      dayLabels.push(d.toLocaleDateString(undefined, { weekday: "short" }));
+    }
+    const series = ENERGY_HISTORY_SOURCES.map(s => {
+      const points = (stats && stats[s.entityId]) || [];
+      const values = dayLabels.map((_, i) => {
+        const p = points[i];
+        return p && typeof p.change === "number" ? p.change : 0;
+      });
+      return { name: s.name, color: s.color, values, on: true };
+    });
+    energyHistoryCache = { days: dayLabels, series };
+  } catch (e) {
+    console.error("refreshEnergyHistory failed", e);
+  } finally {
+    energyHistoryFetchInFlight = false;
+  }
+  if (currentRoom === "power" && powerTab === "history") renderPowerContent();
+}
+
 function renderEnergyHistory() {
-  const h = POWER.history;
+  if (!energyHistoryCache) {
+    refreshEnergyHistory();
+    return `<div class="kv-section"><div class="kv-row"><div class="kv-left"><div class="kv-name" style="opacity:0.5">Loading…</div></div></div></div>`;
+  }
+  const h = energyHistoryCache;
   const w = 320, hgt = 140, pad = 10;
   const maxVal = Math.max(...h.series.filter(s => s.on).flatMap(s => s.values), 1);
   const points = s => s.values.map((v, i) => {
@@ -1220,7 +1243,7 @@ function renderEnergyHistory() {
   const legendRow = s => `
     <div class="kv-row">
       <div class="kv-left"><span class="mini-legend-dot" style="background:${s.color}"></span><div class="kv-name">${s.name}</div></div>
-      <button class="notif-check ${s.on ? "on" : ""}" style="border-radius:5px" data-history-toggle="${s.name}">${ico("check", "i14")}</button>
+      <div class="kv-value">${s.values.reduce((a, b) => a + b, 0).toFixed(1)} kWh</div>
     </div>`;
   return `
     <div class="history-chart-wrap">
@@ -1229,10 +1252,8 @@ function renderEnergyHistory() {
       </svg>
       <div class="history-days">${h.days.map(d => `<span>${d}</span>`).join("")}</div>
     </div>
-    <div class="section-label-sm" style="margin-top:20px">Sources</div>
-    <div class="kv-section">${h.series.filter(s => s.kind === "source").map(legendRow).join("")}</div>
-    <div class="section-label-sm" style="margin-top:20px">Consumers</div>
-    <div class="kv-section">${h.series.filter(s => s.kind === "consumer").map(legendRow).join("")}</div>`;
+    <div class="section-label-sm" style="margin-top:20px">Sources · last 7 days</div>
+    <div class="kv-section">${h.series.map(legendRow).join("")}</div>`;
 }
 
 function renderPowerAutomation() {
@@ -1255,42 +1276,6 @@ function renderPowerAutomation() {
     </div>`;
 }
 
-function renderEVCharging() {
-  const ev = POWER.evCharger;
-  return `
-    <div class="section-label-sm">${ev.name}</div>
-    <div class="ev-stats-row">
-      <div class="ev-stat"><div class="ev-stat-val">${ev.sessionKwh} kWh</div><div class="ev-stat-label">This Session</div></div>
-      <div class="ev-stat"><div class="ev-stat-val">${ev.remaining}</div><div class="ev-stat-label">Remaining</div></div>
-      <div class="ev-stat"><div class="ev-stat-val">${ev.livePower} kW</div><div class="ev-stat-label">Live Power</div></div>
-    </div>
-    <div class="badge ok" style="display:inline-block; margin:16px 0">${ev.charging ? "CHARGING" : "IDLE"}</div>
-    <div class="ev-timeline">${ev.timeline.map(v => `<div class="ev-bar" style="height:${Math.max((v / 2) * 100, 4)}%"></div>`).join("")}</div>
-    <button class="bypass-btn" data-ev-stop style="margin-top:20px; ${ev.charging ? "" : "opacity:0.4; pointer-events:none;"}">${ev.charging ? "Stop Charging" : "Not Charging"}</button>
-    <div class="kv-row" style="margin-top:4px">
-      <div class="kv-name">Last Activated Scene</div>
-      <div class="kv-value">${ev.lastScene}</div>
-    </div>
-    <div class="kv-row">
-      <div class="kv-name">Rate</div>
-      <div class="kv-value linked">${ev.rate} <span class="kv-chevron">›</span></div>
-    </div>`;
-}
-
-function renderMessageCenter() {
-  return `
-    <div class="security-list">
-      ${POWER.events.map(e => `
-        <div class="security-row">
-          <div class="light-row-name">${e.text}</div>
-          <div class="light-row-sub">${e.time}</div>
-        </div>`).join("")}
-    </div>
-    <div class="kv-row" style="margin-top:10px; border-top:1px solid var(--hairline-soft); padding-top:16px">
-      <div class="kv-name">Today's Total</div>
-      <div class="kv-value">${POWER.dailyTotal.kwh} kWh <span style="color:#FF9F0A">↗${POWER.dailyTotal.changePct}% ${POWER.dailyTotal.direction}</span></div>
-    </div>`;
-}
 
 function renderPowerOverview() {
   return `
@@ -1352,16 +1337,12 @@ function renderPowerContent() {
     ["overview", "Overview"],
     ["history", "History"],
     ["automation", "Automation"],
-    ["ev", "EV Charging"],
     ["waterheater", "Water Heater"],
-    ["events", "Events"],
   ];
   const bodies = {
     history: renderEnergyHistory,
     automation: renderPowerAutomation,
-    ev: renderEVCharging,
     waterheater: renderWaterHeater,
-    events: renderMessageCenter,
   };
   content.innerHTML = `
     <div class="header">
@@ -1394,28 +1375,9 @@ function renderPowerContent() {
   const stormCancel = document.querySelector("[data-storm-cancel]");
   if (stormCancel) stormCancel.addEventListener("click", () => { energyMode = "eco"; renderPowerContent(); });
 
-  document.querySelectorAll("[data-history-toggle]").forEach(el => {
-    el.addEventListener("click", () => {
-      const s = POWER.history.series.find(s => s.name === el.dataset.historyToggle);
-      s.on = !s.on;
-      renderPowerContent();
-    });
-  });
-
   document.querySelectorAll("[data-auto-remove]").forEach(el => {
     el.addEventListener("click", () => el.closest(".automation-pill").remove());
   });
-
-  document.querySelectorAll("[data-consumer-toggle]").forEach(el => {
-    el.addEventListener("click", () => {
-      const c = POWER.consumers[+el.dataset.consumerToggle];
-      c.on = !c.on;
-      renderPowerContent();
-    });
-  });
-
-  const evStop = document.querySelector("[data-ev-stop]");
-  if (evStop) evStop.addEventListener("click", () => { POWER.evCharger.charging = false; renderPowerContent(); });
 }
 
 function avgBrightness(room) {
