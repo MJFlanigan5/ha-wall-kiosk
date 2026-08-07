@@ -64,8 +64,15 @@ class HomeyClient {
 // setable enum ids containing "mode") rather than any one vendor's device,
 // so any Homey thermostat-class device works here, not just the Nest this
 // was built against (see homeyThermostatCapabilities usage in index.html).
+//
+// Requires BOTH Homey's own semantic device.class ("thermostat" -- Homey's
+// standard taxonomy, the same field every Homey app sets regardless of
+// vendor) AND the capability check, not capability alone (found 2026-08-07:
+// other device types, e.g. some water heater apps, also expose a
+// target_temperature-shaped setpoint capability, which capability-matching
+// alone would misclassify as a thermostat).
 function isHomeyThermostat(device) {
-  return (device.capabilities || []).some(c => c.startsWith("target_temperature"));
+  return device.class === "thermostat" && (device.capabilities || []).some(c => c.startsWith("target_temperature"));
 }
 
 function homeyThermostatCapabilities(device) {
