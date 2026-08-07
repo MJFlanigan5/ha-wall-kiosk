@@ -224,7 +224,16 @@ ApplicationWindow {
                         anchors.margins: 14
                         spacing: 4
 
+                        Image {
+                            source: (musicCard.playing && musicCard.playing.mediaPlaying) ? "icons/music-on.svg" : "icons/music.svg"
+                            sourceSize.width: 18
+                            sourceSize.height: 18
+                            Layout.bottomMargin: 8
+                        }
+
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: musicCard.playing ? (musicCard.playing.mediaPlaying ? musicCard.playing.mediaTrack : "Paused") : "Nothing playing"
                             font.family: Theme.fontHead
                             font.pixelSize: 17
@@ -232,6 +241,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: musicCard.playing ? root.displayNameFor(musicCard.playing.mediaName) : "Music"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
@@ -248,7 +259,7 @@ ApplicationWindow {
                             Rectangle {
                                 width: 40; height: 32; radius: Theme.radiusChip
                                 color: Theme.base; border.color: Theme.hairline; border.width: 1
-                                Text { anchors.centerIn: parent; text: "⏮"; color: Theme.textDim; font.pixelSize: 14 }
+                                Image { anchors.centerIn: parent; source: "icons/skip-back.svg"; sourceSize.width: 14; sourceSize.height: 14 }
                                 MouseArea {
                                     anchors.fill: parent
                                     onClicked: haClient.callService("media_player", "media_previous_track", [musicCard.playing.mediaEntityId])
@@ -257,10 +268,11 @@ ApplicationWindow {
                             Rectangle {
                                 width: 40; height: 32; radius: Theme.radiusChip
                                 color: Theme.base; border.color: Theme.hairline; border.width: 1
-                                Text {
+                                Image {
                                     anchors.centerIn: parent
-                                    text: musicCard.playing && musicCard.playing.mediaPlaying ? "⏸" : "⏵"
-                                    color: Theme.textDim; font.pixelSize: 14
+                                    source: (musicCard.playing && musicCard.playing.mediaPlaying) ? "icons/pause.svg" : "icons/play.svg"
+                                    sourceSize.width: 14
+                                    sourceSize.height: 14
                                 }
                                 MouseArea {
                                     anchors.fill: parent
@@ -270,7 +282,7 @@ ApplicationWindow {
                             Rectangle {
                                 width: 40; height: 32; radius: Theme.radiusChip
                                 color: Theme.base; border.color: Theme.hairline; border.width: 1
-                                Text { anchors.centerIn: parent; text: "⏭"; color: Theme.textDim; font.pixelSize: 14 }
+                                Image { anchors.centerIn: parent; source: "icons/skip-forward.svg"; sourceSize.width: 14; sourceSize.height: 14 }
                                 MouseArea {
                                     anchors.fill: parent
                                     onClicked: haClient.callService("media_player", "media_next_track", [musicCard.playing.mediaEntityId])
@@ -296,13 +308,21 @@ ApplicationWindow {
                         anchors.margins: 14
                         spacing: 4
 
-                        Text {
-                            text: "Hallway"
-                            font.family: Theme.fontBody
-                            font.pixelSize: 11
-                            color: Theme.textDim
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.bottomMargin: 8
+                            Image { source: "icons/thermometer.svg"; sourceSize.width: 18; sourceSize.height: 18 }
+                            Item { Layout.fillWidth: true }
+                            Text {
+                                text: "Hallway"
+                                font.family: Theme.fontBody
+                                font.pixelSize: 11
+                                color: Theme.textDim
+                            }
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: !isNaN(comfortCard.thermoTemp) ? Math.round(comfortCard.thermoTemp) + "°" : "—"
                             font.family: Theme.fontHead
                             font.pixelSize: 17
@@ -310,6 +330,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: !isNaN(comfortCard.thermoCool) ? "Comfort · cools to " + Math.round(comfortCard.thermoCool) + "°" : "Comfort"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
@@ -365,7 +387,10 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 4
+                        Image { source: "icons/package.svg"; sourceSize.width: 18; sourceSize.height: 18; Layout.bottomMargin: 8 }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: root.packagesTotal()
                             font.family: Theme.fontHead
                             font.pixelSize: 17
@@ -373,6 +398,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: "Packages"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
@@ -393,7 +420,10 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 4
+                        Image { source: "icons/zap.svg"; sourceSize.width: 18; sourceSize.height: 18; Layout.bottomMargin: 8 }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: root.fmtKw(haClient.ambient.power)
                             font.family: Theme.fontHead
                             font.pixelSize: 17
@@ -401,6 +431,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: "Energy Flow"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
@@ -440,7 +472,10 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 4
+                        Image { source: "icons/droplets.svg"; sourceSize.width: 18; sourceSize.height: 18; Layout.bottomMargin: 8 }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: haClient.ambient.water_usage.state != null ? parseFloat(haClient.ambient.water_usage.state).toFixed(1) : "—"
                             font.family: Theme.fontHead
                             font.pixelSize: 17
@@ -448,6 +483,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: "gal · Water Today"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
@@ -468,7 +505,10 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 4
+                        Image { source: "icons/sprout.svg"; sourceSize.width: 18; sourceSize.height: 18; Layout.bottomMargin: 8 }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: haClient.ambient.home_usage.state != null ? parseFloat(haClient.ambient.home_usage.state).toFixed(1) : "—"
                             font.family: Theme.fontHead
                             font.pixelSize: 17
@@ -476,6 +516,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: "kWh · Home Usage"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
@@ -496,7 +538,10 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 4
+                        Image { source: "icons/droplet.svg"; sourceSize.width: 18; sourceSize.height: 18; Layout.bottomMargin: 8 }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: {
                                 var attrs = haClient.ambient.water_heater.attributes
                                 var t = attrs ? attrs.temperature : null
@@ -508,6 +553,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: "Water Heater"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
@@ -572,8 +619,17 @@ ApplicationWindow {
                                 spacing: 4
 
                                 RowLayout {
-                                    spacing: 6
+                                    Layout.fillWidth: true
+                                    Image {
+                                        source: modelData.lightOn ? "icons/lightbulb-on.svg" : "icons/lightbulb.svg"
+                                        sourceSize.width: 18
+                                        sourceSize.height: 18
+                                    }
+                                    Item { Layout.fillWidth: true }
                                     Text {
+                                        Layout.maximumWidth: 70
+                                        horizontalAlignment: Text.AlignRight
+                                        wrapMode: Text.WordWrap
                                         text: modelData.displayName
                                         font.family: Theme.fontBody
                                         font.pixelSize: 11
@@ -589,6 +645,8 @@ ApplicationWindow {
                                 Item { Layout.fillHeight: true }
 
                                 Text {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
                                     text: modelData.hasLight ? root.brightnessWord(modelData.lightPct) : "No light"
                                     font.family: Theme.fontHead
                                     font.pixelSize: 17
@@ -597,6 +655,8 @@ ApplicationWindow {
                                 }
 
                                 Text {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
                                     text: modelData.hasLight ? modelData.lightName : "Fixture pending"
                                     font.family: Theme.fontBody
                                     font.pixelSize: 12
@@ -647,7 +707,16 @@ ApplicationWindow {
                         anchors.margins: 14
                         spacing: 4
 
+                        Image {
+                            source: root.isArmed(securityCard.alarmState) ? "icons/shield-check-on.svg" : "icons/shield.svg"
+                            sourceSize.width: 18
+                            sourceSize.height: 18
+                            Layout.bottomMargin: 8
+                        }
+
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: root.alarmLabel(securityCard.alarmState)
                             font.family: Theme.fontHead
                             font.pixelSize: 17
@@ -655,6 +724,8 @@ ApplicationWindow {
                             color: Theme.text
                         }
                         Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             text: "Security"
                             font.family: Theme.fontBody
                             font.pixelSize: 12
