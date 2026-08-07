@@ -1663,26 +1663,44 @@ function renderClimate(room) {
 }
 
 // Homey-only right now (2026-08-07) — no real HA `climate` domain entities
-// exist in this instance yet. Polls on an interval while the assigned
-// room is open, same on-demand-only pattern as Cameras/Sensors, not a
-// standing subscription. Writes go straight to Homey then re-fetch,
-// mirroring Ambient Mode's Comfort card — HA's mirrored sensors for this
-// bridge were confirmed to lag 15s+ behind the real device.
-async function refreshClimateLive(room) {
-  if (!room.climateDeviceId || !window.homeyClient) return;
+// exist in this instance yet. Keyed by deviceId (not by room) so this one
+// system covers both a room's Climate section AND Ambient Mode's Comfort
+// tile — consolidated 2026-08-07 from two separate, duplicate systems
+// after the room Climate section was built. Polls on an interval only
+// while something using a given device is actually open, same
+// on-demand-only pattern as Cameras/Sensors, not a standing subscription.
+// Writes go straight to Homey then re-fetch — HA's mirrored sensors for
+// this bridge were confirmed to lag 15s+ behind the real device.
+async function refreshClimateDevice(deviceId) {
+  if (!deviceId || !window.homeyClient) return null;
   try {
-    const device = await window.homeyClient.getDevice(room.climateDeviceId);
-    climateLiveCache[room.climateDeviceId] = device;
-  } catch (e) { console.error("refreshClimateLive failed", e); }
-  if (ROOMS[currentRoom] === room) renderContent();
+    const device = await window.homeyClient.getDevice(deviceId);
+    climateLiveCache[deviceId] = device;
+    return device;
+  } catch (e) { console.error("refreshClimateDevice failed", e); return null; }
 }
 
-async function writeClimateCapability(room, capabilityId, value) {
-  if (!room.climateDeviceId || !window.homeyClient) return;
+async function writeClimateCapability(deviceId, capabilityId, value) {
+  if (!deviceId || !window.homeyClient) return;
+  // Eco mode blocks every manual write on the real device this was built
+  // against (confirmed live) — turn off any setable boolean "eco"-ish
+  // capability before a temperature-setpoint write, generically (capability
+  // *shape*, not a hardcoded "nest_thermostat_eco" id, so this still works
+  // for a different Homey thermostat that either has no eco capability at
+  // all, or one under a different id). Best-effort and separately caught:
+  // confirmed live that Nest's API 500s this exact call as an invalid
+  // no-op transition when eco is already off, which must not block the
+  // actual temperature write below it.
+  const device = climateLiveCache[deviceId];
+  const caps = device ? (device.capabilitiesObj || {}) : {};
+  const ecoCap = Object.values(caps).find(c => c.setable && c.type === "boolean" && /eco/i.test(c.id));
+  if (ecoCap && capabilityId.startsWith("target_temperature")) {
+    try { await window.homeyClient.setCapability(deviceId, ecoCap.id, false); } catch (e) { /* already off — expected, ignore */ }
+  }
   try {
-    await window.homeyClient.setCapability(room.climateDeviceId, capabilityId, value);
+    await window.homeyClient.setCapability(deviceId, capabilityId, value);
   } catch (e) { console.error("writeClimateCapability failed", e); }
-  await refreshClimateLive(room);
+  await refreshClimateDevice(deviceId);
 }
 
 function fmtTime(s) {
@@ -2161,14 +2179,14 @@ function renderContent() {
   wireInteractions(room);
 
   if (room.climateDeviceId) {
-    // Only fetch immediately if there's no cached data yet — refreshClimateLive
-    // already re-renders (and therefore re-enters this block) when IT
-    // finishes fetching, and after a write too (writeClimateCapability
-    // calls it directly). Firing it unconditionally here as well meant
-    // every write, and every re-render for any reason, triggered two
-    // Homey device fetches instead of one.
-    if (!climateLiveCache[room.climateDeviceId]) refreshClimateLive(room);
-    climateRefreshTimer = setInterval(() => refreshClimateLive(room), 20000);
+    const rerenderIfStillHere = () => { if (ROOMS[currentRoom] === room) renderContent(); };
+    // Only fetch immediately if there's no cached data yet — a write
+    // (writeClimateCapability) already triggers its own refetch, so
+    // firing one unconditionally here too meant every write, and every
+    // re-render for any reason, triggered two Homey device fetches
+    // instead of one.
+    if (!climateLiveCache[room.climateDeviceId]) refreshClimateDevice(room.climateDeviceId).then(rerenderIfStillHere);
+    climateRefreshTimer = setInterval(() => refreshClimateDevice(room.climateDeviceId).then(rerenderIfStillHere), 20000);
   }
 }
 
@@ -2403,8 +2421,10 @@ function wireInteractions(room) {
   // has no drag control since Homey's measure_humidity capability is
   // read-only (a sensor reading, not a setpoint).
   if (room.climateDeviceId) {
-    const device = climateLiveCache[room.climateDeviceId];
+    const deviceId = room.climateDeviceId;
+    const device = climateLiveCache[deviceId];
     const caps = device ? homeyThermostatCapabilities(device) : { targets: [] };
+    const rerenderIfStillHere = () => { if (ROOMS[currentRoom] === room) renderContent(); };
     // cap.value is mutated optimistically before the write resolves —
     // without it, two rapid clicks both read the same stale cached value
     // and compute the same target (write, write again with no net
@@ -2415,7 +2435,7 @@ function wireInteractions(room) {
       el.addEventListener("click", () => {
         const next = Math.min(cap.max, cap.value + 1);
         cap.value = next;
-        writeClimateCapability(room, cap.id, next);
+        writeClimateCapability(deviceId, cap.id, next).then(rerenderIfStillHere);
       });
     });
     document.querySelectorAll("[data-climate-target-down]").forEach(el => {
@@ -2424,13 +2444,13 @@ function wireInteractions(room) {
       el.addEventListener("click", () => {
         const next = Math.max(cap.min, cap.value - 1);
         cap.value = next;
-        writeClimateCapability(room, cap.id, next);
+        writeClimateCapability(deviceId, cap.id, next).then(rerenderIfStillHere);
       });
     });
     document.querySelectorAll("[data-climate-mode]").forEach(el => {
       el.addEventListener("click", () => {
         if (!caps.modeCap) return;
-        writeClimateCapability(room, caps.modeCap.id, el.dataset.climateMode);
+        writeClimateCapability(deviceId, caps.modeCap.id, el.dataset.climateMode).then(rerenderIfStillHere);
       });
     });
   }
@@ -2589,23 +2609,12 @@ let ambientAlarmState = null;
 const AMBIENT_KITCHEN_TEMP_ENTITY = "sensor.apollo_mtr_1_5452d0_dps310_temperature";
 let ambientKitchenTempState = null;
 
-// Comfort tile, corrected (2026-08-06) — the Hallway Nest thermostat itself
-// is the real climate-control device (Homey drives it; the device was
-// deliberately excluded from the Homey->MQTT->HA bridge until now, flipped
-// on tonight so it shows up here without re-enabling HA's own competing
-// Nest integration). This is a genuinely better match for the reference's
-// Comfort tile than a bare room sensor — it's the actual thermostat's own
-// current reading, not a proxy.
-const AMBIENT_THERMOSTAT_TEMP_ENTITY = "sensor.thermostat_temperature";
-const AMBIENT_THERMOSTAT_COOL_ENTITY = "sensor.thermostat_cool_temperature";
-let ambientThermostatTempState = null;
-let ambientThermostatCoolState = null;
-// Set right after a Homey write (2026-08-06) — confirmed live that HA's
-// mirrored sensors lag well behind the real device (15+ seconds, possibly
-// longer/never depending on the MQTT bridge's own poll cycle), so the
-// card reads from here first when present instead of waiting on that
-// separate, slower path.
-let homeyThermostatOverride = null; // { temp, cool }
+// Comfort tile, corrected (2026-08-06), consolidated (2026-08-07) — the
+// Hallway Nest thermostat is the real climate-control device (Homey
+// drives it). Used to read from a dedicated HA-mirrored-sensor pair with
+// its own override cache; now reads from the same climateLiveCache/
+// writeClimateCapability system the room Climate section uses, keyed by
+// NEST_THERMOSTAT_DEVICE_ID directly — one system instead of two.
 
 // Homey device/mood IDs (2026-08-06) — thermostat writes and moods, both
 // confirmed real but unreachable through HA (climate.hallway is a dead
@@ -2873,8 +2882,6 @@ async function initLiveData() {
     refreshWaterHeaterFromHA();
     ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
     ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
-    ambientThermostatTempState = stateById.get(AMBIENT_THERMOSTAT_TEMP_ENTITY) || null;
-    ambientThermostatCoolState = stateById.get(AMBIENT_THERMOSTAT_COOL_ENTITY) || null;
     ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
     for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
       ambientPackageStates[entityId] = stateById.get(entityId) || null;
@@ -2932,12 +2939,6 @@ async function initLiveData() {
       }
       if (entityId === AMBIENT_KITCHEN_TEMP_ENTITY) {
         ambientKitchenTempState = newState;
-        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
-        return;
-      }
-      if (entityId === AMBIENT_THERMOSTAT_TEMP_ENTITY || entityId === AMBIENT_THERMOSTAT_COOL_ENTITY) {
-        if (entityId === AMBIENT_THERMOSTAT_TEMP_ENTITY) ambientThermostatTempState = newState;
-        if (entityId === AMBIENT_THERMOSTAT_COOL_ENTITY) ambientThermostatCoolState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
@@ -3573,22 +3574,17 @@ function renderAmbientActions() {
     </div>`;
   }
 
-  // Comfort tile (2026-08-06, real thermostat) — the Hallway Nest
-  // thermostat, bridged Homey -> MQTT -> HA tonight specifically for this
-  // tile (was excluded from the bridge before). Shows the thermostat's own
-  // current reading and cool setpoint — a real climate device, not a proxy
-  // room sensor.
-  const thermoTemp = homeyThermostatOverride ? homeyThermostatOverride.temp
-    : ambientThermostatTempState ? parseFloat(ambientThermostatTempState.state) : null;
-  const thermoCool = homeyThermostatOverride ? homeyThermostatOverride.cool
-    : ambientThermostatCoolState ? parseFloat(ambientThermostatCoolState.state) : null;
-  // +/- writes go through Homey directly (2026-08-06), not HA — verified
-  // live that climate.hallway is a dead restored entity with no real
-  // backing. Homey's own local API write works (confirmed via curl), the
-  // thermostat was just stuck in Eco mode blocking every write attempt
-  // tonight regardless of path; turning Eco off is now part of the write
-  // itself (see wireInteractions' data-comfort-temp handler) rather than a
-  // separate step, per Mike's direction.
+  // Comfort tile (2026-08-06, real thermostat; consolidated 2026-08-07 onto
+  // the shared climateLiveCache/writeClimateCapability system also used by
+  // the room Climate section — see refreshClimateDevice). Shows the
+  // thermostat's own current reading and cool setpoint — a real climate
+  // device, not a proxy room sensor. +/- writes go through Homey directly,
+  // not HA — climate.hallway is a dead restored entity with no real backing.
+  const nestDevice = climateLiveCache[NEST_THERMOSTAT_DEVICE_ID];
+  const nestCaps = nestDevice ? homeyThermostatCapabilities(nestDevice) : null;
+  const thermoTemp = nestCaps && nestCaps.measureTemp ? nestCaps.measureTemp.value : null;
+  const coolCap = nestCaps ? nestCaps.targets.find(t => t.id === "target_temperature.cool") : null;
+  const thermoCool = coolCap ? coolCap.value : null;
   const comfortControls = (window.homeyClient && thermoCool != null) ? `
     <div class="ambient-card-controls">
       <button class="ambient-stepper-btn" data-comfort-temp="down" style="flex:1">−</button>
@@ -3849,30 +3845,10 @@ function renderAmbientActions() {
       e.stopPropagation();
       if (!window.homeyClient || thermoCool == null) return;
       const target = Math.round(thermoCool) + (btn.dataset.comfortTemp === "up" ? 1 : -1);
-      // Eco mode blocks every manual write (confirmed live tonight) — turn
-      // it off as part of the same action. Best-effort and separately
-      // caught: confirmed live that Nest's API 500s this exact call as an
-      // invalid no-op transition when eco is already off (real error:
-      // "SetMode command not allowed in current thermostat mode"), which
-      // must not block the actual temperature write below it.
-      try {
-        await window.homeyClient.setCapability(NEST_THERMOSTAT_DEVICE_ID, "nest_thermostat_eco", false);
-      } catch (err) { /* already off — expected, ignore */ }
-      try {
-        await window.homeyClient.setCapability(NEST_THERMOSTAT_DEVICE_ID, "target_temperature.cool", target);
-        // Read the real device back directly instead of waiting on HA's
-        // mirrored sensors, confirmed live to lag well behind (still stale
-        // 15+ seconds after a write).
-        const device = await window.homeyClient.getDevice(NEST_THERMOSTAT_DEVICE_ID);
-        const caps = device.capabilitiesObj || {};
-        homeyThermostatOverride = {
-          temp: caps.measure_temperature ? caps.measure_temperature.value : thermoTemp,
-          cool: caps["target_temperature.cool"] ? caps["target_temperature.cool"].value : target,
-        };
-        renderAmbientActions();
-      } catch (err) {
-        console.error(err);
-      }
+      // Eco-off-before-write and readback both now live in the shared
+      // writeClimateCapability (see its own comment for why).
+      await writeClimateCapability(NEST_THERMOSTAT_DEVICE_ID, "target_temperature.cool", target);
+      if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
     });
   });
 }
@@ -3908,6 +3884,12 @@ function showAmbient() {
   renderAmbientActions();
   renderAmbientQuickNav();
   document.getElementById("ambientOverlay").classList.add("visible");
+  // Comfort tile's data source (climateLiveCache) is shared with the room
+  // Climate section, which only gets populated by actually visiting a
+  // room with a climate device assigned. Ambient Mode needs to work
+  // standalone regardless, so it freshens its own specific device here —
+  // on-demand (each time the overlay opens), not a standing subscription.
+  if (window.homeyClient) refreshClimateDevice(NEST_THERMOSTAT_DEVICE_ID).then(renderAmbientActions);
 }
 
 function hideAmbient() {
