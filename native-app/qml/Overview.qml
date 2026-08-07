@@ -689,6 +689,12 @@ ApplicationWindow {
                             Rectangle {
                                 visible: modelData.hasLight
                                 Layout.alignment: Qt.AlignBottom
+                                // Extra breathing room off the card's right
+                                // edge -- 14px from the RowLayout's own
+                                // margin read as too tight/crowded next to
+                                // this bright a fill color (flagged
+                                // 2026-08-06).
+                                Layout.rightMargin: 6
                                 width: 13
                                 height: 46
                                 radius: 999
