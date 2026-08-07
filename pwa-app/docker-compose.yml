@@ -1,0 +1,7 @@
+services:
+  ha-wall-kiosk-pwa:
+    build: .
+    container_name: ha-wall-kiosk-pwa
+    restart: unless-stopped
+    ports:
+      - "8090:80"
