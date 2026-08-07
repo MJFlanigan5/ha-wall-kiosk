@@ -2902,10 +2902,23 @@ function saveGlobalActions(actions) {
 
 async function triggerQuickAction(entityId) {
   if (!window.haClient || !window.haClient.connected) return;
-  if (entityId.startsWith("script.")) {
-    await window.haClient.callService("script", "turn_on", entityId).catch(console.error);
-  } else if (entityId.startsWith("automation.")) {
-    await window.haClient.callService("automation", "trigger", entityId).catch(console.error);
+  const domain = entityId.startsWith("script.") ? "script" : entityId.startsWith("automation.") ? "automation" : null;
+  if (!domain) return;
+  const service = domain === "script" ? "turn_on" : "trigger";
+  try {
+    await window.haClient.callService(domain, service, entityId);
+  } catch (e) {
+    console.error("triggerQuickAction failed", e);
+    // Self-heal a stale cached label/state (real bug found in audit,
+    // 2026-08-07): once cached, a room's Quick Action button never
+    // re-checked itself, so if the underlying automation/script got
+    // renamed or deleted in HA, the button would keep showing the old
+    // name and silently no-op forever. A failed trigger is the natural
+    // moment to find out the cached state might be stale — evict it and
+    // refetch so the button reflects reality on the next render.
+    delete actionStateCache[entityId];
+    await refreshActionStates([entityId]);
+    render();
   }
 }
 
