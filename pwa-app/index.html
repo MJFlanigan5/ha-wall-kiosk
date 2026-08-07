@@ -708,9 +708,9 @@
     </div>
     <div class="admin-note">
       Changes save to this device only (not shared with other devices).
-      New rooms get a real Overview/Lighting screen right away; other
-      screens (climate, security, shades) show placeholder/no data until
-      those domains are wired — see docs/UI_MODES_SPEC.md.
+      New rooms get a real Overview/Lighting screen right away; Climate
+      wires up once you assign a Homey thermostat below; shades stay
+      unwired until that domain has real entities — see docs/UI_MODES_SPEC.md.
     </div>
     <div class="admin-add-row" style="margin: 16px 0 24px;">
       <input class="admin-add-select" id="adminNewRoomName" placeholder="New room name (e.g. Office)" />
@@ -745,6 +745,7 @@
       </div>
       <div class="admin-note" id="homeyStatus" style="margin-top:8px;"></div>
     </div>
+    <div id="adminRoomSuggestions"></div>
     <div id="adminRoomList"></div>
   </div>
 
@@ -2974,6 +2975,7 @@ setInterval(updateClock, 1000 * 15);
 async function openAdmin() {
   document.getElementById("adminOverlay").classList.add("visible");
   await renderAdminRoomList();
+  await renderMissingRoomSuggestions();
 }
 
 function closeAdmin() {
@@ -3016,6 +3018,79 @@ async function createNewRoom(name) {
   renderRail();
   document.getElementById("adminNewRoomName").value = "";
   await refreshAfterAdminChange(map);
+  await renderMissingRoomSuggestions();
+}
+
+// "Suggest, don't auto-build" (2026-08-07, Mike's explicit call after
+// weighing auto-generating every HA area/Homey zone as a full room
+// screen): cross-references the house's real areas/zones against Foyer's
+// existing rooms and surfaces the gap, with a real device count per
+// candidate so Mike can judge relevance himself — no hardcoded blocklist
+// for "infra" areas like Server Rack/Attic, since that wouldn't
+// generalize past this one house. Fuzzy name-matching (not exact) folds
+// an HA area and a same-ish-named Homey zone into one suggestion instead
+// of two, and excludes anything that already matches an existing room.
+async function getMissingRoomSuggestions() {
+  if (!window.haClient || !window.haClient.connected) return [];
+  let states, entityAreaName;
+  try {
+    states = await window.haClient.getStates();
+    entityAreaName = await getSensorsAreaMap();
+  } catch (e) { console.error(e); return []; }
+
+  const countByName = new Map();
+  const addCount = (name, n) => {
+    const existingKey = [...countByName.keys()].find(k => roomMatchesZoneName(k, name));
+    countByName.set(existingKey || name, (countByName.get(existingKey) || 0) + n);
+  };
+
+  states
+    .filter(s => s.entity_id.startsWith("light.") || s.entity_id.startsWith("media_player."))
+    .forEach(s => {
+      const area = entityAreaName.get(s.entity_id);
+      if (area && area !== "Other") addCount(area, 1);
+    });
+
+  if (window.homeyClient) {
+    try {
+      const [devices, zones] = await Promise.all([window.homeyClient.listDevices(), window.homeyClient.listZones()]);
+      const zoneNameById = new Map(zones.map(z => [z.id, z.name]));
+      devices.forEach(d => {
+        const zoneName = zoneNameById.get(d.zone);
+        if (zoneName) addCount(zoneName, 1);
+      });
+    } catch (e) { console.error(e); }
+  }
+
+  const existingRoomNames = Object.values(ROOMS).map(r => r.name);
+  return [...countByName.entries()]
+    .filter(([name]) => !existingRoomNames.some(rn => roomMatchesZoneName(rn, name)))
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+async function renderMissingRoomSuggestions() {
+  const el = document.getElementById("adminRoomSuggestions");
+  if (!el) return;
+  const suggestions = await getMissingRoomSuggestions();
+  if (!suggestions.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="admin-room-block">
+    <h3>Rooms not yet in Foyer</h3>
+    <div class="admin-note" style="margin-bottom:10px;">
+      Real areas/zones from Home Assistant and Homey with devices in
+      them, but no Foyer room yet. Adding one gives it a real
+      Overview/Lighting screen right away — assign its devices from the
+      room list below afterward.
+    </div>
+    ${suggestions.map(s => `
+      <div class="admin-entity-row">
+        <span>${s.name} <span style="opacity:0.5">(${s.count} device${s.count === 1 ? "" : "s"})</span></span>
+        <button class="admin-add-btn" data-add-suggested-room="${s.name}">Add Room</button>
+      </div>`).join("")}
+  </div>`;
+  el.querySelectorAll("[data-add-suggested-room]").forEach(btn => {
+    btn.addEventListener("click", () => createNewRoom(btn.dataset.addSuggestedRoom));
+  });
 }
 
 async function renderAdminRoomList() {
