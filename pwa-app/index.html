@@ -1337,7 +1337,12 @@ function renderWaterHeater() {
         <div class="kv-left"><div class="kv-icon">${ico("plane", "i18")}</div><div class="kv-name">Vacation Mode</div></div>
         <button class="switch-btn ${wh.vacationMode ? "on" : ""}" data-vacation>${wh.vacationMode ? "ON" : "OFF"}</button>
       </div>
-    </div>`;
+    </div>
+    <div class="section-label-sm" style="margin-top:20px">${ico("droplet", "i14")}Quick Action</div>
+    <div class="light-list"><div class="switch-row">
+      <div><div class="light-row-name">Shower Prep</div><div class="light-row-sub">Runs the real recirculation script — the setpoint itself isn't controllable through this integration (confirmed live), so this is the actual lever, not a temperature dial</div></div>
+      <button class="switch-btn" data-shower-prep>Run</button>
+    </div></div>`;
 }
 
 function renderPowerContent() {
@@ -1376,6 +1381,11 @@ function renderPowerContent() {
     if (window.haClient && window.haClient.connected) {
       window.haClient.callService("water_heater", "set_away_mode", WATER_HEATER_ENTITY, { away_mode: next ? "on" : "off" }).catch(console.error);
     }
+  });
+  const showerPrepTabBtn = document.querySelector("[data-shower-prep]");
+  if (showerPrepTabBtn) showerPrepTabBtn.addEventListener("click", () => {
+    if (!window.haClient || !window.haClient.connected) return;
+    window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(console.error);
   });
 
   document.querySelectorAll("[data-energy-mode]").forEach(el => {
