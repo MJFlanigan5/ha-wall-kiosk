@@ -1,13 +1,39 @@
 # Native App Spec
 
 A real native app — no browser engine at all, the same approach
-Savant/Control4/Crestron actually use on their own touch panels. This is
-the kiosk software for this project; there's no browser-based fallback
-(touchkio or otherwise) in the plan.
+Savant/Control4/Crestron actually use on their own touch panels. Explored
+as the kiosk software for this project; see the status note below for
+where this stands relative to the PWA.
 
-**Status: MVP phase (1 + 2) in progress.** Phases 3+ remain
-deferred/incremental — add screens as needed rather than porting
-everything up front.
+**Status: paused (2026-08-07).** The PWA is the kiosk plan for the Pi —
+deployed via a Chromium kiosk, not this native app. Phase 2 (the Overview/
+Ambient screen, live HA data, one write action) got real, working effort:
+a full icon pipeline built from Lucide SVGs, entity-registry renames, and
+several rounds of pixel-level layout debugging to reach visual parity with
+the PWA's Ambient Mode. That work is what surfaced the actual tradeoff —
+QML's Layouts module needed real fighting (an obscure GridLayout column-
+sizing quirk, `Layout.minimumWidth` defaulting to implicit content width,
+took multiple passes to track down) to reach the same result the PWA's
+CSS Grid already had for free. Ambient is also the *simplest* of the
+~15-25 screens this spec originally scoped — the interior room screens and
+Admin Mode would mean repeating that same parity-chasing effort several
+times over, for a payoff (lower memory footprint, a "real product" feel)
+that isn't decisive on Pi 5 hardware, which has RAM to spare for a single
+kiosk tab.
+
+**What would justify picking this back up:** a specific hardware need the
+PWA genuinely can't reach — not visual polish. See
+[[project_ha_native_app_hardware_ideas]]-equivalent ideas: direct GPIO (a
+physical button/dial), a PIR motion sensor to wake the screen without a
+network round-trip, or direct backlight control tied to ambient light — all
+things a browser has no API surface for. Absent one of those becoming a
+real requirement, this repo's `native-app/` code stays as-is (working,
+committed, not deleted) rather than being actively developed further.
+
+**Status before the pause, for reference:** MVP phase (1 + 2) was in
+progress. Phases 3+ were deferred/incremental — add screens as needed
+rather than porting everything up front. That plan is superseded by the
+pause above, not resumed at the point it left off.
 
 ## Why this matters (product thesis, not just technical)
 
@@ -50,11 +76,11 @@ Estimated part-time (evenings/weekends), matching this project's pace:
 
 | Phase | What | Estimate | Status |
 |---|---|---|---|
-| 1 | `Theme.qml` — port every design token from the mockup's CSS | 2-4 hours | **In progress** |
-| 2 | HA WebSocket client + one working screen (Overview) end-to-end, live data | 3-7 days | **In progress** |
-| 3 | Remaining screens (~15-25, ported one at a time from the HTML mockups) | 4-8 weeks | Not started |
-| 4 | Service calls (write actions) on each interactive screen | rolled into 3 | Not started |
-| 5 | Hardware testing + touch/perf polish on the real Pi | 3-5 days | Not started |
+| 1 | `Theme.qml` — port every design token from the mockup's CSS | 2-4 hours | Done |
+| 2 | HA WebSocket client + one working screen (Overview/Ambient) end-to-end, live data, one write action | 3-7 days | Done, then paused |
+| 3 | Remaining screens (~15-25, ported one at a time from the HTML mockups) | 4-8 weeks | Paused |
+| 4 | Service calls (write actions) on each interactive screen | rolled into 3 | Paused |
+| 5 | Hardware testing + touch/perf polish on the real Pi | 3-5 days | Paused |
 
 MVP (phases 1-2, plus a handful of the most-used screens) is realistically
 **1-2 weeks** total. Full port of everything designed so far is **6-10
