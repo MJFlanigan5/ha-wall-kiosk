@@ -324,9 +324,15 @@ setup, not just this specific house.
   person-detection automations — the literal doorbell *ring* push turned
   out to be native to the UniFi Protect app, unreachable from HA),
   Lighting (a light still on 10 min after every `person.*` entity is
-  `not_home`, via HA's `zone` trigger + `entity_id: all` so it isn't
-  hardcoded to one person), Entertainment (any `media_player` still
-  playing at 1am).
+  `not_home` — trigger is HA's `zone` platform on the real person
+  entity/entities as a list; `entity_id: "all"` was tried first as a
+  wildcard for "any current or future person," but that's not real HA
+  syntax — this HA version rejected it outright and silently disabled
+  the whole automation, caught in a post-restart audit 2026-08-07 by
+  checking each automation's actual entity state, not just config
+  validation, which had passed. List format means adding a second person
+  later is a one-line edit, not a rewrite), Entertainment (any
+  `media_player` still playing at 1am).
 - **Energy History — actually wired**, and the "Sources is real,
   Consumers is fake" framing from the 2026-08-06 pass turned out to be
   wrong on inspection: *both* were 100% mock (Solar/Grid/Battery values
