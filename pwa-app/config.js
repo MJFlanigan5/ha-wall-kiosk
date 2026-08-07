@@ -60,6 +60,16 @@ function showOnboarding(onDone) {
         style="width:100%;padding:12px;margin-bottom:10px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;" />
       <textarea id="ha-token-input" placeholder="Long-lived access token"
         style="width:100%;padding:12px;margin-bottom:16px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;height:80px;resize:none;"></textarea>
+
+      <h2 style="font-size:16px;margin-bottom:4px;">Homey <span style="opacity:0.5;font-weight:400;">(optional)</span></h2>
+      <p style="opacity:0.6;font-size:13px;margin-bottom:14px;">
+        Only needed for the few things HA can't reach (hallway thermostat, moods). Skip if you don't use those.
+      </p>
+      <input id="homey-url-input" placeholder="http://192.168.3.159"
+        style="width:100%;padding:12px;margin-bottom:10px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;" />
+      <input id="homey-token-input" placeholder="Personal Access Token"
+        style="width:100%;padding:12px;margin-bottom:16px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;" />
+
       <button id="ha-connect-btn"
         style="width:100%;padding:14px;background:#3CCB7F;border:none;border-radius:8px;color:#0A0A0C;font-weight:600;font-size:15px;">
         Connect
@@ -72,12 +82,17 @@ function showOnboarding(onDone) {
   document.getElementById("ha-connect-btn").addEventListener("click", async () => {
     const url = document.getElementById("ha-url-input").value.trim();
     const token = document.getElementById("ha-token-input").value.trim();
+    const homeyUrl = document.getElementById("homey-url-input").value.trim();
+    const homeyToken = document.getElementById("homey-token-input").value.trim();
     const errorEl = document.getElementById("ha-error");
     if (!url || !token) {
-      errorEl.textContent = "Both fields are required.";
+      errorEl.textContent = "HA URL and token are required.";
       return;
     }
     HAConfig.set(url, token);
+    if (homeyUrl && homeyToken) {
+      HomeyConfig.set(homeyUrl, homeyToken);
+    }
     overlay.remove();
     onDone();
   });
