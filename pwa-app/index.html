@@ -745,6 +745,16 @@
       </div>
       <div class="admin-note" id="homeyStatus" style="margin-top:8px;"></div>
     </div>
+    <div class="admin-room-block">
+      <h3>Quick Actions — whole-home</h3>
+      <div class="admin-note" style="margin-bottom:10px;">
+        Automation/script buttons not tied to any one room (e.g. Shower
+        Prep). Only automations/scripts with no HA area set show up here
+        — ones with an area belong to that room's own Quick Actions
+        instead.
+      </div>
+      <div id="adminGlobalActions"></div>
+    </div>
     <div id="adminRoomSuggestions"></div>
     <div id="adminRoomList"></div>
   </div>
@@ -920,6 +930,7 @@ let sensorsAreaMapCache = null;      // area/device/entity registries rarely cha
 let climateRefreshTimer = null;      // polling interval while a room with an assigned climate device is open
 let climateLiveCache = {};           // { [homeyDeviceId]: full Homey device object }
 let tvRemoteCache = {};              // { [mediaPlayerEntityId]: paired remote.* entity_id | null }
+let actionStateCache = {};           // { [automation.*|script.* entityId]: HA state object }
 
 // Lucide line icons instead of emoji — matches Savant's actual monochrome icon
 // style instead of platform-dependent emoji rendering. `icons()` must run after
@@ -2077,12 +2088,15 @@ async function renderSettingsContent() {
   const content = document.getElementById("content");
 
   let notifStates = new Map();
+  let globalActionLabels = new Map();
   if (window.haClient && window.haClient.connected) {
     try {
       const states = await window.haClient.getStates();
       notifStates = new Map(states.map(s => [s.entity_id, s.state]));
+      globalActionLabels = new Map(states.map(s => [s.entity_id, s.attributes.friendly_name || s.entity_id]));
     } catch (e) { console.error(e); }
   }
+  const globalActionIds = getGlobalActions().buttons || [];
 
   content.innerHTML = `
     <div class="header">
@@ -2097,6 +2111,13 @@ async function renderSettingsContent() {
           <button class="notif-check ${notifStates.get(n.entityId) === "on" ? "on" : ""}" data-notif-entity="${n.entityId}">${ico("check", "i14")}</button>
         </div>`).join("")}
     </div>
+    ${globalActionIds.length ? `
+    <div class="section-label-sm" style="margin-top:24px">${ico("zap", "i14")}Quick Actions</div>
+    <div class="light-list">${globalActionIds.map(id => `
+      <div class="switch-row">
+        <div class="light-row-name">${globalActionLabels.get(id) || id}</div>
+        <button class="switch-btn" data-quick-action="${id}">Run</button>
+      </div>`).join("")}</div>` : ""}
     <div class="section-label-sm" style="margin-top:24px">${ico("users", "i14")}Users</div>
     <div class="kv-section">
       ${USERS.map(u => `
@@ -2121,6 +2142,9 @@ async function renderSettingsContent() {
       } catch (e) { console.error(e); }
       renderSettingsContent();
     });
+  });
+  document.querySelectorAll("[data-quick-action]").forEach(el => {
+    el.addEventListener("click", () => triggerQuickAction(el.dataset.quickAction));
   });
 }
 
@@ -2173,6 +2197,10 @@ function renderContent() {
 
   if (room.tv && room.tv.entityId && !(room.tv.entityId in tvRemoteCache)) {
     findPairedRemoteEntity(room.tv.entityId).then(() => { if (ROOMS[currentRoom] === room) renderContent(); });
+  }
+
+  if (room.automationButtons && room.automationButtons.some(id => !(id in actionStateCache))) {
+    refreshActionStates(room.automationButtons).then(() => { if (ROOMS[currentRoom] === room) renderContent(); });
   }
 }
 
@@ -2233,6 +2261,29 @@ async function findPairedRemoteEntity(mediaPlayerEntityId) {
   return tvRemoteCache[mediaPlayerEntityId];
 }
 
+// Quick Action buttons only need a display name, so a bare state fetch
+// is enough — no polling, fetched once per entity id then cached, same
+// as everything else that's read-mostly in this app.
+async function refreshActionStates(entityIds) {
+  const missing = entityIds.filter(id => !(id in actionStateCache));
+  if (!missing.length || !window.haClient || !window.haClient.connected) return;
+  try {
+    const states = await window.haClient.getStates();
+    missing.forEach(id => { actionStateCache[id] = states.find(s => s.entity_id === id) || null; });
+  } catch (e) { console.error("refreshActionStates failed", e); }
+}
+
+function renderQuickActionButtons(entityIds) {
+  return `<div class="light-list">${entityIds.map(id => {
+    const state = actionStateCache[id];
+    const label = state ? (state.attributes.friendly_name || id) : id;
+    return `<div class="switch-row">
+      <div class="light-row-name">${label}</div>
+      <button class="switch-btn" data-quick-action="${id}">Run</button>
+    </div>`;
+  }).join("")}</div>`;
+}
+
 function renderRoomSections(room) {
   let sections = `<div class="section-label-sm" id="section-lighting" style="margin-top:24px">${ico("lightbulb", "i14")}Lighting</div>${renderLighting(room)}`;
   if (room.climateDeviceId) {
@@ -2243,6 +2294,9 @@ function renderRoomSections(room) {
   }
   if (room.tv && room.tv.entityId) {
     sections += `<div class="section-label-sm" id="section-tv" style="margin-top:32px">${ico("tv", "i14")}TV</div>${renderTv(room)}`;
+  }
+  if (room.automationButtons && room.automationButtons.length) {
+    sections += `<div class="section-label-sm" id="section-quickactions" style="margin-top:32px">${ico("zap", "i14")}Quick Actions</div>${renderQuickActionButtons(room.automationButtons)}`;
   }
   // Moods — real Homey moods, only exist for these 2 rooms (Goodnight is
   // whole-home, not room-specific, so it's not shown here).
@@ -2344,6 +2398,10 @@ function wireInteractions(room) {
       if (!remoteEntityId || !window.haClient || !window.haClient.connected) return;
       window.haClient.callService("remote", "send_command", remoteEntityId, { command: btn.dataset.remoteCmd }).catch(console.error);
     });
+  });
+
+  document.querySelectorAll("[data-quick-action]").forEach(btn => {
+    btn.addEventListener("click", () => triggerQuickAction(btn.dataset.quickAction));
   });
 
   document.querySelectorAll("[data-mood]").forEach(btn => {
@@ -2815,6 +2873,33 @@ function saveRoomEntityMap(map) {
   localStorage.setItem(ROOM_OVERRIDE_KEY, JSON.stringify(map));
 }
 
+// Whole-home Quick Actions (2026-08-07) — automation/script buttons not
+// tied to any one room (Shower Prep-style infrastructure controls).
+// Separate storage from the room map since these aren't room data at
+// all; same per-device localStorage pattern as everything else here.
+const GLOBAL_ACTIONS_KEY = "ha_global_quick_actions";
+
+function getGlobalActions() {
+  const raw = localStorage.getItem(GLOBAL_ACTIONS_KEY);
+  if (raw) {
+    try { return JSON.parse(raw); } catch (e) { console.error("Bad global actions JSON", e); }
+  }
+  return { buttons: [] };
+}
+
+function saveGlobalActions(actions) {
+  localStorage.setItem(GLOBAL_ACTIONS_KEY, JSON.stringify(actions));
+}
+
+async function triggerQuickAction(entityId) {
+  if (!window.haClient || !window.haClient.connected) return;
+  if (entityId.startsWith("script.")) {
+    await window.haClient.callService("script", "turn_on", entityId).catch(console.error);
+  } else if (entityId.startsWith("automation.")) {
+    await window.haClient.callService("automation", "trigger", entityId).catch(console.error);
+  }
+}
+
 function populateRoomsFromMap(map, statesById) {
   entityLocations = new Map();
   mediaEntityLocations = new Map();
@@ -2875,6 +2960,7 @@ function populateRoomsFromMap(map, statesById) {
     // statesById, just carry the assignment through so renderRoomSections
     // knows whether to show the section at all.
     ROOMS[roomId].climateDeviceId = map[roomId].climateDeviceId || null;
+    ROOMS[roomId].automationButtons = map[roomId].automationButtons || [];
 
     const aq = map[roomId].airQuality;
     if (aq && (aq.pm25 || aq.temp || aq.humidity)) {
@@ -3219,12 +3305,12 @@ async function renderAdminRoomList() {
   const map = getRoomEntityMap();
 
   // fresh live snapshot so "already assigned" and "available to add" are accurate
-  let allLights = [], allMediaPlayers = [];
+  let allLights = [], allMediaPlayers = [], allStates = [];
   if (window.haClient && window.haClient.connected) {
     try {
-      const states = await window.haClient.getStates();
-      allLights = states.filter(s => s.entity_id.startsWith("light."));
-      allMediaPlayers = states.filter(s => s.entity_id.startsWith("media_player."));
+      allStates = await window.haClient.getStates();
+      allLights = allStates.filter(s => s.entity_id.startsWith("light."));
+      allMediaPlayers = allStates.filter(s => s.entity_id.startsWith("media_player."));
     } catch (e) { console.error(e); }
   }
   // Climate — sourced from Homey (no real HA climate-domain entities exist
@@ -3241,6 +3327,37 @@ async function renderAdminRoomList() {
       zoneNameById = new Map(zones.map(z => [z.id, z.name]));
     } catch (e) { console.error(e); }
   }
+  // Automations & scripts — generic by capability of HA's own area
+  // assignment, not a hardcoded list: an automation/script with an area
+  // set (via HA's own UI) is a per-room candidate for that room; one
+  // with no area at all is a whole-home "Quick Actions" candidate. Same
+  // on-demand-only fetch as everything else in this function.
+  let allAutomations = [], allScripts = [], actionAreaName = new Map();
+  if (window.haClient && window.haClient.connected) {
+    try {
+      allAutomations = allStates.filter(s => s.entity_id.startsWith("automation."));
+      allScripts = allStates.filter(s => s.entity_id.startsWith("script."));
+      actionAreaName = await getSensorsAreaMap();
+    } catch (e) { console.error(e); }
+  }
+  const allActions = [...allAutomations, ...allScripts];
+  const globalActions = getGlobalActions();
+  const assignedActionIds = new Set([
+    ...Object.values(map).flatMap(r => r.automationButtons || []),
+    ...(globalActions.buttons || []),
+  ]);
+  // Room-assignable candidates are restricted to ones that actually have
+  // an area set — area-less ones are Global-only (see below), not because
+  // they couldn't work in a room, but so the same automation doesn't show
+  // up as a pickable option in both places at once, which would be
+  // confusing about where it's "really" scoped.
+  const availableRoomActions = allActions.filter(a =>
+    !assignedActionIds.has(a.entity_id) && (actionAreaName.get(a.entity_id) || "Other") !== "Other"
+  );
+  const availableGlobalActions = allActions.filter(a =>
+    !assignedActionIds.has(a.entity_id) && (actionAreaName.get(a.entity_id) || "Other") === "Other"
+  );
+
   // Excludes "unavailable" entities from what CAN be picked (real bug found
   // 2026-08-05: the live instance has duplicate entities sharing the same
   // friendly_name, e.g. 4 different "HT-A3000" media_players, one real and
@@ -3315,6 +3432,24 @@ async function renderAdminRoomList() {
       ? map[roomId].showOnAmbient
       : AMBIENT_ROOMS_DEFAULT.includes(roomId);
 
+    // Quick Actions (multi, like Lighting) — real automations/scripts
+    // whose HA area matches this room sorted first, but every candidate
+    // with any area is listed, same "suggest, user still chooses" pattern.
+    const actionIds = map[roomId].automationButtons || [];
+    const actionRows = actionIds.map(id => {
+      const known = allActions.find(a => a.entity_id === id);
+      const label = known ? known.attributes.friendly_name || id : id;
+      return `<div class="admin-entity-row"><span>${label}</span><button class="admin-remove-btn" data-remove-action-room="${roomId}" data-remove-action="${id}">×</button></div>`;
+    }).join("") || `<div class="admin-entity-row"><span style="opacity:0.5">No quick actions assigned</span></div>`;
+    const roomActionCandidates = [...availableRoomActions].sort((a, b) => {
+      const aMatch = roomMatchesZoneName(room.name, actionAreaName.get(a.entity_id)) ? 0 : 1;
+      const bMatch = roomMatchesZoneName(room.name, actionAreaName.get(b.entity_id)) ? 0 : 1;
+      return aMatch - bMatch;
+    });
+    const roomActionOptions = roomActionCandidates.map(a =>
+      `<option value="${a.entity_id}">${a.attributes.friendly_name || a.entity_id} (${actionAreaName.get(a.entity_id)})</option>`
+    ).join("");
+
     return `<div class="admin-room-block">
       <div class="admin-entity-row">
         <span>Show on Ambient Mode</span>
@@ -3338,6 +3473,14 @@ async function renderAdminRoomList() {
              <button class="admin-add-btn" data-add-climate-room="${roomId}" ${climateOptions ? "" : "disabled"}>Add</button>
            </div>`
       }
+      <h3 style="margin-top:18px;">${room.name} — Quick Actions</h3>
+      ${actionRows}
+      <div class="admin-add-row">
+        <select class="admin-add-select" data-action-room="${roomId}" ${roomActionOptions ? "" : "disabled"}>
+          ${roomActionOptions || '<option>No unassigned automations/scripts with an area found</option>'}
+        </select>
+        <button class="admin-add-btn" data-add-action-room="${roomId}" ${roomActionOptions ? "" : "disabled"}>Add</button>
+      </div>
       <h3 style="margin-top:18px;">${room.name} — Music (basic only, see docs/MUSIC_SPEC.md)</h3>
       ${currentMediaId
         ? `<div class="admin-entity-row"><span>${currentMediaLabel}</span><button class="admin-remove-btn" data-remove-media-room="${roomId}">×</button></div>`
@@ -3400,6 +3543,80 @@ async function renderAdminRoomList() {
   listEl.querySelectorAll("[data-toggle-ambient-room]").forEach(btn => {
     btn.addEventListener("click", () => toggleAmbientForRoom(btn.dataset.toggleAmbientRoom));
   });
+  listEl.querySelectorAll("[data-remove-action-room]").forEach(btn => {
+    btn.addEventListener("click", () => removeActionFromRoom(btn.dataset.removeActionRoom, btn.dataset.removeAction));
+  });
+  listEl.querySelectorAll("[data-add-action-room]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const select = listEl.querySelector(`select[data-action-room="${btn.dataset.addActionRoom}"]`);
+      if (select && select.value) addActionToRoom(btn.dataset.addActionRoom, select.value);
+    });
+  });
+
+  await renderGlobalActionsAdmin(availableGlobalActions, allActions, globalActions);
+}
+
+async function addActionToRoom(roomId, entityId) {
+  const map = getRoomEntityMap();
+  if (!map[roomId]) map[roomId] = { lighting: [] };
+  if (!map[roomId].automationButtons) map[roomId].automationButtons = [];
+  if (!map[roomId].automationButtons.includes(entityId)) map[roomId].automationButtons.push(entityId);
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+async function removeActionFromRoom(roomId, entityId) {
+  const map = getRoomEntityMap();
+  if (map[roomId]) map[roomId].automationButtons = (map[roomId].automationButtons || []).filter(id => id !== entityId);
+  if (ROOMS[roomId]) ROOMS[roomId].automationButtons = map[roomId] ? map[roomId].automationButtons : [];
+  saveRoomEntityMap(map);
+  await refreshAfterAdminChange(map);
+}
+
+// Whole-home Quick Actions — same picker pattern, rendered in its own
+// Admin Mode block (like Appearance/Homey) rather than inside a room
+// block, since these aren't scoped to any room.
+async function renderGlobalActionsAdmin(availableGlobalActions, allActions, globalActions) {
+  const el = document.getElementById("adminGlobalActions");
+  if (!el) return;
+  const rows = (globalActions.buttons || []).map(id => {
+    const known = allActions.find(a => a.entity_id === id);
+    const label = known ? known.attributes.friendly_name || id : id;
+    return `<div class="admin-entity-row"><span>${label}</span><button class="admin-remove-btn" data-remove-global-action="${id}">×</button></div>`;
+  }).join("") || `<div class="admin-entity-row"><span style="opacity:0.5">No quick actions assigned</span></div>`;
+  const options = availableGlobalActions.map(a =>
+    `<option value="${a.entity_id}">${a.attributes.friendly_name || a.entity_id}</option>`
+  ).join("");
+  el.innerHTML = `
+    ${rows}
+    <div class="admin-add-row">
+      <select class="admin-add-select" id="adminGlobalActionSelect" ${options ? "" : "disabled"}>
+        ${options || '<option>No unassigned automations/scripts without an area found</option>'}
+      </select>
+      <button class="admin-add-btn" id="adminGlobalActionAddBtn" ${options ? "" : "disabled"}>Add</button>
+    </div>`;
+  const addBtn = document.getElementById("adminGlobalActionAddBtn");
+  if (addBtn) addBtn.addEventListener("click", () => {
+    const select = document.getElementById("adminGlobalActionSelect");
+    if (select && select.value) addGlobalAction(select.value);
+  });
+  el.querySelectorAll("[data-remove-global-action]").forEach(btn => {
+    btn.addEventListener("click", () => removeGlobalAction(btn.dataset.removeGlobalAction));
+  });
+}
+
+async function addGlobalAction(entityId) {
+  const actions = getGlobalActions();
+  if (!actions.buttons.includes(entityId)) actions.buttons.push(entityId);
+  saveGlobalActions(actions);
+  await refreshAfterAdminChange(getRoomEntityMap());
+}
+
+async function removeGlobalAction(entityId) {
+  const actions = getGlobalActions();
+  actions.buttons = actions.buttons.filter(id => id !== entityId);
+  saveGlobalActions(actions);
+  await refreshAfterAdminChange(getRoomEntityMap());
 }
 
 async function toggleAmbientForRoom(roomId) {
