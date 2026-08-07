@@ -43,37 +43,64 @@ outer window size.
 
 ## Status / what's actually been verified
 
-Ran a headless smoke test (`QT_QPA_PLATFORM=offscreen`, stub HA client, no
-real connection) to catch load-time bugs before handing this off — no
-visible window appears in that mode, so it can't confirm what this
-actually *looks* like, but it did catch one real bug:
+**First real run against a live HA instance (2026-08-06): confirmed
+working.** Ran with a real long-lived access token against a large home
+(hundreds of entities across dozens of integrations) — connected,
+authenticated, and the area grid populated with real live data.
 
-- **Fixed:** `Overview.qml` originally tried `import HaWallKiosk 1.0` to
-  reach the `Theme` singleton, which failed (module not found via the
-  configured import path). `Theme.qml` + `qmldir` live in the same
-  directory as `Overview.qml`, so QML resolves the singleton
-  automatically without an explicit module import — removed the bad
-  import line, confirmed the fix loads cleanly.
-- **Confirmed working:** window loads and resizes correctly for *both*
-  orientations (1200×1920 portrait, 1920×1200 landscape, verified by
-  reading back the actual `width`/`height` properties after load — not
-  just "no crash"), `Theme` singleton resolves, `Repeater` renders
-  against stub data, `AppConfig`'s `isPortrait` correctly drives both the
-  window size and the area grid's column count.
-- **Not fully resolved — a console warning, not a crash:** during headless
-  runs, `haClient`/`appConfig` properties briefly evaluate as null in some
-  binding passes, even though the final, measured state (window size,
-  grid layout) is correct every time. This specific warning only shows up
-  when running two QML engines back-to-back in one process, which only my
-  test harness does — the real `main.py` creates exactly one engine, one
-  time, so this may simply not apply to normal operation. Still can't
-  fully rule it out without a real windowed run.
-- **Not tested at all:** the actual HA WebSocket connection/auth/registry
-  flow in `ha_client.py` — the smoke test used a stub client, not a real
-  HA instance. Area/device/entity registry resolution (entities assigned
-  to an area *via their device*, not just directly) is implemented per
-  HA's real registry model but unverified against live data.
+One real bug found and fixed on that first run:
+- **Fixed:** `websockets.connect()` used the library's default 1MiB frame
+  size limit. This instance's registry/state dump exceeds that easily
+  (many entities, many integrations), so the connection authenticated
+  then immediately dropped with `1009 (message too big)` and kept
+  retrying forever. Fix: pass `max_size=None` in `ha_client.py`'s
+  `_connect_and_listen()`. Confirmed clean connect + populated grid after
+  the fix, no further errors.
 
-First real run should be treated as a debugging pass, not "should just
-work." Report back what you see (or any tracebacks, or that console
-warning showing up for real) and we'll fix from there.
+Earlier headless smoke test (`QT_QPA_PLATFORM=offscreen`, stub HA client)
+had already caught one load-time bug and confirmed layout/orientation
+logic before this real run — see git history for that pass's notes if
+needed; superseded by the real-run result above.
+
+## Ambient Mode pass + write-action proof (2026-08-06)
+
+Same session, moved past the plain area grid. Bounded scope, matching
+this project's "prove one thing before templating" discipline — not the
+full PWA Ambient Mode port (no brightness stepper, color presets,
+day/night shift, or global Night/Day buttons yet, those are real PWA
+features but bigger scope):
+
+- **Clock + date header**, room cards now read "N of M lights on" instead
+  of a raw entity dump.
+- **First real write action, confirmed end-to-end**: tap a room card →
+  `light.toggle` on every light entity in that area → verified against
+  real HA state, not just the UI. Also fixed a real perf bug found in the
+  process: `areasChanged` was firing on *every* state_changed event
+  house-wide (hundreds of entities), rebuilding the whole grid each time
+  — now only fires (debounced 150ms) when a tracked entity actually
+  changes.
+- **Real entity-curation bug found via live testing**: Master Bedroom's
+  light count was wrong (6 shown, should be ~3-4) — HA's Area registry
+  had picked up a UniFi switch's status LED (not a room fixture) plus
+  duplicate entities from integration re-adds (confirmed via
+  `get_device_details`: same physical Govee bulb, two live integrations
+  both reporting it). Added `display.excluded_entities` in `config.yaml`
+  as a stopgap (same evolutionary path the PWA took — hand-edited config
+  first, real on-device picker later, not built yet).
+- **Second connection added**: `homey_client.py`, a Python port of the
+  PWA's `homey-client.js` (same minimal REST pattern — get/set device
+  capability, polled not pushed), for the handful of real devices HA
+  can't reach directly. Proven working end-to-end this pass (real read,
+  real write, confirmed via Homey state). One genuine Homey-side bug
+  surfaced in the process: a device bridged through Homey's
+  `io.home-assistant` app 500'd on every write attempt — logged cleanly,
+  didn't crash the app. `config.yaml`'s `homey.device_ids` is empty for
+  now — Mike's swapping the Master Bedroom ceiling bulbs soon, so
+  tonight's specific entity IDs will be obsolete shortly. Same discovery
+  process (HA + Homey cross-check, confirm real vs. duplicate, verify via
+  a real toggle) once the new hardware is in.
+
+**Still not tested:** anything past this one screen — no other views, no
+Pi hardware deployment, no visual port of the PWA's actual Ambient Mode
+look (icons, rail nav, card polish — this pass proved the architecture,
+not the visual design).

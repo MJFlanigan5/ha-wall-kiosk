@@ -13,6 +13,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 import qasync
 
 from ha_client import HAClient, load_config
+from homey_client import HomeyClient, load_config as load_homey_config
 from app_config import AppConfig
 
 
@@ -26,9 +27,17 @@ def main():
     ha_client = HAClient(config)
     app_config = AppConfig(config)
 
+    # Optional -- most setups won't have a homey: block in config.yaml.
+    # Construct with an empty/idle config either way so QML never has to
+    # null-check homeyClient; an unconfigured client just never starts,
+    # connected stays False, devices stays [].
+    homey_config = load_homey_config() or {"url": "", "token": "", "device_ids": []}
+    homey_client = HomeyClient(homey_config)
+
     engine = QQmlApplicationEngine()
     engine.addImportPath("qml")
     engine.rootContext().setContextProperty("haClient", ha_client)
+    engine.rootContext().setContextProperty("homeyClient", homey_client)
     engine.rootContext().setContextProperty("appConfig", app_config)
     engine.load("qml/Overview.qml")
 
@@ -37,6 +46,8 @@ def main():
         sys.exit(1)
 
     ha_client.start()
+    if homey_config["device_ids"]:
+        homey_client.start()
 
     with loop:
         loop.run_forever()

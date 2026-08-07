@@ -25,3 +25,23 @@ display:
   # portrait, but someone running this against a landscape-mounted panel
   # just sets this and the window dimensions swap automatically.
   orientation: "portrait"
+
+  # Entity IDs to exclude from every area's light count/toggle. Real,
+  # recurring need (see NATIVE_APP_SPEC.md "Other lessons from the PWA
+  # build"): HA's Area registry pulls in non-fixture devices (network
+  # switch status LEDs, etc.) and duplicate entities left behind by
+  # integration re-adds -- both confirmed live in this instance's own
+  # Master Bedroom area (2026-08-06). "unavailable" filtering alone
+  # doesn't catch these since duplicates are often both fully live,
+  # just pointing at the same physical device. Stopgap until there's a
+  # real on-device picker (Admin Mode equivalent) -- same evolutionary
+  # path config.js took in the PWA (hand-edited file first).
+  excluded_entities: []
+
+# Optional. Only needed if some of your real devices are only reachable
+# through Homey (not bridged into HA, or bridged as read-only sensors).
+# Leave the whole block out, or leave token blank, to skip this entirely.
+# homey:
+#   url: "http://your-homey-local-ip"
+#   token: ""
+#   device_ids: []
