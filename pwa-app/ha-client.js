@@ -150,6 +150,10 @@ class HAClient {
     return this._send({ type: "config/entity_registry/list" });
   }
 
+  async getDeviceRegistry() {
+    return this._send({ type: "config/device_registry/list" });
+  }
+
   async callService(domain, service, entityId, serviceData = {}) {
     return this._send({
       type: "call_service",

@@ -919,6 +919,8 @@ let colorWheelIndex = null;          // room.lighting index whose color wheel is
 let energyMode = "eco";              // eco | storm — Storm Watch is a variant of the Eco Mode template
 let colorSubView = "wheel";          // wheel | white — dock inside the color screen
 let cameraRefreshTimer = null;       // live snapshot polling interval while the Cameras tab is open
+let sensorsRefreshTimer = null;      // polling interval while the Sensors page is open
+let sensorsAreaMapCache = null;      // area/device/entity registries rarely change; fetched once per session
 
 // Lucide line icons instead of emoji — matches Savant's actual monochrome icon
 // style instead of platform-dependent emoji rendering. `icons()` must run after
@@ -992,10 +994,12 @@ function renderRail() {
   const securityHtml = `<button class="rail-item ${securityActive}" data-room="security"><span class="stem"></span><span class="label">Security</span></button>`;
   const musicActive = currentRoom === "music" ? "active" : "";
   const musicHtml = `<button class="rail-item ${musicActive}" data-room="music"><span class="stem"></span><span class="label">Music</span></button>`;
+  const sensorsActive = currentRoom === "sensors" ? "active" : "";
+  const sensorsHtml = `<button class="rail-item ${sensorsActive}" data-room="sensors"><span class="stem"></span><span class="label">Sensors</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
   const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
-  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + `<div class="rail-divider"></div>` + settingsHtml);
-  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + settingsHtml);
+  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + sensorsHtml + `<div class="rail-divider"></div>` + settingsHtml);
+  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + settingsHtml);
 
   document.querySelectorAll("[data-room]").forEach(el => {
     el.addEventListener("click", () => goToRoom(el.dataset.room));
@@ -1912,6 +1916,122 @@ function renderMusicContent() {
   });
 }
 
+// Every sensor.*/binary_sensor.* entity in the house, grouped by room —
+// generic by design (2026-08-07): reads HA's own area/device/entity
+// registries to place entities, so it works for any HA instance's sensor
+// set (Beszel, Flo water usage, air quality, whatever's connected) with
+// zero per-entity configuration. Registries are fetched once per session
+// and cached (they rarely change); live values refresh on a plain
+// interval while this page is open, same on-demand-only pattern as the
+// Cameras tab's polling — not a standing subscription for every sensor.
+const SENSOR_DEVICE_CLASS_ICONS = {
+  temperature: "thermometer",
+  humidity: "droplets",
+  battery: "battery",
+  power: "zap",
+  energy: "zap",
+  water: "droplets",
+  moisture: "droplet",
+  illuminance: "sun",
+  duration: "clock",
+  timestamp: "clock",
+  enum: "activity",
+  connectivity: "wifi",
+  problem: "alert-triangle",
+  update: "download",
+  motion: "scan",
+  door: "door-open",
+  window: "app-window",
+  occupancy: "user",
+  presence: "user",
+  co2: "wind",
+  aqi: "wind",
+  pressure: "gauge",
+};
+
+function sensorIconFor(entity) {
+  const dc = entity.attributes && entity.attributes.device_class;
+  return SENSOR_DEVICE_CLASS_ICONS[dc] || "activity";
+}
+
+function formatSensorValue(entity) {
+  if (entity.state === "unavailable" || entity.state === "unknown") return "—";
+  const unit = entity.attributes && entity.attributes.unit_of_measurement;
+  return unit ? `${entity.state} ${unit}` : entity.state;
+}
+
+async function getSensorsAreaMap() {
+  if (sensorsAreaMapCache) return sensorsAreaMapCache;
+  const [areas, entities, devices] = await Promise.all([
+    window.haClient.getAreaRegistry(),
+    window.haClient.getEntityRegistry(),
+    window.haClient.getDeviceRegistry(),
+  ]);
+  const areaNameById = new Map(areas.map(a => [a.area_id, a.name]));
+  const deviceAreaById = new Map(devices.map(d => [d.id, d.area_id]));
+  const entityAreaName = new Map();
+  entities.forEach(e => {
+    const areaId = e.area_id || deviceAreaById.get(e.device_id) || null;
+    entityAreaName.set(e.entity_id, areaId ? (areaNameById.get(areaId) || "Other") : "Other");
+  });
+  sensorsAreaMapCache = entityAreaName;
+  return entityAreaName;
+}
+
+async function renderSensorsContent() {
+  const content = document.getElementById("content");
+  content.innerHTML = `
+    <div class="header">
+      <div class="header-title-row"><span>${ico("activity", "i24")}</span><h1>Sensors</h1></div>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Every sensor in the house, by room</div></div>
+    </div>
+    <div id="sensorsBody"><div class="kv-section"><div class="kv-row"><div class="kv-left"><div class="kv-name" style="opacity:0.5">Loading…</div></div></div></div></div>
+  `;
+  updateClock();
+  icons();
+  await refreshSensorsBody();
+  if (sensorsRefreshTimer) clearInterval(sensorsRefreshTimer);
+  sensorsRefreshTimer = setInterval(refreshSensorsBody, 15000);
+}
+
+async function refreshSensorsBody() {
+  if (currentRoom !== "sensors") return;
+  const body = document.getElementById("sensorsBody");
+  if (!body || !window.haClient || !window.haClient.connected) return;
+
+  let states;
+  try { states = await window.haClient.getStates(); } catch (e) { console.error(e); return; }
+  const sensors = states.filter(s => s.entity_id.startsWith("sensor.") || s.entity_id.startsWith("binary_sensor."));
+
+  let entityAreaName;
+  try { entityAreaName = await getSensorsAreaMap(); } catch (e) { console.error(e); entityAreaName = new Map(); }
+
+  const byArea = new Map();
+  sensors.forEach(s => {
+    const area = entityAreaName.get(s.entity_id) || "Other";
+    if (!byArea.has(area)) byArea.set(area, []);
+    byArea.get(area).push(s);
+  });
+
+  const areaNames = [...byArea.keys()].sort((a, b) => {
+    if (a === "Other") return 1;
+    if (b === "Other") return -1;
+    return a.localeCompare(b);
+  });
+
+  body.innerHTML = areaNames.map(area => {
+    const rows = byArea.get(area)
+      .sort((a, b) => (a.attributes.friendly_name || a.entity_id).localeCompare(b.attributes.friendly_name || b.entity_id))
+      .map(s => `
+        <div class="kv-row">
+          <div class="kv-left"><div class="kv-icon">${ico(sensorIconFor(s), "i18")}</div><div class="kv-name">${s.attributes.friendly_name || s.entity_id}</div></div>
+          <div class="kv-value">${formatSensorValue(s)}</div>
+        </div>`).join("");
+    return `<div class="section-label-sm" style="margin-top:24px">${ico("map-pin", "i14")}${area} <span style="opacity:0.5;font-weight:400">(${byArea.get(area).length})</span></div><div class="kv-section">${rows}</div>`;
+  }).join("");
+  icons();
+}
+
 function renderSettingsContent() {
   const content = document.getElementById("content");
   content.innerHTML = `
@@ -1953,9 +2073,14 @@ function renderContent() {
     clearInterval(cameraRefreshTimer);
     cameraRefreshTimer = null;
   }
+  if (currentRoom !== "sensors" && sensorsRefreshTimer) {
+    clearInterval(sensorsRefreshTimer);
+    sensorsRefreshTimer = null;
+  }
   if (currentRoom === "power") { renderPowerContent(); return; }
   if (currentRoom === "security") { renderSecurityContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
+  if (currentRoom === "sensors") { renderSensorsContent(); return; }
   if (currentRoom === "settings") { renderSettingsContent(); return; }
   const room = ROOMS[currentRoom];
   const content = document.getElementById("content");
