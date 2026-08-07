@@ -754,6 +754,33 @@ ApplicationWindow {
                     }
                 }
                 }
+
+                // Bottom quick-nav row -- matches AMBIENT_QUICKNAV in
+                // pwa-app/index.html exactly (security/music/settings).
+                // Bare icons, no button chrome, same as the reference.
+                // Not wired to navigation yet -- there's no room-screen
+                // stack in the native app to navigate to (Ambient is the
+                // only screen so far), so these are display-only for now.
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 32
+                    spacing: 30
+
+                    Image { source: "icons/shield.svg"; sourceSize.width: 20; sourceSize.height: 20 }
+                    Image { source: "icons/music.svg"; sourceSize.width: 20; sourceSize.height: 20 }
+                    Image { source: "icons/settings.svg"; sourceSize.width: 20; sourceSize.height: 20 }
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 18
+                    text: "TAP A CARD TO OPEN THAT ROOM · TAP ANYWHERE ELSE TO WAKE"
+                    font.family: Theme.fontBody
+                    font.pixelSize: 12
+                    font.letterSpacing: 0.5
+                    color: Theme.textDim
+                    opacity: 0.6
+                }
             }
         }
 
@@ -805,6 +832,20 @@ ApplicationWindow {
                 }
             }
         }
+    }
+
+    // Theme toggle -- matches .ambient-theme-toggle exactly (bare icon,
+    // top-right, no button chrome). Display-only for now: the PWA's
+    // light/dark ambient theme swap (docs/UI_MODES_SPEC.md roadmap item)
+    // isn't built in the native app yet, so this always shows the moon
+    // (this app's only theme, dark, matching its current default).
+    Image {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 40
+        source: "icons/moon.svg"
+        sourceSize.width: 24
+        sourceSize.height: 24
     }
 
     // Connection status -- this app's own addition, not part of the PWA's
