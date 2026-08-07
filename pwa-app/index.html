@@ -1189,7 +1189,9 @@ const ENERGY_HISTORY_SOURCES = [
   { name: "Battery", color: "#34C759", entityId: "sensor.my_home_battery_charged" },
 ];
 let energyHistoryCache = null; // { days: [...], series: [{name, color, values}] }
+let energyHistoryCacheTime = 0;
 let energyHistoryFetchInFlight = false;
+const ENERGY_HISTORY_MAX_AGE_MS = 30 * 60 * 1000; // otherwise the first-ever fetch just sits there for the rest of the session
 
 async function refreshEnergyHistory() {
   if (energyHistoryFetchInFlight || !window.haClient || !window.haClient.connected) return;
@@ -1219,6 +1221,7 @@ async function refreshEnergyHistory() {
       return { name: s.name, color: s.color, values, on: true };
     });
     energyHistoryCache = { days: dayLabels, series };
+    energyHistoryCacheTime = Date.now();
   } catch (e) {
     console.error("refreshEnergyHistory failed", e);
   } finally {
@@ -1228,8 +1231,14 @@ async function refreshEnergyHistory() {
 }
 
 function renderEnergyHistory() {
-  if (!energyHistoryCache) {
+  // Bug found in audit (2026-08-07): with no staleness check, the first
+  // fetch of a session was cached forever — leaving this tab and coming
+  // back hours (or a day) later showed the same numbers from the first
+  // visit, never refetching.
+  if (!energyHistoryCache || Date.now() - energyHistoryCacheTime > ENERGY_HISTORY_MAX_AGE_MS) {
     refreshEnergyHistory();
+  }
+  if (!energyHistoryCache) {
     return `<div class="kv-section"><div class="kv-row"><div class="kv-left"><div class="kv-name" style="opacity:0.5">Loading…</div></div></div></div>`;
   }
   const h = energyHistoryCache;
