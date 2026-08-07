@@ -2245,6 +2245,12 @@ async function checkHomeyFlows() {
 }
 
 async function runHealthChecks() {
+  // Captured before the checks run, not derived from their results — a
+  // system being unreachable and a system being genuinely clean both
+  // return zero findings, and the diff below needs to tell those apart.
+  const haReachable = !!(window.haClient && window.haClient.connected);
+  const homeyReachable = !!window.homeyClient;
+
   const [autos, errors, devices, flows] = await Promise.all([
     checkHaAutomations(), checkHaErrorLog(), checkHomeyDevices(), checkHomeyFlows(),
   ]);
@@ -2253,6 +2259,21 @@ async function runHealthChecks() {
   const prevState = getHealthCheckState();
   const nextState = {};
   const now = Date.now();
+
+  // Real bug found on review: without this, a system being momentarily
+  // unreachable (HA restart, brief WS reconnect) wiped its findings from
+  // the diff state entirely, since nextState was built only from this
+  // cycle's results. The issue would then look "new" all over again once
+  // the system came back — even though it was never actually resolved,
+  // just invisible for one poll. Carrying forward a system's prior state
+  // when it couldn't be checked this cycle fixes that.
+  if (!haReachable) {
+    Object.entries(prevState).forEach(([id, ts]) => { if (id.startsWith("ha:")) nextState[id] = ts; });
+  }
+  if (!homeyReachable) {
+    Object.entries(prevState).forEach(([id, ts]) => { if (id.startsWith("homey:")) nextState[id] = ts; });
+  }
+
   findings.forEach(f => {
     f.firstSeen = prevState[f.id] || now;
     f.isNew = !prevState[f.id];
