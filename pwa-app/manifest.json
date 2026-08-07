@@ -1,6 +1,6 @@
 {
-  "name": "Home Control",
-  "short_name": "Home",
+  "name": "Foyer",
+  "short_name": "Foyer",
   "description": "Savant-styled Home Assistant control panel",
   "start_url": "./index.html",
   "display": "standalone",
