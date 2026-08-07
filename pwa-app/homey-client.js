@@ -57,6 +57,13 @@ class HomeyClient {
     const map = await this._fetch("/api/manager/zones/zone/");
     return Object.values(map || {});
   }
+
+  // Used by the Health check (broken flows) — same map-not-array shape as
+  // listDevices/listZones above.
+  async listFlows() {
+    const map = await this._fetch("/api/manager/flow/flow/");
+    return Object.values(map || {});
+  }
 }
 
 // Capability introspection is generic on purpose: it keys off Homey's own

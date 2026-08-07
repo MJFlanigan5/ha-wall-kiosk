@@ -173,6 +173,15 @@ class HAClient {
     return this._send({ type: "config/device_registry/list" });
   }
 
+  // WS, not REST (tried REST first — /api/error_log fails with a CORS
+  // error from the browser since HA doesn't send Access-Control-Allow-Origin
+  // for arbitrary origins; confirmed via live testing 2026-08-07). This WS
+  // command returns already-structured entries (level/message/count/name),
+  // no raw-text log parsing needed.
+  async getSystemLog() {
+    return this._send({ type: "system_log/list" });
+  }
+
   async callService(domain, service, entityId, serviceData = {}) {
     return this._send({
       type: "call_service",

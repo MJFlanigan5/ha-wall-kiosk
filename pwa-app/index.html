@@ -74,6 +74,8 @@
   .rail-item.active .stem { background: var(--accent); }
   .rail-item.active .stem::after { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-dim); transform: translate(-50%, -50%) scale(1.15); }
   .rail-item span.label { max-width: 60px; text-align: center; line-height: 1.3; }
+  .rail-health-dot { position: absolute; top: 8px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: #FF9F0A; box-shadow: 0 0 0 3px rgba(255,159,10,0.16); }
+  .mobile-rail .rail-health-dot { top: 4px; right: 6px; }
 
   /* ---------- Main ---------- */
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
@@ -929,6 +931,9 @@ let climateRefreshTimer = null;      // polling interval while a room with an as
 let climateLiveCache = {};           // { [homeyDeviceId]: full Homey device object }
 let tvRemoteCache = {};              // { [mediaPlayerEntityId]: paired remote.* entity_id | null }
 let actionStateCache = {};           // { [automation.*|script.* entityId]: HA state object }
+let healthFindingCount = 0;          // cached count for the rail badge — updated by the background poll, not page-visit-scoped
+let healthLastFindings = [];         // last computed health-check findings, rendered from cache when the Health page opens
+let healthLastCheckedAt = null;      // null until the first background check completes
 
 // Lucide line icons instead of emoji — matches Savant's actual monochrome icon
 // style instead of platform-dependent emoji rendering. `icons()` must run after
@@ -983,10 +988,13 @@ function renderRail() {
   const musicHtml = `<button class="rail-item ${musicActive}" data-room="music"><span class="stem"></span><span class="label">Music</span></button>`;
   const sensorsActive = currentRoom === "sensors" ? "active" : "";
   const sensorsHtml = `<button class="rail-item ${sensorsActive}" data-room="sensors"><span class="stem"></span><span class="label">Sensors</span></button>`;
+  const healthActive = currentRoom === "health" ? "active" : "";
+  const healthDot = healthFindingCount > 0 ? `<span class="rail-health-dot"></span>` : "";
+  const healthHtml = `<button class="rail-item ${healthActive}" data-room="health">${healthDot}<span class="stem"></span><span class="label">Health</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
   const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
-  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + sensorsHtml + `<div class="rail-divider"></div>` + settingsHtml);
-  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + settingsHtml);
+  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + `<div class="rail-divider"></div>` + settingsHtml);
+  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + settingsHtml);
 
   document.querySelectorAll("[data-room]").forEach(el => {
     el.addEventListener("click", () => goToRoom(el.dataset.room));
@@ -2138,6 +2146,190 @@ function renderSensorsBodyDom() {
   });
 }
 
+// --- Health check (2026-08-07) ---
+// Deterministic checks against HA's and Homey's own APIs — no LLM/AI call
+// per household, matching the reasoning from the personal nightly-audit
+// version of this (see project_ha_homey_nightly_audit memory): the
+// detection itself (unavailable automations, error-log entries, unreachable
+// devices, broken flows) is rule-based and works the same for any house,
+// unlike an AI trying to learn a stranger's home from scratch. Diagnose
+// only — this never calls anything that changes HA/Homey state.
+
+const HEALTH_STATE_KEY = "ha_health_check_state"; // { [findingId]: firstSeenTimestamp } — night-to-night new-vs-still-open diff
+
+function getHealthCheckState() {
+  try { return JSON.parse(localStorage.getItem(HEALTH_STATE_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveHealthCheckState(state) {
+  localStorage.setItem(HEALTH_STATE_KEY, JSON.stringify(state));
+}
+
+async function checkHaAutomations() {
+  if (!window.haClient || !window.haClient.connected) return [];
+  let states;
+  try { states = await window.haClient.getStates(); } catch (e) { console.error(e); return []; }
+  // check_config passing doesn't mean an automation actually works — an
+  // automation can have valid config and still sit in "unavailable" at
+  // runtime (e.g. a bad trigger target). Live state is what actually
+  // catches that, not config validation alone.
+  return states
+    .filter(s => s.entity_id.startsWith("automation.") && (s.state === "unavailable" || s.state === "unknown"))
+    .map(s => ({
+      id: `ha:automation:${s.entity_id}:${s.state}`,
+      system: "ha",
+      icon: "zap-off",
+      title: s.attributes.friendly_name || s.entity_id,
+      detail: `Automation is ${s.state} — check its trigger/condition config.`,
+    }));
+}
+
+async function checkHaErrorLog() {
+  if (!window.haClient || !window.haClient.connected) return [];
+  let entries;
+  try { entries = await window.haClient.getSystemLog(); } catch (e) { console.error(e); return []; }
+  return entries
+    .filter(e => e.level === "ERROR")
+    .slice(0, 8) // system_log/list is already newest-first
+    .map(e => ({
+      // name alone isn't unique — the same component can log two distinct
+      // errors (found live 2026-08-07: Pura's coordinator had two). Tried a
+      // message-text snippet to disambiguate, but that broke stability
+      // instead: some messages embed a per-occurrence value (a connection/
+      // object id) that changes every time the same underlying error fires
+      // again, so the "same" finding got a new id every poll and never
+      // diffed as still-open. first_occurred is HA's own stable grouping
+      // key for this exact error pattern — confirmed identical across
+      // repeated polls of the same live error via direct testing.
+      id: `ha:errorlog:${e.name}:${e.first_occurred}`,
+      system: "ha",
+      icon: "alert-triangle",
+      title: e.name.split(".").pop(),
+      detail: `${e.count}x — ${String(e.message[0] || "").slice(0, 140)}`,
+    }));
+}
+
+async function checkHomeyDevices() {
+  if (!window.homeyClient) return [];
+  let devices;
+  try { devices = await window.homeyClient.listDevices(); } catch (e) { console.error(e); return []; }
+  return devices
+    .filter(d => d.available === false || d.warning)
+    .map(d => ({
+      id: `homey:device:${d.id}:${d.available === false ? "unavailable" : "warning"}`,
+      system: "homey",
+      icon: "wifi-off",
+      title: d.name || d.id,
+      detail: d.available === false ? "Device unavailable/unreachable." : (d.warningMessage || String(d.warning)),
+    }));
+}
+
+async function checkHomeyFlows() {
+  if (!window.homeyClient) return [];
+  let flows;
+  try { flows = await window.homeyClient.listFlows(); } catch (e) { console.error(e); return []; }
+  return flows
+    .filter(f => f.broken)
+    .map(f => ({
+      id: `homey:flow:${f.id}`,
+      system: "homey",
+      icon: "workflow",
+      title: f.name || f.id,
+      detail: "Flow is broken — a card it depends on may be missing or removed.",
+    }));
+}
+
+async function runHealthChecks() {
+  const [autos, errors, devices, flows] = await Promise.all([
+    checkHaAutomations(), checkHaErrorLog(), checkHomeyDevices(), checkHomeyFlows(),
+  ]);
+  const findings = [...autos, ...errors, ...devices, ...flows];
+
+  const prevState = getHealthCheckState();
+  const nextState = {};
+  const now = Date.now();
+  findings.forEach(f => {
+    f.firstSeen = prevState[f.id] || now;
+    f.isNew = !prevState[f.id];
+    nextState[f.id] = f.firstSeen;
+  });
+  saveHealthCheckState(nextState);
+
+  return findings;
+}
+
+// Background poll, not page-visit-scoped (see the setInterval call near
+// initLiveData) — the rail badge needs to reflect reality even if the user
+// never opens Health. Only touches #healthBody DOM if that page happens to
+// be open right now.
+async function refreshHealthBody() {
+  let findings;
+  try { findings = await runHealthChecks(); } catch (e) { console.error(e); return; }
+  healthLastFindings = findings;
+  healthLastCheckedAt = Date.now();
+  const countChanged = findings.length !== healthFindingCount;
+  healthFindingCount = findings.length;
+  if (countChanged) renderRail();
+  if (currentRoom === "health") renderHealthBodyDom();
+}
+
+// Finding title/detail can contain third-party text (HA error messages,
+// Homey device names) that isn't sanitized upstream — unlike the rest of
+// this file's innerHTML templates, which only ever interpolate HA
+// friendly_names/room names the user themselves configured, this page
+// surfaces raw log/device text that a LAN device could influence. Escaped
+// here rather than adding a file-wide helper, since nothing else in this
+// codebase currently needs it.
+function escapeHealthText(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderHealthBodyDom() {
+  const body = document.getElementById("healthBody");
+  if (!body) return;
+
+  if (!healthLastFindings.length) {
+    body.innerHTML = `<div class="kv-section"><div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("check-circle", "i18")}</div><div class="kv-name">All clear</div></div><div class="kv-value" style="opacity:0.6">No issues found</div></div></div>`;
+    icons(body);
+    return;
+  }
+
+  const bySystem = new Map();
+  healthLastFindings.forEach(f => {
+    const label = f.system === "ha" ? "Home Assistant" : "Homey";
+    if (!bySystem.has(label)) bySystem.set(label, []);
+    bySystem.get(label).push(f);
+  });
+
+  body.innerHTML = [...bySystem.entries()].map(([label, items]) => `
+    <div class="section-label-sm" style="margin-top:24px">${ico(label === "Home Assistant" ? "home" : "smartphone", "i14")}${label} <span style="opacity:0.5;font-weight:400">(${items.length})</span></div>
+    <div class="kv-section">${items.map(f => `
+      <div class="kv-row">
+        <div class="kv-left"><div class="kv-icon">${ico(f.icon, "i18")}</div><div class="kv-name">${escapeHealthText(f.title)}${f.isNew ? ` <span class="badge fault">NEW</span>` : ""}</div></div>
+        <div class="kv-value" style="text-align:right;max-width:55%;opacity:0.75;font-size:13px;font-weight:400">${escapeHealthText(f.detail)}</div>
+      </div>`).join("")}</div>
+  `).join("");
+  icons(body);
+}
+
+async function renderHealthContent() {
+  const content = document.getElementById("content");
+  content.innerHTML = `
+    <div class="header">
+      <div class="header-title-row"><span>${ico("heart-pulse", "i24")}</span><h1>Health</h1></div>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Home Assistant &amp; Homey diagnostics</div></div>
+    </div>
+    <div id="healthBody"><div class="kv-section"><div class="kv-row"><div class="kv-left"><div class="kv-name" style="opacity:0.5">Checking…</div></div></div></div></div>
+  `;
+  updateClock();
+  icons();
+  if (healthLastCheckedAt === null) {
+    await refreshHealthBody();
+  } else {
+    renderHealthBodyDom(); // instant — render from the background poll's cache, then let the next scheduled poll refresh it
+  }
+}
+
 async function renderSettingsContent() {
   const content = document.getElementById("content");
 
@@ -2220,6 +2412,7 @@ function renderContent() {
   if (currentRoom === "security") { renderSecurityContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
   if (currentRoom === "sensors") { renderSensorsContent(); return; }
+  if (currentRoom === "health") { renderHealthContent(); return; }
   if (currentRoom === "settings") { renderSettingsContent(); return; }
   const room = ROOMS[currentRoom];
   const content = document.getElementById("content");
@@ -3190,6 +3383,17 @@ async function initLiveData() {
   }
 
   render();
+
+  // Real bug found via live testing 2026-08-07: calling this at top-level
+  // script scope (right after this function is invoked, unawaited) ran
+  // before the WS connection above actually resolved, so window.haClient
+  // .connected was still false — every HA-side health check silently
+  // no-opped on first load and didn't get another chance for 4 hours.
+  // Calling it here, after the connection attempt has actually settled
+  // (success or failure), fixes that. window.homeyClient is also
+  // guaranteed set by now — its setup below is synchronous and runs
+  // before this async function's `await client.connect()` yields back.
+  refreshHealthBody();
 }
 
 // First-run nudge (2026-08-07): the credential-entry onboarding screen
@@ -3237,6 +3441,12 @@ async function pollDiningRoomAQ() {
 }
 
 setInterval(updateClock, 1000 * 15);
+
+// Recurring cadence for the health check — the first run is kicked off
+// from inside initLiveData() instead, once the HA connection has actually
+// settled (see the comment there for why calling it here unconditionally
+// was a real bug).
+setInterval(refreshHealthBody, 4 * 60 * 60 * 1000);
 
 // --- Admin Mode (2026-08-05) ---
 // On-device room/entity config, per docs/UI_MODES_SPEC.md "Admin Mode".
