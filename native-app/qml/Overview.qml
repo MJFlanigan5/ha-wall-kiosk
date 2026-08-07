@@ -88,6 +88,27 @@ ApplicationWindow {
         return withMedia.length > 0 ? withMedia[0] : null
     }
 
+    // Exact HA Area registry names for pwa-app/index.html's AMBIENT_ROOMS
+    // slugs, in the same dictated order (living, kitchen, dining, office,
+    // master, bedroom3, bedroom4) -- confirmed against this house's real
+    // area registry, not guessed.
+    readonly property var ambientRoomNames: ["Living Room", "Kitchen", "Dining Room", "Office", "Master Bedroom", "Bedroom 3", "Bedroom 4"]
+
+    function ambientRooms() {
+        var order = root.ambientRoomNames
+        var areas = haClient.areas
+        var result = []
+        for (var i = 0; i < order.length; i++) {
+            for (var j = 0; j < areas.length; j++) {
+                if (areas[j].name === order[i]) {
+                    result.push(areas[j])
+                    break
+                }
+            }
+        }
+        return result
+    }
+
     // Matches the PWA's updateClock interval (setInterval(updateClock,
     // 1000*15)) -- a clock only needs to be accurate to the minute here.
     Timer {
@@ -145,20 +166,24 @@ ApplicationWindow {
             }
         }
 
-        ScrollView {
+        // Not a ScrollView anymore -- the grid below is a fixed 8x2 = 16
+        // cells (exactly matches renderAmbientActions()'s real content:
+        // Music spans 2 + 6 singles = 8 in row 1; 7 curated rooms +
+        // Security = 8 in row 2), same as the PWA's .ambient-actions,
+        // which never scrolls either. Centered in the remaining space,
+        // matching .ambient-overlay's `align-items: center; justify-
+        // content: center`, not stretched/top-anchored.
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
 
             GridLayout {
-                width: root.width - 64
-                // Landscape gets an extra column -- the point of making
-                // orientation a config value instead of a hardcoded
-                // portrait assumption is that layouts actually adapt,
-                // not just the window's outer dimensions.
-                columns: appConfig.isPortrait ? 2 : 3
-                columnSpacing: 16
-                rowSpacing: 16
+                anchors.centerIn: parent
+                // Exact match to pwa-app/index.html's .ambient-actions:
+                // `grid-template-columns: repeat(8, 130px); gap: 12px;`
+                columns: 8
+                columnSpacing: 12
+                rowSpacing: 12
 
                 // ---------- Status row (matches renderAmbientActions()'s
                 // row 1: Music, Comfort, Packages, Energy Flow, Water
@@ -167,7 +192,7 @@ ApplicationWindow {
                 Rectangle {
                     id: musicCard
                     property var playing: root.findPlayingMedia()
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: 130 * 2 + 12
                     Layout.columnSpan: 2
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
@@ -240,8 +265,8 @@ ApplicationWindow {
                     id: comfortCard
                     property real thermoTemp: parseFloat(haClient.ambient.thermostat_temp.state)
                     property real thermoCool: parseFloat(haClient.ambient.thermostat_cool.state)
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 150
+                    Layout.preferredWidth: 130
+                    Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
                     border.color: Theme.hairline
@@ -310,8 +335,8 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 110
+                    Layout.preferredWidth: 130
+                    Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
                     border.color: Theme.hairline
@@ -338,7 +363,7 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: 130
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
@@ -385,8 +410,8 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 110
+                    Layout.preferredWidth: 130
+                    Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
                     border.color: Theme.hairline
@@ -413,8 +438,8 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 110
+                    Layout.preferredWidth: 130
+                    Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
                     border.color: Theme.hairline
@@ -441,8 +466,8 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 150
+                    Layout.preferredWidth: 130
+                    Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
                     border.color: Theme.hairline
@@ -487,12 +512,17 @@ ApplicationWindow {
                 // ---------- Room cards ----------
 
                 Repeater {
-                    model: haClient.areas
+                    // Curated to the exact 7 rooms + order Mike dictated
+                    // for AMBIENT_ROOMS in pwa-app/index.html (2026-08-06)
+                    // -- Ambient Mode is a deliberately fixed 8-column
+                    // layout, not "every area HA reports" (that's what
+                    // the interior/Admin screens are for).
+                    model: root.ambientRooms()
 
                     delegate: Rectangle {
                         required property var modelData
 
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 130
                         Layout.preferredHeight: 140
                         radius: Theme.radiusCard
                         color: modelData.lightOn ? Theme.onDim : Theme.baseRaised
@@ -586,8 +616,8 @@ ApplicationWindow {
                 Rectangle {
                     id: securityCard
                     property var alarmState: haClient.ambient.alarm.state
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 150
+                    Layout.preferredWidth: 130
+                    Layout.preferredHeight: 140
                     radius: Theme.radiusCard
                     color: root.isArmed(alarmState) ? Theme.onDim : Theme.baseRaised
                     border.color: Theme.hairline
