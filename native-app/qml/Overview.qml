@@ -627,9 +627,15 @@ ApplicationWindow {
                                     }
                                     Item { Layout.fillWidth: true }
                                     Text {
+                                        // Single line, truncated with an
+                                        // ellipsis instead of wrapping --
+                                        // wrapping a long room name here
+                                        // ("Master Bedroom") squeezed the
+                                        // header row and crowded the whole
+                                        // card (flagged 2026-08-06).
                                         Layout.maximumWidth: 70
                                         horizontalAlignment: Text.AlignRight
-                                        wrapMode: Text.WordWrap
+                                        elide: Text.ElideRight
                                         text: modelData.displayName
                                         font.family: Theme.fontBody
                                         font.pixelSize: 11
@@ -655,8 +661,18 @@ ApplicationWindow {
                                 }
 
                                 Text {
+                                    // Capped to 2 lines -- long raw HA
+                                    // friendly_names ("Home Assistant
+                                    // Voice 0a9d1a LED Ring") were wrapping
+                                    // to 3 lines and crowding the vpill
+                                    // next to it (flagged 2026-08-06).
+                                    // Real fix is renaming the entities in
+                                    // HA/Homey; this is the display-side
+                                    // stopgap until that happens.
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
                                     text: modelData.hasLight ? modelData.lightName : "Fixture pending"
                                     font.family: Theme.fontBody
                                     font.pixelSize: 12
