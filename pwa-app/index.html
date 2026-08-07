@@ -2070,10 +2070,20 @@ async function renderSensorsContent() {
   sensorsRefreshTimer = setInterval(refreshSensorsBody, 15000);
 }
 
+// Collapsed by default, expanded areas remembered across refreshes
+// (2026-08-07, perf) — this HA instance has 1,128 sensor/binary_sensor
+// entities; rendering every row for every area into one DOM tree, then
+// rebuilding all of it every 15s, is real memory/layout pressure on a
+// low-powered kiosk device (e.g. a 2GB Pi). Collapsed areas render only
+// their header — the row markup for that area isn't in the DOM at all,
+// not just visually hidden — so the live DOM is a small fraction of
+// 1,128 rows unless the user actually opens several areas at once.
+let sensorsLastGrouped = null; // { areaNames: [...], byArea: Map<area, entities[]> }
+let expandedSensorAreas = new Set();
+
 async function refreshSensorsBody() {
   if (currentRoom !== "sensors") return;
-  const body = document.getElementById("sensorsBody");
-  if (!body || !window.haClient || !window.haClient.connected) return;
+  if (!window.haClient || !window.haClient.connected) return;
 
   let states;
   try { states = await window.haClient.getStates(); } catch (e) { console.error(e); return; }
@@ -2095,17 +2105,39 @@ async function refreshSensorsBody() {
     return a.localeCompare(b);
   });
 
+  sensorsLastGrouped = { areaNames, byArea };
+  renderSensorsBodyDom();
+}
+
+// Pure DOM render from the last fetch — no network call, so toggling an
+// area open/closed is instant and doesn't wait on/trigger a fresh fetch.
+function renderSensorsBodyDom() {
+  const body = document.getElementById("sensorsBody");
+  if (!body || !sensorsLastGrouped) return;
+  const { areaNames, byArea } = sensorsLastGrouped;
+
   body.innerHTML = areaNames.map(area => {
-    const rows = byArea.get(area)
+    const isOpen = expandedSensorAreas.has(area);
+    const entities = byArea.get(area);
+    const rows = isOpen ? entities
       .sort((a, b) => (a.attributes.friendly_name || a.entity_id).localeCompare(b.attributes.friendly_name || b.entity_id))
       .map(s => `
         <div class="kv-row">
           <div class="kv-left"><div class="kv-icon">${ico(sensorIconFor(s), "i18")}</div><div class="kv-name">${s.attributes.friendly_name || s.entity_id}</div></div>
           <div class="kv-value">${formatSensorValue(s)}</div>
-        </div>`).join("");
-    return `<div class="section-label-sm" style="margin-top:24px">${ico("map-pin", "i14")}${area} <span style="opacity:0.5;font-weight:400">(${byArea.get(area).length})</span></div><div class="kv-section">${rows}</div>`;
+        </div>`).join("") : "";
+    return `<div class="section-label-sm" data-sensor-area="${area}" style="margin-top:24px; cursor:pointer">${ico("map-pin", "i14")}${area} <span style="opacity:0.5;font-weight:400">(${entities.length})</span> <span class="kv-chevron">${isOpen ? "⌄" : "›"}</span></div>${isOpen ? `<div class="kv-section">${rows}</div>` : ""}`;
   }).join("");
   icons(body);
+
+  body.querySelectorAll("[data-sensor-area]").forEach(el => {
+    el.addEventListener("click", () => {
+      const area = el.dataset.sensorArea;
+      if (expandedSensorAreas.has(area)) expandedSensorAreas.delete(area);
+      else expandedSensorAreas.add(area);
+      renderSensorsBodyDom();
+    });
+  });
 }
 
 async function renderSettingsContent() {
