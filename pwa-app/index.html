@@ -773,11 +773,17 @@ const FAVORITE_CHANNELS = ["ESPN", "HBO", "Local News", "Apple TV", "Netflix", "
 const CAMERAS = [
   { name: "Front Door", entityId: "camera.front_door_entry_high_resolution_channel" },
 ];
-const NOTIFICATIONS = [
-  { name: "Climate", desc: "The temperature is below 40° or above 78° in the home.", on: true },
-  { name: "Door Entry", desc: "If an entry ring is detected at the front door.", on: true },
-  { name: "Lighting", desc: "Lights are left on after everyone has left the house.", on: false },
-  { name: "Entertainment", desc: "A TV or media device is left on overnight.", on: false },
+// Real HA automations behind each of these (2026-08-07), gated by these
+// exact input_boolean entities — not local-only state. Descriptions match
+// what each automation actually does, not the earlier draft copy: the
+// literal doorbell "ring" push is native to the UniFi Protect app and
+// unreachable from HA/Foyer, so Door Entry gates the two person-detected
+// automations instead (confirmed with Mike rather than silently relabeling).
+const NOTIFICATION_ENTITIES = [
+  { name: "Climate", desc: "The home's thermostat reading drops below 40° or rises above 78°.", entityId: "input_boolean.notify_climate" },
+  { name: "Door Entry", desc: "A person is detected on the front door camera (arriving or away).", entityId: "input_boolean.notify_door_entry" },
+  { name: "Lighting", desc: "A light is still on 10 minutes after everyone has left the house.", entityId: "input_boolean.notify_lighting" },
+  { name: "Entertainment", desc: "A TV or media device is still playing at 1:00 AM.", entityId: "input_boolean.notify_entertainment" },
 ];
 const USERS = [
   { name: "Mike", role: "Owner" },
@@ -2061,8 +2067,17 @@ async function refreshSensorsBody() {
   icons();
 }
 
-function renderSettingsContent() {
+async function renderSettingsContent() {
   const content = document.getElementById("content");
+
+  let notifStates = new Map();
+  if (window.haClient && window.haClient.connected) {
+    try {
+      const states = await window.haClient.getStates();
+      notifStates = new Map(states.map(s => [s.entity_id, s.state]));
+    } catch (e) { console.error(e); }
+  }
+
   content.innerHTML = `
     <div class="header">
       <div class="header-title-row"><span>${ico("settings", "i24")}</span><h1>Settings</h1></div>
@@ -2070,10 +2085,10 @@ function renderSettingsContent() {
     </div>
     <div class="section-label-sm">${ico("bell", "i14")}Notifications</div>
     <div class="kv-section">
-      ${NOTIFICATIONS.map((n, i) => `
+      ${NOTIFICATION_ENTITIES.map(n => `
         <div class="notif-row">
           <div><div class="notif-name">${n.name}</div><div class="notif-desc">${n.desc}</div></div>
-          <button class="notif-check ${n.on ? "on" : ""}" data-notif="${i}">${ico("check", "i14")}</button>
+          <button class="notif-check ${notifStates.get(n.entityId) === "on" ? "on" : ""}" data-notif-entity="${n.entityId}">${ico("check", "i14")}</button>
         </div>`).join("")}
     </div>
     <div class="section-label-sm" style="margin-top:24px">${ico("users", "i14")}Users</div>
@@ -2092,8 +2107,14 @@ function renderSettingsContent() {
   `;
   updateClock();
   icons();
-  document.querySelectorAll("[data-notif]").forEach(el => {
-    el.addEventListener("click", () => { NOTIFICATIONS[+el.dataset.notif].on = !NOTIFICATIONS[+el.dataset.notif].on; renderSettingsContent(); });
+  document.querySelectorAll("[data-notif-entity]").forEach(el => {
+    el.addEventListener("click", async () => {
+      if (!window.haClient || !window.haClient.connected) return;
+      try {
+        await window.haClient.callService("input_boolean", "toggle", el.dataset.notifEntity);
+      } catch (e) { console.error(e); }
+      renderSettingsContent();
+    });
   });
 }
 
@@ -2934,10 +2955,24 @@ async function initLiveData() {
   render();
 }
 
+// First-run nudge (2026-08-07): the credential-entry onboarding screen
+// stays minimal on purpose, but a device's very first connection is also
+// the moment Admin Mode's room suggestions are most useful — surfaces
+// discovery instead of requiring the user to already know Admin Mode
+// exists. Only fires once per device, right after onboarding completes,
+// never on a normal app load for an already-configured device.
+const FIRST_RUN_SEEN_KEY = "ha_foyer_first_run_seen";
+
 if (HAConfig.isConfigured()) {
   initLiveData();
 } else {
-  showOnboarding(initLiveData);
+  showOnboarding(async () => {
+    await initLiveData();
+    if (!localStorage.getItem(FIRST_RUN_SEEN_KEY)) {
+      localStorage.setItem(FIRST_RUN_SEEN_KEY, "1");
+      openAdmin();
+    }
+  });
 }
 
 if (HomeyConfig.isConfigured()) {
