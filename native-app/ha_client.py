@@ -90,6 +90,11 @@ class HAClient(QObject):
                 e for e in entities
                 if e["domain"] == "light" and e["state"] != "unavailable" and e["entity_id"] not in excluded
             ]
+            # Representative light (matches the PWA's ambient lightCard(),
+            # which uses r.lighting[0] rather than an aggregate "N of M"
+            # count) -- the card shows one light's actual name/brightness,
+            # same as Ambient Mode's real Loxone-matched anatomy.
+            primary = lights[0] if lights else None
             result.append({
                 "id": area["id"],
                 "name": area["name"],
@@ -97,6 +102,10 @@ class HAClient(QObject):
                 "lightEntityIds": [e["entity_id"] for e in lights],
                 "lightsOn": sum(1 for e in lights if e["state"] == "on"),
                 "lightsTotal": len(lights),
+                "hasLight": primary is not None,
+                "lightName": primary["name"] if primary else "",
+                "lightOn": primary["state"] == "on" if primary else False,
+                "lightPct": primary["brightnessPct"] if primary and primary["state"] == "on" else 0,
             })
         result.sort(key=lambda a: a["name"])
         return result
@@ -244,10 +253,16 @@ class HAClient(QObject):
         if area_id is None or area_id not in self._areas:
             return False  # entity not assigned to any known area -- not shown on Overview
         domain = entity_id.split(".", 1)[0]
+        attrs = state.get("attributes", {})
+        # brightness is HA's 0-255 scale; stored pre-converted to 0-100 so
+        # QML and the PWA's ambient-card fill logic agree on the same units
+        # (matches the PWA's `light.brightness || 100` when on, 0 when off).
+        brightness_attr = attrs.get("brightness")
         self._areas[area_id]["entities"][entity_id] = {
             "entity_id": entity_id,
             "domain": domain,
-            "name": state.get("attributes", {}).get("friendly_name", entity_id),
+            "name": attrs.get("friendly_name", entity_id),
             "state": state.get("state", "unknown"),
+            "brightnessPct": round(brightness_attr / 255 * 100) if brightness_attr is not None else 100,
         }
         return True

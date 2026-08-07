@@ -9,13 +9,24 @@ import QtQuick.Layouts
 // docs/UI_MODES_SPEC.md "Ambient Mode v2") rather than the plain area grid
 // this file started as -- per NATIVE_APP_SPEC.md "Port from the PWA, not
 // the original mockup." This is a bounded first pass, not the full port:
-// clock/date + per-room status cards ("N of M lights on") with tap-to-
-// toggle, the same "one quick-action per room" behavior Ambient Mode v1
-// shipped with in the PWA. Deliberately NOT included yet (real PWA
-// features, just bigger scope, matching this project's "prove one thing
-// before templating" discipline): the +/- brightness stepper, color
-// presets, day/night theme shift, the global Night/Day buttons. Follow-up
-// passes, not this one.
+// clock/date + per-room status cards with tap-to-toggle, the same "one
+// quick-action per room" behavior Ambient Mode v1 shipped with in the PWA.
+//
+// Card anatomy (2026-08-06) updated to match the PWA's current
+// Loxone-matched room card: room label, a brightness word (Off/Dim/On/
+// Bright) as the primary text, the representative light's own name as the
+// sub-text, and a vertical pill on the right showing brightness as a fill
+// height -- same visual language as pwa-app/index.html's lightCard().
+// Two things the PWA's card has that this one deliberately doesn't yet:
+// a lightbulb icon (no SVG/icon-asset pipeline exists in the native app
+// yet -- text-only for now rather than faking one) and the presence dot
+// (no presence-sensor data wired into ha_client.py's model yet). Both are
+// real, scoped follow-ups, not oversights.
+//
+// Still deliberately NOT included (real PWA features, just bigger scope):
+// drag-to-set brightness on the pill itself (tap-to-toggle stays as the
+// write action for now), color presets, day/night theme shift, the global
+// Night/Day buttons. Follow-up passes, not this one.
 ApplicationWindow {
     id: root
     visible: true
@@ -106,10 +117,20 @@ ApplicationWindow {
 
                     delegate: Rectangle {
                         required property var modelData
+                        // brightnessWord() mirrors the PWA's
+                        // ambientBrightnessWord() exactly -- same four
+                        // bands, same thresholds.
+                        function brightnessWord(pct) {
+                            if (pct <= 0) return "Off"
+                            if (pct < 40) return "Dim"
+                            if (pct < 75) return "On"
+                            return "Bright"
+                        }
+
                         Layout.fillWidth: true
                         Layout.preferredHeight: 140
                         radius: Theme.radiusCard
-                        color: modelData.lightsOn > 0 ? Theme.onDim : Theme.baseRaised
+                        color: modelData.lightOn ? Theme.onDim : Theme.baseRaised
                         border.color: Theme.hairline
                         border.width: 1
 
@@ -126,28 +147,64 @@ ApplicationWindow {
                             onClicked: haClient.callService("light", "toggle", modelData.lightEntityIds)
                         }
 
-                        ColumnLayout {
+                        RowLayout {
                             anchors.fill: parent
-                            anchors.margins: 16
-                            spacing: 6
+                            anchors.margins: 14
+                            spacing: 10
 
-                            Text {
-                                text: modelData.name
-                                font.family: Theme.fontHead
-                                font.pixelSize: 18
-                                font.weight: Font.DemiBold
-                                color: Theme.text
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 4
+
+                                Text {
+                                    text: modelData.name
+                                    font.family: Theme.fontBody
+                                    font.pixelSize: 11
+                                    color: Theme.textDim
+                                }
+
+                                Item { Layout.fillHeight: true }
+
+                                Text {
+                                    text: modelData.hasLight ? brightnessWord(modelData.lightPct) : "No light"
+                                    font.family: Theme.fontHead
+                                    font.pixelSize: 17
+                                    font.weight: Font.Bold
+                                    color: Theme.text
+                                }
+
+                                Text {
+                                    text: modelData.hasLight ? modelData.lightName : "Fixture pending"
+                                    font.family: Theme.fontBody
+                                    font.pixelSize: 12
+                                    color: Theme.textDim
+                                }
                             }
 
-                            Item { Layout.fillHeight: true }
+                            // Vertical pill -- same fill-from-bottom
+                            // brightness indicator as the PWA's
+                            // .ambient-vpill-track/.ambient-vpill-fill.
+                            // Display-only in this pass (shows current
+                            // brightness; dragging to set it is a
+                            // follow-up, not proven here yet).
+                            Rectangle {
+                                visible: modelData.hasLight
+                                Layout.alignment: Qt.AlignBottom
+                                width: 13
+                                height: 46
+                                radius: 999
+                                color: Theme.hairline
+                                clip: true
 
-                            Text {
-                                text: modelData.lightsTotal > 0
-                                    ? modelData.lightsOn + " of " + modelData.lightsTotal + " lights on"
-                                    : "No lights"
-                                font.family: Theme.fontBody
-                                font.pixelSize: 15
-                                color: modelData.lightsOn > 0 ? Theme.on : Theme.textDim
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: parent.height * (modelData.lightPct / 100)
+                                    radius: 999
+                                    color: modelData.lightOn ? Theme.on : Theme.textDim
+                                }
                             }
                         }
                     }
