@@ -766,7 +766,12 @@
 // Shared favorites list — real Savant favorites are largely shared across the house
 // (one "Cable Favorites" list, surfaced per-room), not fabricated per-device variation.
 const FAVORITE_CHANNELS = ["ESPN", "HBO", "Local News", "Apple TV", "Netflix", "FX"];
-const CAMERAS = ["Front Door", "Driveway", "Back Door", "Backyard"];
+// Only one real camera position exists in this HA instance (checked live
+// via search_entities 2026-08-07) — Front Door, with a high-res main feed
+// and a package-detection sub-view. No driveway/back-door/backyard cameras.
+const CAMERAS = [
+  { name: "Front Door", entityId: "camera.front_door_entry_high_resolution_channel" },
+];
 const NOTIFICATIONS = [
   { name: "Climate", desc: "The temperature is below 40° or above 78° in the home.", on: true },
   { name: "Door Entry", desc: "If an entry ring is detected at the front door.", on: true },
@@ -804,7 +809,6 @@ const ROOMS = {
     ],
     climate: { temp: 71, target: 72, mode: "Auto", fan: "Auto", humidity: 52 },
     media: { name: "Sonos Arc", track: "Evening Mix", artist: "KEXP", source: "AirPlay", playing: true, volume: 34, elapsed: 74, duration: 224, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
-    security: [ { name: "Front Door", status: "Locked" }, { name: "Motion", status: "Clear" } ],
     shades: [ { name: "Picture Window", position: 40 }, { name: "Sliding Door", position: 0 } ],
   },
   kitchen: {
@@ -820,7 +824,6 @@ const ROOMS = {
     ],
     climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 48 },
     media: { name: "Kitchen Speaker", track: "—", artist: "", source: "AirPlay", playing: false, volume: 20, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
-    security: [ { name: "Back Door", status: "Locked" }, { name: "AQ Sensor", status: "Good" } ],
     shades: [ { name: "Sink Window", position: 60 } ],
   },
   master: {
@@ -836,7 +839,6 @@ const ROOMS = {
     ],
     climate: { temp: 68, target: 67, mode: "Sleep", fan: "Auto", humidity: 45 },
     media: { name: "Bedroom Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 12, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
-    security: [ { name: "Bed Presence", status: "Occupied" }, { name: "FP2", status: "Still" } ],
     shades: [ { name: "Bedroom Window", position: 10 }, { name: "Blackout Shade", position: 0 } ],
   },
   office: {
@@ -852,7 +854,6 @@ const ROOMS = {
     ],
     climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "Office Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
-    security: [ { name: "Motion", status: "Active" }, { name: "Door", status: "Unlocked" } ],
     shades: [ { name: "Window", position: 70 } ],
   },
   utility: {
@@ -868,7 +869,6 @@ const ROOMS = {
     ],
     climate: { temp: 69, target: 69, mode: "Auto", fan: "Auto", humidity: 55 },
     media: { name: "Utility Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
-    security: [ { name: "MSR-2 Radar", status: "Clear" }, { name: "Washer", status: "Idle" } ],
     shades: [ { name: "Utility Window", position: 100 } ],
   },
   // Dining Room (added 2026-08-06) — no mock entry existed for this room
@@ -882,7 +882,7 @@ const ROOMS = {
     lighting: [],
     climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
-    security: [], shades: [],
+    shades: [],
   },
   bedroom4: {
     name: "Guest West",
@@ -891,7 +891,7 @@ const ROOMS = {
     lighting: [],
     climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
-    security: [], shades: [],
+    shades: [],
   },
   bedroom3: {
     name: "Guest East",
@@ -900,7 +900,7 @@ const ROOMS = {
     lighting: [],
     climate: { temp: 70, target: 70, mode: "Auto", fan: "Auto", humidity: 50 },
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
-    security: [], shades: [],
+    shades: [],
   },
 };
 
@@ -909,17 +909,16 @@ let currentRoom = "living";
 let currentService = "lighting";     // lighting | climate | media | security
 let lightingView = "slider";         // slider | scenes | global
 let powerTab = "overview";           // overview | waterheater
-let securityView = "arm";            // arm | status
-let securityFilter = "all";          // all | ready | notready
-let armState = "disarmed";           // stay | disarmed | away (whole-home, matches real Savant)
+let securityView = "arm";            // arm | cameras — "status" (per-room fault list) removed 2026-08-07:
+                                      // no HA instance has any real contact/motion/lock entities to back
+                                      // a per-room fault list (checked live via search_entities), so it
+                                      // was pure fabricated data with nothing real to wire it to.
 let mediaView = "now";               // now | favorites
 let securityCameraFullscreen = null; // index into CAMERAS expanded fullscreen, or null
 let colorWheelIndex = null;          // room.lighting index whose color wheel is open, or null
 let energyMode = "eco";              // eco | storm — Storm Watch is a variant of the Eco Mode template
 let colorSubView = "wheel";          // wheel | white — dock inside the color screen
-
-const GOOD_STATUSES = new Set(["Locked", "Clear", "Good", "Still", "Idle"]);
-function isFault(s) { return !GOOD_STATUSES.has(s.status); }
+let cameraRefreshTimer = null;       // live snapshot polling interval while the Cameras tab is open
 
 // Lucide line icons instead of emoji — matches Savant's actual monochrome icon
 // style instead of platform-dependent emoji rendering. `icons()` must run after
@@ -1010,7 +1009,7 @@ function renderRail() {
 // same reset-state list either path used to duplicate inline.
 function goToRoom(id) {
   currentRoom = id; currentService = "lighting"; lightingView = "slider"; colorWheelIndex = null;
-  mediaView = "now"; powerTab = "overview"; securityView = "arm"; securityFilter = "all";
+  mediaView = "now"; powerTab = "overview"; securityView = "arm";
   render();
 }
 
@@ -1712,84 +1711,103 @@ function renderShades(room) {
     </div>`).join("")}</div>`;
 }
 
+// Derives an http(s) base ("http://homeassistant.local:8123") from the
+// configured WebSocket URL ("ws://homeassistant.local:8123/api/websocket")
+// so REST endpoints (camera snapshots) can be called without a second
+// config field — same URL the user already entered at onboarding.
+function haHttpBase() {
+  if (!window.haClient || !window.haClient.url) return null;
+  return window.haClient.url.replace(/^ws/, "http").replace(/\/api\/websocket$/, "");
+}
+
+// Camera snapshots are fetched with the Bearer token (an <img src> can't
+// send auth headers) and turned into a blob URL, revoking the previous one
+// each refresh to avoid leaking memory over a long-running kiosk session.
+async function refreshCameraSnapshot(entityId, imgId) {
+  const base = haHttpBase();
+  const imgEl = document.getElementById(imgId);
+  if (!base || !imgEl || !window.haClient || !window.haClient.token) return;
+  try {
+    const res = await fetch(`${base}/api/camera_proxy/${entityId}`, {
+      headers: { Authorization: `Bearer ${window.haClient.token}` },
+    });
+    if (!res.ok) throw new Error(`camera snapshot failed: ${res.status}`);
+    const blob = await res.blob();
+    const newUrl = URL.createObjectURL(blob);
+    const oldUrl = imgEl.dataset.blobUrl;
+    imgEl.src = newUrl;
+    imgEl.dataset.blobUrl = newUrl;
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+  } catch (e) {
+    console.error("camera snapshot failed", e);
+  }
+}
+
 function renderSecurityArm() {
+  // Real Alarmo state (ambientAlarmState is kept live via the same
+  // WebSocket subscription the Ambient card uses — see AMBIENT_ALARM_ENTITY).
   // Icon differentiated per arm state (2026-08-06) — all three used a plain
   // "shield" before, which didn't distinguish Stay/Away/Disarmed at a
   // glance the way the rest of the app's icon-forward screens do.
+  const rawState = ambientAlarmState ? ambientAlarmState.state : null;
+  const knownStates = { armed_home: "stay", armed_away: "away", disarmed: "disarmed" };
+  const uiState = knownStates[rawState] || null;
   const states = [["stay", "Stay", "home"], ["disarmed", "Disarmed", "shield-off"], ["away", "Away", "shield-check"]];
-  const label = armState === "disarmed" ? "READY TO ARM" : `ARMED · ${armState.toUpperCase()}`;
+  let label;
+  if (!rawState) label = "—";
+  else if (uiState) label = uiState === "disarmed" ? "READY TO ARM" : `ARMED · ${uiState.toUpperCase()}`;
+  else label = rawState.replace(/_/g, " ").toUpperCase(); // arming / pending / triggered
   return `
     <div class="arm-row">
       ${states.map(([id, name, icon]) => `
-        <button class="arm-shield ${armState === id ? "active" : ""}" data-arm="${id}">
+        <button class="arm-shield ${uiState === id ? "active" : ""}" data-arm="${id}">
           ${ico(icon, "i24")}<div class="label">${name.toUpperCase()}</div>
         </button>`).join("")}
     </div>
     <div class="arm-status-text">${label}</div>
     <div class="quick-grid">
-      <button class="quick-btn" data-quick="lock">${ico("lock", "i16")}Lock Doors</button>
-      <button class="quick-btn" data-quick="unlock">${ico("lock-open", "i16")}Unlock Front Door</button>
       <button class="quick-btn" data-quick="porch">${ico("lightbulb", "i16")}Turn On Porch Lights</button>
-      <button class="quick-btn" data-quick="entry">${ico("door-open", "i16")}Open Door Entry</button>
     </div>`;
-}
-
-// Whole-home Security Status — real Savant groups every room's sensors under one
-// screen ("Main House 4 Faults / Foyer 1 Fault"), not a per-room filtered list.
-function renderSecurityStatusAll() {
-  const filterTabs = [["all", "All"], ["ready", "Ready"], ["notready", "Not Ready"]];
-  let anyFaults = false;
-  const groups = ROOM_ORDER.map(id => {
-    const room = ROOMS[id];
-    const items = room.security.filter(s => {
-      if (securityFilter === "ready") return !isFault(s);
-      if (securityFilter === "notready") return isFault(s);
-      return true;
-    });
-    const faultCount = room.security.filter(isFault).length;
-    if (faultCount > 0) anyFaults = true;
-    return { room, items, faultCount };
-  }).filter(g => g.items.length > 0);
-
-  return `
-    <div class="security-filter-tabs">
-      ${filterTabs.map(([id, label]) => `<button class="security-filter-tab ${securityFilter === id ? "active" : ""}" data-secfilter="${id}">${label}</button>`).join("")}
-    </div>
-    ${groups.map(g => `
-      <div class="security-group">
-        <div class="security-group-header">
-          <span>${g.room.name}</span>
-          ${g.faultCount > 0 ? `<span class="security-fault-count">${g.faultCount} Fault${g.faultCount > 1 ? "s" : ""}</span>` : ""}
-        </div>
-        <div class="security-list">
-          ${g.items.map(s => `
-            <div class="security-row">
-              <div style="display:flex; align-items:center; gap:10px">
-                <span class="security-dot" style="background:${isFault(s) ? "#FF9F0A" : "var(--on)"}"></span>
-                <div class="light-row-name">${s.name}</div>
-              </div>
-              <div class="badge ${isFault(s) ? "fault" : "ok"}">${s.status}</div>
-            </div>`).join("")}
-        </div>
-      </div>`).join("")}
-    ${anyFaults ? `<button class="bypass-btn" data-bypass>${ico("shield-off", "i16")}Bypass All Faults</button>` : ""}`;
+  // Lock/Unlock/Open-Door-Entry buttons removed 2026-08-07 — no lock
+  // entities exist in this HA instance (sensor.locks reports 0, the one
+  // "Front Door Locked" binary_sensor is stuck on "unknown"), so they had
+  // nothing real to call.
 }
 
 function renderSecurityCameras() {
   if (securityCameraFullscreen !== null) {
+    const cam = CAMERAS[securityCameraFullscreen];
+    const imgId = `cam-img-full-${securityCameraFullscreen}`;
     return `
       <div class="video-fullscreen-wrap">
-        <div class="video-tile-bg"></div>
+        <img class="video-tile-bg" id="${imgId}" style="width:100%; height:100%; object-fit:cover;" alt="${cam.name}" />
         <button class="video-fullscreen-close" data-camera-close>${ico("minimize-2", "i16")}</button>
-        <div class="video-fullscreen-name">${CAMERAS[securityCameraFullscreen]}</div>
+        <div class="video-fullscreen-name">${cam.name}</div>
       </div>`;
   }
-  return `<div class="camera-grid">${CAMERAS.map((name, i) => `
+  return `<div class="camera-grid">${CAMERAS.map((cam, i) => `
     <div class="camera-tile" data-camera="${i}">
       <div class="camera-tile-live">LIVE</div>
-      <div class="camera-tile-bg"></div>
-      <div class="camera-tile-name">${name}</div>
+      <img class="camera-tile-bg" id="cam-img-${i}" style="width:100%; height:100%; object-fit:cover;" alt="${cam.name}" />
+      <div class="camera-tile-name">${cam.name}</div>
     </div>`).join("")}</div>`;
+}
+
+// Loads the currently-visible camera snapshot(s) once immediately, then
+// keeps them refreshing every 8s for as long as the Cameras tab stays
+// open (cleared on navigating away — see renderContent()).
+function startCameraRefresh() {
+  if (cameraRefreshTimer) clearInterval(cameraRefreshTimer);
+  const doRefresh = () => {
+    if (securityCameraFullscreen !== null) {
+      const cam = CAMERAS[securityCameraFullscreen];
+      refreshCameraSnapshot(cam.entityId, `cam-img-full-${securityCameraFullscreen}`);
+    } else {
+      CAMERAS.forEach((cam, i) => refreshCameraSnapshot(cam.entityId, `cam-img-${i}`));
+    }
+  };
+  doRefresh();
+  cameraRefreshTimer = setInterval(doRefresh, 8000);
 }
 
 function renderSecurityContent() {
@@ -1797,13 +1815,9 @@ function renderSecurityContent() {
   const subnav = `
     <div class="subnav">
       <button class="subnav-btn ${securityView === "arm" ? "active" : ""}" data-secview="arm" title="Arm">${ico("shield", "i18")}</button>
-      <button class="subnav-btn ${securityView === "status" ? "active" : ""}" data-secview="status" title="Status">${ico("list-checks", "i18")}</button>
       <button class="subnav-btn ${securityView === "cameras" ? "active" : ""}" data-secview="cameras" title="Cameras">${ico("camera", "i18")}</button>
     </div>`;
-  let body;
-  if (securityView === "status") body = renderSecurityStatusAll();
-  else if (securityView === "cameras") body = renderSecurityCameras();
-  else body = renderSecurityArm();
+  const body = securityView === "cameras" ? renderSecurityCameras() : renderSecurityArm();
   content.innerHTML = `
     <div class="header">
       <div class="header-title-row"><span>${ico("shield", "i24")}</span><h1>Security</h1></div>
@@ -1815,24 +1829,28 @@ function renderSecurityContent() {
   updateClock();
   icons();
 
+  if (securityView === "cameras") startCameraRefresh();
+  else if (cameraRefreshTimer) { clearInterval(cameraRefreshTimer); cameraRefreshTimer = null; }
+
   document.querySelectorAll("[data-secview]").forEach(el => {
     el.addEventListener("click", () => { securityView = el.dataset.secview; securityCameraFullscreen = null; renderSecurityContent(); });
   });
   document.querySelectorAll("[data-arm]").forEach(el => {
-    el.addEventListener("click", () => { armState = el.dataset.arm; renderSecurityContent(); });
-  });
-  document.querySelectorAll("[data-secfilter]").forEach(el => {
-    el.addEventListener("click", () => { securityFilter = el.dataset.secfilter; renderSecurityContent(); });
+    el.addEventListener("click", () => {
+      if (!window.haClient || !window.haClient.connected) return;
+      const service = { stay: "alarm_arm_home", away: "alarm_arm_away", disarmed: "alarm_disarm" }[el.dataset.arm];
+      if (service) window.haClient.callService("alarm_control_panel", service, AMBIENT_ALARM_ENTITY).catch(console.error);
+    });
   });
   document.querySelectorAll("[data-camera]").forEach(el => {
     el.addEventListener("click", () => { securityCameraFullscreen = +el.dataset.camera; renderSecurityContent(); });
   });
   const camClose = document.querySelector("[data-camera-close]");
   if (camClose) camClose.addEventListener("click", () => { securityCameraFullscreen = null; renderSecurityContent(); });
-  const bypassBtn = document.querySelector("[data-bypass]");
-  if (bypassBtn) bypassBtn.addEventListener("click", () => {
-    ROOM_ORDER.forEach(id => { ROOMS[id].security.forEach(s => { if (isFault(s)) s.status = "Clear"; }); });
-    renderSecurityContent();
+  const porchBtn = document.querySelector('[data-quick="porch"]');
+  if (porchBtn) porchBtn.addEventListener("click", () => {
+    if (!window.haClient || !window.haClient.connected) return;
+    window.haClient.callService("light", "turn_on", "group.front_porch_exterior_lights").catch(console.error);
   });
 }
 
@@ -1931,6 +1949,10 @@ function renderSettingsContent() {
 }
 
 function renderContent() {
+  if (currentRoom !== "security" && cameraRefreshTimer) {
+    clearInterval(cameraRefreshTimer);
+    cameraRefreshTimer = null;
+  }
   if (currentRoom === "power") { renderPowerContent(); return; }
   if (currentRoom === "security") { renderSecurityContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
@@ -2811,7 +2833,7 @@ function defaultRoomShape(name) {
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     tv: null,
     airQuality: null,
-    security: [], shades: [],
+    shades: [],
   };
 }
 

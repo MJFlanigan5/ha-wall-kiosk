@@ -245,14 +245,41 @@ viewport → bottom nav). `manifest.json`'s `orientation: "any"` is
 deliberate — locking to one orientation would break the other device
 class.
 
+## Security + Cameras (wired 2026-08-07)
+
+Both were previously fully mock — a hand-authored per-room "fault list"
+with no real backing data at all, a local-only 3-way arm toggle, and a
+4-camera grid (Front Door/Driveway/Back Door/Backyard) where only Front
+Door is a real device.
+
+- **Arm/Disarm** — real `alarm_control_panel.alarmo`, same live-updated
+  state the Ambient card already used (`AMBIENT_ALARM_ENTITY`). Stay →
+  `alarm_arm_home`, Away → `alarm_arm_away`, Disarmed → `alarm_disarm`.
+- **Status tab (per-room faults) — removed entirely**, not wired. Checked
+  live via `search_entities`: zero contact/window/motion sensors exist
+  anywhere in this HA instance, and Alarmo's own `open_sensors` is `null`
+  — there was no real data to put there.
+- **Lock Doors / Unlock Front Door / Open Door Entry — removed.** No lock
+  entities exist (`sensor.locks` reports 0; the one `binary_sensor.front_door_locked`
+  is stuck on `unknown`, a dead restored entity).
+- **Turn On Porch Lights — kept, now real**, calls `light.turn_on` on
+  `group.front_porch_exterior_lights` (the same group already used
+  elsewhere in the live HA config).
+- **Cameras — now the one real camera** (`camera.front_door_entry_high_resolution_channel`).
+  Snapshot polling every 8s via `/api/camera_proxy/<entity>` with the
+  Bearer token (blob URL, revoked each refresh to avoid leaking memory
+  over a long kiosk session) — not a true video stream, a refreshing
+  still image. A real HLS stream is a further step if wanted later.
+
 ## What's still mock content
 
-Every other screen (climate, media, security, cameras, shades, energy,
-pool/spa, video/AppleTV, message center) — unchanged from the original
-mockup, still fake data. Climate specifically isn't wired because **no
+Every other screen (climate, media [1 of 3 rooms], shades, energy
+sub-sections, video/AppleTV, message center) — unchanged from the
+original mockup, still fake data. Climate isn't wired because **no
 climate entities exist in this HA instance yet** (verified live via
 `search_entities`, not assumed) — that's a backend gap, not something this
-app can fix.
+app can fix. Same is true for shades (no `cover` domain entities exist).
+There is no pool/spa screen in this app — never was.
 
 ## Why only 3 rooms / a curated entity list, not full auto-discovery
 
