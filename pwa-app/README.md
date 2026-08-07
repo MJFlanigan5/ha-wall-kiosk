@@ -193,10 +193,12 @@ Reached from the rail nav ("Energy") or Ambient's Energy Flow card:
 - **Water Heater** — real Rinnai tankless entities (set temp, recirculation,
   flow rate, away/vacation mode). Vacation Mode calls the real
   `water_heater.set_away_mode` service instead of flipping a local boolean.
-- **History / Automation / EV Charging / Events** — still mock, explicitly
-  flagged in a code comment above `renderEnergyHistory()`. EV Charging has
-  zero real backing entity (no EV charger exists in this house); the others
-  need separate scoping (real historical time-series data, etc.).
+- **History** — real 7-day daily totals (Solar/Grid/Battery) via HA's
+  recorder statistics (2026-08-07, see below). **Automation** is still mock
+  (a real rule-builder is its own separate, larger project — explicitly
+  out of scope for now, not just unwired). **EV Charging** and **Events**
+  (Message Center) were removed entirely, not left mock — see 2026-08-07
+  section below.
 
 ## Admin Mode (added 2026-08-05)
 
@@ -271,15 +273,90 @@ Door is a real device.
   over a long kiosk session) — not a true video stream, a refreshing
   still image. A real HLS stream is a further step if wanted later.
 
+## Discovery, Climate, Sensors, Video/TV, Notifications (2026-08-07)
+
+A bigger pass, built generically on purpose so it works for any HA/Homey
+setup, not just this specific house.
+
+- **Sensors page** (new nav item) — every `sensor.*`/`binary_sensor.*`
+  entity in HA, grouped by real room via the area/device/entity
+  registries. Zero per-entity config; anything wired into HA shows up
+  automatically (Beszel homelab monitoring, Flo water usage, air quality,
+  everything). Registries fetched once per session, live values poll on a
+  plain interval only while the page is open.
+- **Climate** — real per-room section, generic by design: any room can
+  have a Homey thermostat-class device assigned (Admin Mode), detected by
+  capability shape (`target_temperature*`) **and** Homey's own
+  `device.class === "thermostat"` (tightened 2026-08-07 after confirming
+  capability-alone can false-positive on other device types, e.g. some
+  water heater apps). Renders whatever capabilities the assigned device
+  actually exposes — separate heat/cool setpoints, mode enum, read-only
+  activity/humidity — instead of assuming a fixed shape. Assignment
+  picker auto-suggests a room by matching the device's Homey zone name
+  against room names, always listing every unassigned candidate so the
+  suggestion can be overridden. Writes go straight to Homey then re-fetch
+  (HA's mirrored sensors for this bridge lag 15s+); Eco mode is turned
+  off first, generically (any setable boolean capability matching
+  `/eco/i`), since it blocks every manual write on the real device this
+  was built against. Ambient Mode's Comfort tile was consolidated onto
+  this same system (it used to be a separate, duplicate one).
+- **Missing-room suggestions** (Admin Mode) — cross-references real HA
+  areas + Homey zones against Foyer's existing rooms and surfaces the gap
+  with a real device count per candidate, "suggest, don't auto-build" by
+  explicit choice: every HA area/Homey zone becoming a full room screen
+  automatically would produce flat placeholder screens for spaces that
+  don't belong in a wall-kiosk UI (Server Rack, Attic, etc). "Add Room"
+  reuses the existing create-room flow directly.
+- **Ambient Mode visibility is now opt-in per room**, not automatic —
+  `getRoomEntityMap()[roomId].showOnAmbient`, toggled from each room's
+  Admin Mode block. Previously a new room forced its way onto Ambient
+  with no way to opt out, unlike Utility Room's manual exclusion; both
+  now go through the same mechanism.
+- **Video/TV — real remote D-pad.** Any room's TV gets one whenever its
+  assigned `media_player` has a paired `remote.*` entity on the same HA
+  device — found generically via the entity/device registries, not
+  hardcoded to Living Room's Apple TV. Command set is HA's own documented
+  `apple_tv` `remote.send_command` vocabulary (up/down/left/right/select,
+  menu/home/play/pause).
+- **Notifications (Settings) — real**, not local-only mock state. 4
+  `input_boolean` helpers gate 4 real automations: Climate (thermostat
+  reading out of 40–78°), Door Entry (gates the existing front-door
+  person-detection automations — the literal doorbell *ring* push turned
+  out to be native to the UniFi Protect app, unreachable from HA),
+  Lighting (a light still on 10 min after every `person.*` entity is
+  `not_home`, via HA's `zone` trigger + `entity_id: all` so it isn't
+  hardcoded to one person), Entertainment (any `media_player` still
+  playing at 1am).
+- **Energy History — actually wired**, and the "Sources is real,
+  Consumers is fake" framing from the 2026-08-06 pass turned out to be
+  wrong on inspection: *both* were 100% mock (Solar/Grid/Battery values
+  were hardcoded arrays too). Sources is now real 7-day daily totals via
+  `HAClient.getStatistics()` (HA's `recorder/statistics_during_period` WS
+  command — undocumented on HA's side, same one its own energy dashboard
+  uses) against real cumulative energy sensors. Consumers, EV Charging,
+  and Message Center (Events) were removed entirely rather than fixed —
+  zero backing entities exist for any of them, not fixable by wiring.
+- **First-run nudge** — the first time a device ever completes
+  onboarding, Admin Mode opens automatically to the room-suggestions
+  list, instead of requiring the user to already know it exists. Fires
+  once per device.
+- **Water heater set-temperature — confirmed broken**, not just slow
+  polling as previously suspected: a real write + 10 minute wait showed
+  `last_updated` advancing (so the integration did poll fresh data) while
+  the target temperature itself never changed. Likely in the third-party
+  `custom_components.rinnai` HACS integration's cloud round-trip, not a
+  bug in this app — Foyer's write path correctly calls the real
+  `water_heater.set_temperature` service.
+
 ## What's still mock content
 
-Every other screen (climate, media [1 of 3 rooms], shades, energy
-sub-sections, video/AppleTV, message center) — unchanged from the
-original mockup, still fake data. Climate isn't wired because **no
-climate entities exist in this HA instance yet** (verified live via
-`search_entities`, not assumed) — that's a backend gap, not something this
-app can fix. Same is true for shades (no `cover` domain entities exist).
-There is no pool/spa screen in this app — never was.
+As of 2026-08-07: **shades** (no `cover` domain entities exist anywhere
+in this HA instance — a real backend gap, not something this app can
+fix) and **Power Automation's rule builder** (its own separate, larger
+project). Climate, Video/TV, and Message Center/EV Charging were all
+still-mock as of the last pass through this doc — see the 2026-08-07
+section below for what changed. There is no pool/spa screen in this app
+— never was.
 
 ## Why only 3 rooms / a curated entity list, not full auto-discovery
 
