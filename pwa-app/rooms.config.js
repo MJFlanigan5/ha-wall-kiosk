@@ -87,9 +87,10 @@ const ROOM_ENTITY_MAP = {
   // same supported_features scheme as Kitchen/Utility's working Cast
   // entities) over the native-integration duplicate (55a300w_television)
   // for consistency with the pattern already verified live in Kitchen.
-  // No airQuality here — this room's Qingping CGS1 sensor is uncalibrated
-  // (temperature reads 181, humidity/CO2/PM2.5 all "unknown"), same known
-  // issue already noted for its CO2 reading elsewhere in this app.
+  // No airQuality here — this room's Qingping sensor never comes through HA
+  // (qingping_cgs1 integration won't load). Real data is pulled straight from
+  // Qingping's Cloud API via a Homey flow and polled directly in index.html
+  // (DINING_ROOM_AQ_DEVICE_ID / pollDiningRoomAQ), not through this map.
   dining: {
     lighting: [
       "light.dining_room_right",

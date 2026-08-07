@@ -1473,6 +1473,7 @@ function renderHero(room) {
   const aqSub = aq ? [
     aq.temp != null ? Math.round(aq.temp) + "°" : null,
     aq.humidity != null ? Math.round(aq.humidity) + "% humidity" : null,
+    aq.co2 != null ? Math.round(aq.co2) + " ppm CO2" : null,
   ].filter(Boolean).join(" · ") : "";
   const aqCard = (aq && aq.pm25 != null) ? `<div class="ambient-card hero-status-card" style="cursor:default">
     ${ico("wind", "ambient-card-icon")}
@@ -2388,6 +2389,14 @@ const NEST_THERMOSTAT_DEVICE_ID = "7d030c67-4001-483b-8765-75f7d34efa59";
 const MOOD_MOVIE_NIGHT_ID = "ff9f13b2-7aa4-4cbf-861a-860d2cdc9ab0"; // Living Room
 const MOOD_DINNER_GUESTS_ID = "800dd834-bb68-44e0-af0b-e5964ecc605c"; // Dining Room
 
+// Dining Room's Qingping air monitor (2026-08-06) — HA's qingping_cgs1
+// integration never loads (cloud-polling custom component, config broken).
+// The real data path is a Homey flow ("Qingping Poll", every 5 min) that
+// hits Qingping's own Cloud API directly and writes the result onto this
+// virtual device's capabilities — confirmed live, real readings. Read via
+// window.homeyClient like the thermostat, not through rooms.config.js/HA.
+const DINING_ROOM_AQ_DEVICE_ID = "c67c1682-3d18-43d9-b08c-5d3de6e640e9";
+
 // Water Usage tile (2026-08-06) — swapped in for the old CO2/grid-intensity
 // tile per Mike's direction. Real Flo shutoff valve sensor, confirmed live
 // (19.8 gal, state_class total_increasing, resets daily).
@@ -2747,6 +2756,25 @@ if (HAConfig.isConfigured()) {
 if (HomeyConfig.isConfigured()) {
   const { url, token } = HomeyConfig.get();
   window.homeyClient = new HomeyClient(url, token);
+  pollDiningRoomAQ();
+  setInterval(pollDiningRoomAQ, 5 * 60 * 1000);
+}
+
+async function pollDiningRoomAQ() {
+  if (!window.homeyClient) return;
+  try {
+    const device = await window.homeyClient.getDevice(DINING_ROOM_AQ_DEVICE_ID);
+    const caps = device.capabilitiesObj || {};
+    ROOMS.dining.airQuality = {
+      pm25: caps.measure_pm25 ? caps.measure_pm25.value : null,
+      temp: caps.measure_temperature ? caps.measure_temperature.value : null,
+      humidity: caps.measure_humidity ? caps.measure_humidity.value : null,
+      co2: caps.measure_co2 ? caps.measure_co2.value : null,
+    };
+    if (currentRoom === "dining") renderContent();
+  } catch (e) {
+    console.error("pollDiningRoomAQ failed", e);
+  }
 }
 
 setInterval(updateClock, 1000 * 15);
