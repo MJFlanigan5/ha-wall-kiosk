@@ -128,62 +128,52 @@ ApplicationWindow {
         anchors.margins: 32
         spacing: 24
 
-        RowLayout {
-            Layout.fillWidth: true
-
-            ColumnLayout {
-                spacing: 2
-                Text {
-                    id: clockText
-                    font.family: Theme.fontHead
-                    font.pixelSize: 56
-                    font.weight: Font.DemiBold
-                    color: Theme.text
-                }
-                Text {
-                    id: dateText
-                    font.family: Theme.fontBody
-                    font.pixelSize: 16
-                    color: Theme.textDim
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Rectangle {
-                width: 10
-                height: 10
-                radius: 5
-                color: haClient.connected ? Theme.on : Theme.textFaint
-            }
-
-            Text {
-                text: haClient.connected ? "connected" : "connecting…"
-                font.family: Theme.fontMono
-                font.pixelSize: 14
-                color: Theme.textDim
-                leftPadding: 8
-            }
-        }
-
-        // Not a ScrollView anymore -- the grid below is a fixed 8x2 = 16
-        // cells (exactly matches renderAmbientActions()'s real content:
-        // Music spans 2 + 6 singles = 8 in row 1; 7 curated rooms +
-        // Security = 8 in row 2), same as the PWA's .ambient-actions,
-        // which never scrolls either. Centered in the remaining space,
-        // matching .ambient-overlay's `align-items: center; justify-
-        // content: center`, not stretched/top-anchored.
+        // Clock + date + grid are ONE centered block, matching the PWA's
+        // .ambient-overlay exactly (`flex-direction: column; align-items:
+        // center; justify-content: center`) -- not a top-left header row
+        // sitting above a separately-positioned grid. Connection status
+        // moved to its own corner indicator below so it doesn't disturb
+        // this structure (the PWA's Ambient screen has no such indicator
+        // at all -- this app's own addition, kept but out of the way).
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            GridLayout {
+            ColumnLayout {
                 anchors.centerIn: parent
-                // Exact match to pwa-app/index.html's .ambient-actions:
-                // `grid-template-columns: repeat(8, 130px); gap: 12px;`
-                columns: 8
-                columnSpacing: 12
-                rowSpacing: 12
+                spacing: 6
+
+                Text {
+                    id: clockText
+                    Layout.alignment: Qt.AlignHCenter
+                    // .ambient-clock: font-family var(--font-mono);
+                    // font-size clamp(64px, 12vw, 140px) -- resolves to
+                    // exactly 140 at both 1200 and 1920 logical width, so
+                    // hardcoded rather than a live vw calculation.
+                    font.family: Theme.fontMono
+                    font.pixelSize: 140
+                    font.weight: Font.DemiBold
+                    color: Theme.text
+                    font.letterSpacing: -1
+                }
+                Text {
+                    id: dateText
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.bottomMargin: 34 // .ambient-date's margin-bottom:40px minus the 6px column spacing already above it
+                    font.family: Theme.fontMono
+                    font.pixelSize: 15
+                    color: Theme.textDim
+                    font.letterSpacing: 1
+                    font.capitalization: Font.AllUppercase
+                }
+
+                GridLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    // Exact match to pwa-app/index.html's .ambient-actions:
+                    // `grid-template-columns: repeat(8, 130px); gap: 12px;`
+                    columns: 8
+                    columnSpacing: 12
+                    rowSpacing: 12
 
                 // ---------- Status row (matches renderAmbientActions()'s
                 // row 1: Music, Comfort, Packages, Energy Flow, Water
@@ -663,6 +653,7 @@ ApplicationWindow {
                         }
                     }
                 }
+                }
             }
         }
 
@@ -713,6 +704,30 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+
+    // Connection status -- this app's own addition, not part of the PWA's
+    // Ambient design (see the comment above the centered clock block).
+    // Anchored to the corner instead of in the main flow so it doesn't
+    // compete with the exact clock/date/grid match.
+    RowLayout {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 20
+        spacing: 8
+
+        Rectangle {
+            width: 8
+            height: 8
+            radius: 4
+            color: haClient.connected ? Theme.on : Theme.textFaint
+        }
+        Text {
+            text: haClient.connected ? "connected" : "connecting…"
+            font.family: Theme.fontMono
+            font.pixelSize: 12
+            color: Theme.textFaint
         }
     }
 }
