@@ -212,6 +212,8 @@ ApplicationWindow {
                     id: musicCard
                     property var playing: root.findPlayingMedia()
                     Layout.preferredWidth: 130 * 2 + 12
+                    Layout.maximumWidth: 130 * 2 + 12
+                    Layout.minimumWidth: 130 * 2 + 12
                     Layout.columnSpan: 2
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
@@ -297,6 +299,8 @@ ApplicationWindow {
                     property real thermoTemp: parseFloat(haClient.ambient.thermostat_temp.state)
                     property real thermoCool: parseFloat(haClient.ambient.thermostat_cool.state)
                     Layout.preferredWidth: 130
+                    Layout.maximumWidth: 130
+                    Layout.minimumWidth: 130
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
@@ -377,6 +381,8 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.preferredWidth: 130
+                    Layout.maximumWidth: 130
+                    Layout.minimumWidth: 130
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
@@ -410,6 +416,8 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.preferredWidth: 130
+                    Layout.maximumWidth: 130
+                    Layout.minimumWidth: 130
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
@@ -462,6 +470,8 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.preferredWidth: 130
+                    Layout.maximumWidth: 130
+                    Layout.minimumWidth: 130
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
@@ -495,6 +505,8 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.preferredWidth: 130
+                    Layout.maximumWidth: 130
+                    Layout.minimumWidth: 130
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
@@ -528,6 +540,8 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.preferredWidth: 130
+                    Layout.maximumWidth: 130
+                    Layout.minimumWidth: 130
                     Layout.preferredHeight: 170
                     radius: Theme.radiusCard
                     color: Theme.baseRaised
@@ -589,6 +603,8 @@ ApplicationWindow {
                         required property var modelData
 
                         Layout.preferredWidth: 130
+                        Layout.maximumWidth: 130
+                        Layout.minimumWidth: 130
                         Layout.preferredHeight: 140
                         radius: Theme.radiusCard
                         color: modelData.lightOn ? Theme.onDim : Theme.baseRaised
@@ -718,6 +734,8 @@ ApplicationWindow {
                     id: securityCard
                     property var alarmState: haClient.ambient.alarm.state
                     Layout.preferredWidth: 130
+                    Layout.maximumWidth: 130
+                    Layout.minimumWidth: 130
                     Layout.preferredHeight: 140
                     radius: Theme.radiusCard
                     color: root.isArmed(alarmState) ? Theme.onDim : Theme.baseRaised
