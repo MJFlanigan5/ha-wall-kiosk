@@ -936,7 +936,16 @@ let actionStateCache = {};           // { [automation.*|script.* entityId]: HA s
 // style instead of platform-dependent emoji rendering. `icons()` must run after
 // any innerHTML write that includes ico() output.
 function ico(name, cls) { return `<i data-lucide="${name}" class="${cls || ""}"></i>`; }
-function icons() { lucide.createIcons({ attrs: { "stroke-width": 1.75 } }); }
+// Optional root (2026-08-07, perf pass): lucide.createIcons() scans the
+// *entire* document for data-lucide by default. Several call sites fire
+// from background polling (Sensors every 15s, Climate every 20s via
+// renderContent, Ambient Mode's live state updates) and only ever
+// re-render one specific subtree — scoping those to a root element
+// avoids a full-document scan+SVG-replace on every timer tick, real cost
+// on a low-powered kiosk device. Left as document-wide (the default) on
+// call sites that only fire from a manual, infrequent user navigation —
+// not worth the added risk of mis-scoping for near-zero benefit there.
+function icons(root) { lucide.createIcons({ attrs: { "stroke-width": 1.75 }, root: root || document }); }
 
 const POWER = {
   totalKw: 17.9,
@@ -986,7 +995,7 @@ function renderRail() {
   });
   const homeBtn = document.querySelector("[data-rail-home]");
   if (homeBtn) homeBtn.addEventListener("click", () => showAmbient());
-  icons();
+  icons(rail); // only #rail's brand button actually has an icon — #mobileRail is text-label-only
 }
 
 // Shared by the rail nav and Ambient Mode's card-tap-to-enter (2026-08-06) —
@@ -2081,7 +2090,7 @@ async function refreshSensorsBody() {
         </div>`).join("");
     return `<div class="section-label-sm" style="margin-top:24px">${ico("map-pin", "i14")}${area} <span style="opacity:0.5;font-weight:400">(${byArea.get(area).length})</span></div><div class="kv-section">${rows}</div>`;
   }).join("");
-  icons();
+  icons(body);
 }
 
 async function renderSettingsContent() {
@@ -2181,7 +2190,7 @@ function renderContent() {
   `;
 
   updateClock();
-  icons();
+  icons(content);
   wireInteractions(room);
 
   if (room.climateDeviceId) {
@@ -2506,7 +2515,7 @@ function wireInteractions(room) {
   if (playBtn) playBtn.addEventListener("click", () => {
     room.media.playing = !room.media.playing;
     playBtn.innerHTML = ico(room.media.playing ? "pause" : "play", "i20");
-    icons();
+    icons(playBtn);
     if (room.media.entityId && window.haClient && window.haClient.connected) {
       window.haClient.callService("media_player", room.media.playing ? "media_play" : "media_pause", room.media.entityId).catch(console.error);
     }
@@ -4030,7 +4039,7 @@ function renderAmbientActions() {
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
   el.innerHTML = musicCard + comfortCard + packagesCard + energyCard + waterUsageCard + energyProducedCard
     + waterHeaterCard + roomCards + securityCard;
-  icons();
+  icons(el);
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
     card.addEventListener("click", (e) => {
