@@ -2213,14 +2213,19 @@ async function checkHomeyDevices() {
   if (!window.homeyClient) return [];
   let devices;
   try { devices = await window.homeyClient.listDevices(); } catch (e) { console.error(e); return []; }
+  // Real schema confirmed against all 85 live devices 2026-08-07: there is
+  // no `warning` field at all (an earlier version of this check assumed
+  // one and its warning branch was dead code — never fired). The real
+  // fields are `unavailableMessage` and `warningMessage`, both strings
+  // that are empty/absent when nothing's wrong.
   return devices
-    .filter(d => d.available === false || d.warning)
+    .filter(d => d.available === false || (d.warningMessage && d.warningMessage.trim()))
     .map(d => ({
       id: `homey:device:${d.id}:${d.available === false ? "unavailable" : "warning"}`,
       system: "homey",
       icon: "wifi-off",
       title: d.name || d.id,
-      detail: d.available === false ? "Device unavailable/unreachable." : (d.warningMessage || String(d.warning)),
+      detail: d.available === false ? (d.unavailableMessage || "Device unavailable/unreachable.") : d.warningMessage,
     }));
 }
 
