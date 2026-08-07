@@ -2025,6 +2025,12 @@ async function renderSensorsContent() {
   updateClock();
   icons();
   await refreshSensorsBody();
+  // currentRoom can have changed while the await above was in flight (user
+  // navigated away before the first fetch finished) — without this check,
+  // an interval got created for a page the user already left, and only
+  // got cleaned up on the *next* unrelated navigation instead of never
+  // existing at all.
+  if (currentRoom !== "sensors") return;
   if (sensorsRefreshTimer) clearInterval(sensorsRefreshTimer);
   sensorsRefreshTimer = setInterval(refreshSensorsBody, 15000);
 }
@@ -2155,7 +2161,13 @@ function renderContent() {
   wireInteractions(room);
 
   if (room.climateDeviceId) {
-    refreshClimateLive(room);
+    // Only fetch immediately if there's no cached data yet — refreshClimateLive
+    // already re-renders (and therefore re-enters this block) when IT
+    // finishes fetching, and after a write too (writeClimateCapability
+    // calls it directly). Firing it unconditionally here as well meant
+    // every write, and every re-render for any reason, triggered two
+    // Homey device fetches instead of one.
+    if (!climateLiveCache[room.climateDeviceId]) refreshClimateLive(room);
     climateRefreshTimer = setInterval(() => refreshClimateLive(room), 20000);
   }
 }
@@ -2393,15 +2405,27 @@ function wireInteractions(room) {
   if (room.climateDeviceId) {
     const device = climateLiveCache[room.climateDeviceId];
     const caps = device ? homeyThermostatCapabilities(device) : { targets: [] };
+    // cap.value is mutated optimistically before the write resolves —
+    // without it, two rapid clicks both read the same stale cached value
+    // and compute the same target (write, write again with no net
+    // change) instead of stepping twice.
     document.querySelectorAll("[data-climate-target-up]").forEach(el => {
       const cap = caps.targets.find(t => t.id === el.dataset.climateTargetUp);
       if (!cap) return;
-      el.addEventListener("click", () => writeClimateCapability(room, cap.id, Math.min(cap.max, cap.value + 1)));
+      el.addEventListener("click", () => {
+        const next = Math.min(cap.max, cap.value + 1);
+        cap.value = next;
+        writeClimateCapability(room, cap.id, next);
+      });
     });
     document.querySelectorAll("[data-climate-target-down]").forEach(el => {
       const cap = caps.targets.find(t => t.id === el.dataset.climateTargetDown);
       if (!cap) return;
-      el.addEventListener("click", () => writeClimateCapability(room, cap.id, Math.max(cap.min, cap.value - 1)));
+      el.addEventListener("click", () => {
+        const next = Math.max(cap.min, cap.value - 1);
+        cap.value = next;
+        writeClimateCapability(room, cap.id, next);
+      });
     });
     document.querySelectorAll("[data-climate-mode]").forEach(el => {
       el.addEventListener("click", () => {
@@ -3311,8 +3335,22 @@ async function renderAdminRoomList() {
 // "Living Room" zone vs. "Living" room screen, etc).
 function roomMatchesZoneName(roomName, zoneName) {
   if (!zoneName) return false;
-  const a = roomName.toLowerCase(), b = zoneName.toLowerCase();
-  return a.includes(b) || b.includes(a);
+  const a = roomName.trim().toLowerCase(), b = zoneName.trim().toLowerCase();
+  if (a === b) return true;
+  // Plain .includes() in both directions treated "Bedroom" as matching
+  // "Bedroom 3"/"Bedroom 4" (real bug found 2026-08-07): those are
+  // genuinely different real spaces in this house, but the substring
+  // match silently folded a real "Bedroom" area into whichever numbered
+  // room happened to be checked first, so it could never be suggested as
+  // missing. A trailing number right after the shorter name means "a
+  // specific instance of this room type" — a different room, not a
+  // looser name for the same one — so that case is excluded, while
+  // "Living" still matches "Living Room" and "Master" still matches
+  // "Master Bedroom" (no digit follows the shorter name there).
+  const numberedSuffix = /^\s*\d/;
+  if (a.startsWith(b) && !numberedSuffix.test(a.slice(b.length))) return true;
+  if (b.startsWith(a) && !numberedSuffix.test(b.slice(a.length))) return true;
+  return false;
 }
 
 async function addEntityToRoom(roomId, entityId) {
