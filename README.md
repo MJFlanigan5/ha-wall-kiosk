@@ -282,6 +282,29 @@ first login on a device with no physical keyboard attached.
 5. Confirm touch input works correctly on the Touch Display 2 once
    Foyer is actually showing.
 
+### Plan B, if TouchKio doesn't work out on this hardware
+
+TouchKio is untested against this exact Pi/display/OS combination, so
+if it has real trouble (RAM pressure, touch input issues, install
+problems), there's a ready-to-run fallback rather than researching one
+from scratch under time pressure: `scripts/02-kiosk-fallback-chromium.sh`
+— a plain `chromium-browser --kiosk` autostart, same idea minus
+TouchKio's extras (on-screen keyboard, systemd service, MQTT). Stop
+TouchKio first (`systemctl --user disable --now touchkio.service`), then:
+
+```bash
+FOYER_URL="https://your-foyer-host/" \
+BASIC_AUTH_USER="your-user" \
+BASIC_AUTH_PASS="your-password" \
+bash scripts/02-kiosk-fallback-chromium.sh
+```
+
+Safe to re-run after changing the URL/credentials — it replaces its own
+block in `~/.config/labwc/autostart` instead of duplicating it.
+Credentials are percent-encoded into the URL (handles `@`/`:`/`/` in a
+real password correctly) rather than embedded raw, and the file gets
+`chmod 600` since it now holds a real credential in plaintext.
+
 ## Troubleshooting
 
 - **2GB RAM headroom:** this is the low-end Pi 5 tier, and TouchKio is
