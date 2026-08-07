@@ -1,12 +1,27 @@
 # HA Wall Kiosk
 
 A wall-mounted Home Assistant control panel: Raspberry Pi 5 + official 10.1"
-Touch Display 2 (portrait), running a from-scratch native app (PySide6 +
-QML, no browser engine — see [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md))
-in kiosk mode, in a 3D-printed arm-locking flush mount.
+Touch Display 2 (portrait), running **Foyer** — the same PWA used on iPad
+and phone (see [`pwa-app/`](pwa-app/)) — in Chromium kiosk mode, in a
+3D-printed arm-locking flush mount.
+
+**Architecture decision, revised 2026-08-07:** this repo originally
+planned a from-scratch native app (PySide6 + QML, no browser engine —
+still documented at [`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md),
+now parked, not deleted) specifically to avoid a browser engine's memory
+footprint on the 2GB tier. That tradeoff no longer holds: Foyer has since
+grown into the actual, working app (real Discovery, Climate, Sensors,
+Quick Actions, notifications — none of which exist in the native app,
+which never got past a stub-client smoke test), and a real perf pass
+was done on Foyer specifically with this device's RAM ceiling in mind
+(see "Dashboard-side performance constraints" below). Maintaining two
+separate apps for the same dashboard stopped being worth it once one of
+them was this far ahead. The Pi now runs the same app as iPad/phone —
+one codebase, one data layer, one deploy.
 
 This repo has both halves of the build: the physical mount (`hardware/`) and
-the Pi/software setup (`scripts/` + this README).
+the Pi/software setup (`scripts/` + this README). The dashboard itself
+(`pwa-app/`) is a sibling directory in the same repo, not duplicated here.
 
 **Built and tuned for the Pi 5 2GB tier on purpose** — not just because
 that's what this build happens to use. The 4GB/8GB Pi 5 boards cost roughly
@@ -18,37 +33,35 @@ have a 4GB/8GB board, it'll just have more headroom to spare.
 
 ## Status / what's left
 
-**Build order (reversed 2026-08-05): iPad/phone PWA first, native Pi app
-second.** The PWA doesn't depend on any unfinished hardware — it can be
-self-hosted and actually used/tested today, while the native Pi app stays
-blocked on physical assembly regardless. See
-[`docs/IPAD_PWA_SPEC.md`](docs/IPAD_PWA_SPEC.md) (~2-3 weeks part-time) and
-[`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md) for full breakdowns.
+**Foyer (`pwa-app/`) is the app for all three surfaces now — iPad, phone,
+and this wall panel.** It's real and working: live HA WebSocket client,
+generic device Discovery (rooms, Climate, Video/TV remotes, Quick
+Actions), real Sensors/Energy History/Notifications, Docker + Basic
+Auth hosting. See [`pwa-app/README.md`](pwa-app/README.md) for the full,
+current state.
 
-**PWA (build this first — testable immediately, no hardware dependency):**
-1. JS HA WebSocket client
-2. Wire live state into the existing HTML mockup screens
-3. Service calls (write actions)
-4. PWA wrapper + self-hosting (HTTPS required)
-5. Responsive pass for phone + real device testing on iPad and phone
-
-**Physical (blocking the native app only, not the PWA):**
-6. Finish the mount — right side printed and working; left side needs a
+**Physical (the only thing actually blocking the Pi build):**
+1. Finish the mount — right side printed and working; left side needs a
    fix where the wall stud leaves zero cavity clearance for the arm-lock
    clamp (handled directly on the printed piece — drill/adhesive — not a
    frame redesign)
-7. Assemble Pi 5 + POE HAT + NVMe SSD + Touch Display 2
-8. Bootstrap NVMe boot (temporary SD card pass, see below)
+2. Assemble Pi 5 + POE HAT + NVMe SSD + Touch Display 2
+3. Bootstrap NVMe boot (temporary SD card pass, see below)
 
-**Native app (see [`native-app/README.md`](native-app/README.md) for setup/run):**
-9. `scripts/01-pi-kiosk-prep.sh` — 2GB tuning, zram, autologin
-10. Verify the native app's HA WebSocket client against real data — untested
-    against a live instance so far, only a stub-client smoke test
-11. Port remaining screens one at a time
-12. Wire service calls (write actions)
-13. Full-screen kiosk launch on boot (systemd service, display session
-    config) — not finalized yet
-14. Hardware/perf testing on the real Pi
+**Software setup for the Pi (see "Software setup" below for the actual steps):**
+4. `scripts/01-pi-kiosk-prep.sh` — 2GB tuning, zram, autologin
+5. Chromium kiosk-mode autostart pointed at Foyer's URL — written below,
+   **not yet verified against real hardware** (the Pi hasn't arrived as
+   of this writing) — treat the exact autostart config/flags as the
+   best-known starting point, not confirmed-working, until tested.
+6. Confirm touch input, screen blanking staying off, and real memory
+   headroom (`free -h`) once it's actually running.
+
+**Parked, not deleted:** the from-scratch native Qt/QML app
+([`docs/NATIVE_APP_SPEC.md`](docs/NATIVE_APP_SPEC.md),
+[`native-app/`](native-app/)) — kept in the repo since it's real prior
+work, not resumed unless Foyer-in-a-browser turns out not to fit the
+2GB budget well in practice.
 
 ## Hardware
 
@@ -153,10 +166,15 @@ This disables screen blanking (critical — a kiosk display can't be allowed
 to sleep), enables desktop autologin (so it boots straight into the kiosk
 session with no login prompt), and updates packages.
 
-**Why Desktop, not Lite:** the native app (PySide6 + QML) still needs a
-Wayland/labwc compositor underneath it for GPU-accelerated rendering, even
-though you'll never see a normal desktop in daily use. Exact display-session
-config for launching it full-screen on boot isn't finalized yet.
+**Why Desktop, not Lite:** Raspberry Pi OS Desktop ships labwc (Wayland)
+by default, which gives Chromium GPU-accelerated rendering out of the
+box — meaningfully smoother than software rendering for a live,
+frequently-updating dashboard. You'll never see a normal desktop in
+daily use (see the panel/taskbar-trimming step below). Lite + a minimal
+X11/Wayland session + chromium-browser is a real, commonly-used lighter
+alternative for exactly this kind of kiosk — worth trying if 2GB turns
+out tight in practice, just not the default here since it's unverified
+against this specific display/touch setup.
 
 `01-pi-kiosk-prep.sh` also applies memory/performance tuning for the 2GB
 tier — see below.
@@ -203,11 +221,14 @@ done once you can see the screen and verify):
 
 - **Skip the desktop panel/taskbar in the kiosk session.** A full labwc
   desktop session normally starts a taskbar, wallpaper, and other chrome
-  you'll never see behind a fullscreen kiosk window — that's RAM and CPU
-  spent on nothing. Once the native app is confirmed launching correctly,
+  you'll never see behind TouchKio's fullscreen window — that's RAM and
+  CPU spent on nothing. TouchKio starts itself via its own systemd user
+  service (see below), independent of this file, so this step is purely
+  about trimming labwc's own startup, not about "leaving room" for
+  anything app-related. Once TouchKio is confirmed launching correctly,
   edit `~/.config/labwc/autostart` and comment out the lines that launch
-  the panel/wallpaper apps, leaving only what starts the app. Reboot and
-  confirm the kiosk still launches correctly before considering this done.
+  the panel/wallpaper apps. Reboot and confirm the kiosk still launches
+  correctly before considering this done.
 - **CPU governor to `performance`** (optional) — trades a little power/heat
   for more consistent UI responsiveness, reasonable given the HAT's active
   cooling gives thermal headroom. Add a `@reboot` cron entry or a small
@@ -216,23 +237,63 @@ done once you can see the screen and verify):
   echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
   ```
 
-### 4. Run the native app
+### 4. Run Foyer in kiosk mode (via TouchKio)
 
-Setup and run instructions live in
-[`native-app/README.md`](native-app/README.md) — venv, `requirements.txt`,
-`config.yaml` (your HA URL + long-lived access token), then `python main.py`.
+**Not yet verified against real hardware** (written before the Pi
+arrived) — treat every step here as the best-known starting point, not
+confirmed-working, until actually tested.
 
-There's no systemd service or full-screen-on-boot config yet (see "Status /
-what's left" above) — for now, run it manually over SSH or with a
-keyboard/mouse attached to confirm it launches and connects.
+Using [TouchKio](https://github.com/leukipp/touchkio) rather than a
+hand-rolled `chromium-browser --kiosk` autostart script — it's
+purpose-built for exactly this (Pi + DSI/HDMI touch display + a URL in
+kiosk mode), Debian/labwc-native, and handles the fiddly parts a raw
+Chromium flag list doesn't: login credentials persist inside its own
+config after the first entry (no plaintext Basic Auth in a shell
+script), it ships a systemd user service instead of an autostart-file
+edit, and it has on-screen-keyboard support (squeekboard) for that
+first login on a device with no physical keyboard attached.
+
+1. Install (the script handles .deb install, arch detection, and
+   creating/enabling the systemd user service):
+   ```bash
+   bash <(wget -qO- https://raw.githubusercontent.com/leukipp/touchkio/main/install.sh)
+   ```
+2. Foyer needs to already be reachable from the Pi — either the
+   Docker-hosted instance on the LAN (same network, PoE-wired, so this
+   should just work — see [`pwa-app/README.md`](pwa-app/README.md) for
+   how that's hosted) or the Cloudflare Tunnel URL if you'd rather not
+   depend on a specific LAN address. LAN is the better default for a
+   permanently wall-mounted device: lower latency, and it keeps working
+   even if the Tunnel/internet is briefly down.
+3. Point it at Foyer:
+   ```bash
+   touchkio --web-url=https://your-foyer-host/
+   ```
+   `--web-url` accepts any URL, not just Home Assistant's own dashboard
+   — Foyer works the same way. First run walks through a CLI setup, then
+   shows the login screen for Basic Auth — have a physical keyboard or
+   VNC handy for that first entry (or use the on-screen keyboard if it's
+   working on this hardware); credentials are remembered after that, no
+   re-entry on reboot.
+4. Confirm it starts on boot without re-running anything manually:
+   ```bash
+   systemctl --user status touchkio.service
+   ```
+5. Confirm touch input works correctly on the Touch Display 2 once
+   Foyer is actually showing.
 
 ## Troubleshooting
 
-- **2GB RAM headroom:** this is the low-end Pi 5 tier. Check `free -h` if
-  things feel sluggish — the native app's baseline footprint should be tens
-  of MB (no browser engine), so persistent memory pressure likely points at
-  the dashboard content itself (too many live camera feeds, etc.) rather
-  than the app shell.
+- **2GB RAM headroom:** this is the low-end Pi 5 tier, and TouchKio is
+  Electron (a real Chromium instance), not a lightweight native shell —
+  expect its baseline footprint to be genuinely higher than "tens of
+  MB." Check `free -h` if things feel sluggish. The Foyer-side perf work
+  already done with this device in mind (icon-scan scoping, the Sensors
+  page's collapsed-by-default areas so 1,000+ entities aren't all live
+  in the DOM at once, camera snapshot blob cleanup — see
+  [`pwa-app/README.md`](pwa-app/README.md)) should help, but this
+  combination hasn't been measured on the real device yet — zram (see
+  above) is the real safety net if it turns out tight.
 - **Blank/black screen on boot:** confirm both the DSI ribbon and GPIO power
   cable are fully seated. Check `dmesg | grep -i dsi` for detection errors.
 - **Screen sleeps after a few minutes:** re-run `sudo raspi-config` →
@@ -241,28 +302,42 @@ keyboard/mouse attached to confirm it launches and connects.
 
 ## Dashboard-side performance constraints
 
-This kiosk's Pi 5 2GB is the real, fixed hardware target — treat it as the
-design baseline for whatever dashboard runs on it, so it scales down
-cleanly to basically anything rather than looking fine on a dev laptop and
-struggling here. When building the actual dashboard this panel displays:
+This kiosk's Pi 5 2GB is the real, fixed hardware target for Foyer, not
+just a general guideline — treat it as the design baseline for anything
+new added to the dashboard, so it scales down cleanly to basically
+anything rather than looking fine on a dev laptop and struggling here.
+Already done with this device specifically in mind (2026-08-07, before
+the Pi itself was available to test against — see
+[`pwa-app/README.md`](pwa-app/README.md) for the full list): `lucide`
+icon re-scans are now scoped to the changed DOM subtree instead of the
+whole document on every render, the Sensors page (1,128 entities in this
+HA instance) renders collapsed by default instead of all-expanded, and
+camera snapshot blob URLs are properly revoked instead of leaking on
+navigation. Keep applying the same standard going forward for anything
+new:
 
 - No CSS animations/transitions on state changes
 - Cap concurrent live camera feeds at ~4
 - Avoid GPU-expensive CSS on this device: heavy `backdrop-filter`/blur,
   large box-shadows, frequently-repainted gradients
-- Prefer stock/Mushroom/card-mod patterns over JS-heavy custom cards,
-  especially anything that polls or re-renders often
-- Keep DOM complexity reasonable per screen — this is a single full-time
-  kiosk view, not a multi-tab desktop app
+- Avoid full-document DOM operations (icon re-scans, wide `querySelectorAll`)
+  on anything that fires from a polling loop — scope to the subtree that
+  actually changed
+- Keep DOM complexity reasonable per screen, especially for
+  large/generic listings (Sensors-style "show everything" pages) — this
+  is a single full-time kiosk view, not a multi-tab desktop app
 
-## iPad + phone companion (not started, spec only)
+## iPad + phone + wall panel — one app
 
-Same Savant-styled experience, for iPad and phone — one PWA wrapping the
-existing HTML mockup (responsive breakpoints cover both screen sizes from
-a single codebase) rather than a port of the native Pi app (different
-hardware, different constraints — the Pi's memory ceiling is why that one
-went native/no-browser, and iPads/phones don't have that ceiling). See
-[`docs/IPAD_PWA_SPEC.md`](docs/IPAD_PWA_SPEC.md).
+Foyer (`pwa-app/`) is the same PWA on all three surfaces now — iPad,
+phone, and this wall panel via TouchKio (see "Run Foyer in kiosk mode"
+above). Originally the wall panel was planned as a separate native app
+specifically to avoid a browser engine's memory footprint on the 2GB
+Pi tier; that's now handled instead by the perf work described above,
+done directly in Foyer with this device's constraints in mind, rather
+than by avoiding a browser at all. See
+[`docs/IPAD_PWA_SPEC.md`](docs/IPAD_PWA_SPEC.md) for the PWA's own
+history/spec.
 
 ## Notifications & interrupt events (not started, spec only)
 

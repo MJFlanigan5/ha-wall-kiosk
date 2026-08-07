@@ -1,8 +1,12 @@
-# iPad + Phone PWA Spec
+# iPad + Phone + Wall Panel PWA Spec
 
-The same Savant-styled control experience as the wall panel, but for iPad
-*and* phone — via a single PWA wrapping the existing HTML mockup, not a
-port of the Pi native app.
+The same Savant-styled control experience across iPad, phone, *and* the
+Pi wall panel — one PWA (Foyer) wrapping the existing HTML mockup, all
+three surfaces. **Revised 2026-08-07:** the wall panel was originally
+planned as a separate native app; that's now paused in favor of running
+this same PWA there too via TouchKio (Chromium/Electron kiosk) — see the
+root [`README.md`](../README.md) "Architecture decision" note and
+[`docs/NATIVE_APP_SPEC.md`](NATIVE_APP_SPEC.md)'s own status.
 
 **Status: MVP in progress (2026-08-05).** Phases 1-4 have a first pass —
 live HA WebSocket client, 3 rooms' lighting wired to real data and real
@@ -23,18 +27,22 @@ on small screens — is genuine work, called out as its own phase below. The
 win is architectural (one codebase, one data layer, one deploy), not "zero
 extra effort."
 
-## Why PWA, not a native port
+## Why PWA, not a native port (originally written for iPad only, still holds)
 
-- The Pi went custom/no-browser specifically because of the Pi 5 2GB memory
-  ceiling. iPads don't have that constraint, so the reason "no browser"
-  was worth the engineering effort on the wall panel doesn't carry over.
-- The Pi app's backend is Python (PySide6), which doesn't run on iOS at
-  all. Porting to Qt for iOS means rewriting the backend in C++; a native
-  SwiftUI app means rewriting everything. Both are full second projects,
-  not ports.
+- iOS has no PySide6/Qt runtime at all. Porting the Pi's originally-planned
+  native app to iOS meant rewriting the backend in C++ for Qt-for-iOS, or a
+  full native SwiftUI app rewriting everything from scratch — both real,
+  separate projects, not ports.
 - The existing mockup is already fully designed and visually complete.
   Wrapping it as a PWA reuses finished work instead of re-implementing the
-  same screens a third time (HA default → QML → SwiftUI).
+  same screens a second time.
+- **Update 2026-08-07:** this reasoning turned out to apply to the wall
+  panel too, not just iPad/phone — see the root README's "Architecture
+  decision" note. The Pi's 2GB memory ceiling was real, but the actual
+  fix was a real perf pass on this PWA (icon-scan scoping, collapsed-by-
+  default large listings, blob URL cleanup — see
+  [`pwa-app/README.md`](../pwa-app/README.md)), not avoiding a browser
+  engine entirely.
 
 ## Current state (checked 2026-08-04)
 
