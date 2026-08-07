@@ -764,9 +764,6 @@
 <script src="homey-client.js"></script>
 <script src="rooms.config.js"></script>
 <script>
-// Shared favorites list — real Savant favorites are largely shared across the house
-// (one "Cable Favorites" list, surfaced per-room), not fabricated per-device variation.
-const FAVORITE_CHANNELS = ["ESPN", "HBO", "Local News", "Apple TV", "Netflix", "FX"];
 // Only one real camera position exists in this HA instance (checked live
 // via search_entities 2026-08-07) — Front Door, with a high-res main feed
 // and a package-detection sub-view. No driveway/back-door/backyard cameras.
@@ -814,7 +811,7 @@ const ROOMS = {
       { name: "Floor Lamp", sub: "LIFX", type: "dim", on: false, brightness: 0, color: true, hue: 265, sat: 75 },
       { name: "Fan Light", sub: "Switch", type: "switch", on: false },
     ],
-    media: { name: "Sonos Arc", track: "Evening Mix", artist: "KEXP", source: "AirPlay", playing: true, volume: 34, elapsed: 74, duration: 224, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    media: { name: "Sonos Arc", track: "Evening Mix", artist: "KEXP", source: "AirPlay", playing: true, volume: 34, elapsed: 74, duration: 224, shuffle: false, repeat: false },
     shades: [ { name: "Picture Window", position: 40 }, { name: "Sliding Door", position: 0 } ],
   },
   kitchen: {
@@ -828,7 +825,7 @@ const ROOMS = {
       { name: "LIFX Ceiling", sub: "LIFX", type: "dim", on: true, brightness: 88 },
       { name: "Sink COB", sub: "Govee strip", type: "dim", on: true, brightness: 55 },
     ],
-    media: { name: "Kitchen Speaker", track: "—", artist: "", source: "AirPlay", playing: false, volume: 20, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    media: { name: "Kitchen Speaker", track: "—", artist: "", source: "AirPlay", playing: false, volume: 20, elapsed: 0, duration: 0, shuffle: false, repeat: false },
     shades: [ { name: "Sink Window", position: 60 } ],
   },
   master: {
@@ -842,7 +839,7 @@ const ROOMS = {
       { name: "Ceiling", sub: "Warm dim", type: "dim", on: true, brightness: 18 },
       { name: "Under-Bed", sub: "Govee", type: "dim", on: false, brightness: 0 },
     ],
-    media: { name: "Bedroom Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 12, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    media: { name: "Bedroom Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 12, elapsed: 0, duration: 0, shuffle: false, repeat: false },
     shades: [ { name: "Bedroom Window", position: 10 }, { name: "Blackout Shade", position: 0 } ],
   },
   office: {
@@ -856,7 +853,7 @@ const ROOMS = {
       { name: "Floor Lamp", sub: "Govee, segmented", type: "dim", on: true, brightness: 70, color: true, hue: 30, sat: 90 },
       { name: "Window", sub: "Govee", type: "dim", on: true, brightness: 45 },
     ],
-    media: { name: "Office Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    media: { name: "Office Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false },
     shades: [ { name: "Window", position: 70 } ],
   },
   utility: {
@@ -870,7 +867,7 @@ const ROOMS = {
       { name: "Utility Light", sub: "Govee", type: "dim", on: false, brightness: 0 },
       { name: "Diffuser Nightlight", sub: "Pura", type: "dim", on: true, brightness: 25 },
     ],
-    media: { name: "Utility Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: FAVORITE_CHANNELS },
+    media: { name: "Utility Display", track: "—", artist: "", source: "AirPlay", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false },
     shades: [ { name: "Utility Window", position: 100 } ],
   },
   // Dining Room (added 2026-08-06) — no mock entry existed for this room
@@ -922,6 +919,7 @@ let sensorsRefreshTimer = null;      // polling interval while the Sensors page 
 let sensorsAreaMapCache = null;      // area/device/entity registries rarely change; fetched once per session
 let climateRefreshTimer = null;      // polling interval while a room with an assigned climate device is open
 let climateLiveCache = {};           // { [homeyDeviceId]: full Homey device object }
+let tvRemoteCache = {};              // { [mediaPlayerEntityId]: paired remote.* entity_id | null }
 
 // Lucide line icons instead of emoji — matches Savant's actual monochrome icon
 // style instead of platform-dependent emoji rendering. `icons()` must run after
@@ -1744,9 +1742,12 @@ function renderMediaNowPlaying(room) {
 }
 
 // Simplified 2026-08-05: dropped the Now Playing/Favorites mode-switcher.
-// The Favorites view showed a fabricated channel list (FAVORITE_CHANNELS,
-// leftover from the AppleTV/cable mockup, not real music data) — dropped
-// entirely rather than shown fake, same discipline as dropping Scenes.
+// The Favorites view showed a fabricated channel list (leftover from the
+// AppleTV/cable mockup, not real music data) — dropped entirely rather
+// than shown fake, same discipline as dropping Scenes. The underlying
+// FAVORITE_CHANNELS constant and its per-room .favorites field (never
+// actually read anywhere) were genuine dead code left behind by that
+// removal — cleaned up 2026-08-07.
 function renderMedia(room) {
   return renderMediaNowPlaying(room);
 }
@@ -2188,19 +2189,67 @@ function renderContent() {
     if (!climateLiveCache[room.climateDeviceId]) refreshClimateDevice(room.climateDeviceId).then(rerenderIfStillHere);
     climateRefreshTimer = setInterval(() => refreshClimateDevice(room.climateDeviceId).then(rerenderIfStillHere), 20000);
   }
+
+  if (room.tv && room.tv.entityId && !(room.tv.entityId in tvRemoteCache)) {
+    findPairedRemoteEntity(room.tv.entityId).then(() => { if (ROOMS[currentRoom] === room) renderContent(); });
+  }
 }
 
 // Single continuous scroll of real, wired sections — no tabs, matching
 // Loxone's actual room-screen structure (see docs/UI_MODES_SPEC.md).
-// Climate/Shades sections dropped entirely, not shown empty: no climate
-// entities exist in this HA instance yet (verified live, not assumed),
-// and shades were never wired. Only real domains get a section.
+// Shades dropped entirely, not shown empty: never wired, no cover-domain
+// entities exist. Only real domains get a section.
+//
+// Remote D-pad (2026-08-07) — shown only when the assigned TV's media_player
+// has a paired remote.* entity on the same HA device (found generically via
+// the entity/device registries, see findPairedRemoteEntity; not hardcoded to
+// any specific room or Apple TV entity id). Command set is HA's own
+// documented apple_tv remote.send_command vocabulary — other remote
+// integrations may not support all of these, so a send failure here is a
+// real "this command isn't supported on this device" case, not a bug.
 function renderTv(room) {
   const tv = room.tv;
+  const remoteEntityId = tvRemoteCache[tv.entityId];
+  const dpad = remoteEntityId ? `
+    <div class="light-list" style="margin-top:12px">
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; justify-items:center">
+        <div></div><button class="stepper" data-remote-cmd="up">${ico("chevron-up", "i18")}</button><div></div>
+        <button class="stepper" data-remote-cmd="left">${ico("chevron-left", "i18")}</button>
+        <button class="stepper" data-remote-cmd="select">${ico("circle", "i16")}</button>
+        <button class="stepper" data-remote-cmd="right">${ico("chevron-right", "i18")}</button>
+        <div></div><button class="stepper" data-remote-cmd="down">${ico("chevron-down", "i18")}</button><div></div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:10px">
+        <button class="climate-tab-btn" data-remote-cmd="menu">MENU</button>
+        <button class="climate-tab-btn" data-remote-cmd="home">HOME</button>
+        <button class="climate-tab-btn" data-remote-cmd="play">PLAY</button>
+        <button class="climate-tab-btn" data-remote-cmd="pause">PAUSE</button>
+      </div>
+    </div>` : "";
   return `<div class="light-list"><div class="switch-row">
     <div><div class="light-row-name">${tv.name}</div><div class="light-row-sub">Home Assistant</div></div>
     <button class="switch-btn ${tv.on ? "on" : ""}" data-tv-toggle>${tv.on ? "ON" : "OFF"}</button>
-  </div></div>`;
+  </div></div>${dpad}`;
+}
+
+// Generic device-registry pairing, not a hardcoded entity id — any TV
+// whose media_player and remote.* entities share the same HA device (how
+// the apple_tv integration, and others, group them) gets a D-pad, not
+// just Living Room's Apple TV. Cached per media_player entity id since
+// the pairing essentially never changes; on-demand only, triggered from
+// renderContent's tail the same way Climate/Sensors are.
+async function findPairedRemoteEntity(mediaPlayerEntityId) {
+  if (mediaPlayerEntityId in tvRemoteCache) return tvRemoteCache[mediaPlayerEntityId];
+  if (!window.haClient || !window.haClient.connected) return null;
+  try {
+    const entities = await window.haClient.getEntityRegistry();
+    const mpEntry = entities.find(e => e.entity_id === mediaPlayerEntityId);
+    const remoteEntry = mpEntry && mpEntry.device_id
+      ? entities.find(e => e.device_id === mpEntry.device_id && e.entity_id.startsWith("remote."))
+      : null;
+    tvRemoteCache[mediaPlayerEntityId] = remoteEntry ? remoteEntry.entity_id : null;
+  } catch (e) { console.error("findPairedRemoteEntity failed", e); tvRemoteCache[mediaPlayerEntityId] = null; }
+  return tvRemoteCache[mediaPlayerEntityId];
 }
 
 function renderRoomSections(room) {
@@ -2306,6 +2355,14 @@ function wireInteractions(room) {
   if (tvToggleBtn) tvToggleBtn.addEventListener("click", () => {
     if (!room.tv || !room.tv.entityId || !window.haClient || !window.haClient.connected) return;
     window.haClient.callService("media_player", room.tv.on ? "turn_off" : "turn_on", room.tv.entityId).catch(console.error);
+  });
+
+  document.querySelectorAll("[data-remote-cmd]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const remoteEntityId = room.tv && room.tv.entityId ? tvRemoteCache[room.tv.entityId] : null;
+      if (!remoteEntityId || !window.haClient || !window.haClient.connected) return;
+      window.haClient.callService("remote", "send_command", remoteEntityId, { command: btn.dataset.remoteCmd }).catch(console.error);
+    });
   });
 
   document.querySelectorAll("[data-mood]").forEach(btn => {
