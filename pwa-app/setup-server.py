@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """First-run setup for Foyer's Basic Auth login — served in-browser at
-/setup (nginx proxies it here, unauthenticated, since no credential exists
-yet on first boot). Requires the one-time setup token entrypoint.sh printed
-to the container logs, in addition to the username/password being chosen —
-that token is what stops anyone who just finds the page on the LAN from
-completing setup themselves; only whoever can read the container's logs
-(i.e. whoever deployed it) has it. Once .htpasswd exists, every request
-here is refused regardless of what's submitted — setup can only happen
-once per deploy; delete .htpasswd on the host to redo it.
+/setup. Before setup, nginx is running nginx-presetup.conf, which sends
+every path (not just /setup) here unauthenticated, since no credential
+exists yet. Same security model Home Assistant and Homey themselves use
+for their own first-run setup: whoever's first to the browser right after
+a fresh deploy sets the login, no separate token to go find — the real
+gate is deliberately choosing when to point a public tunnel at this
+container, not a secret required to complete setup. On success, this
+swaps nginx to nginx-postsetup.conf and reloads it, so Basic Auth takes
+effect immediately without a container restart. Once .htpasswd exists,
+every request here is refused regardless of what's submitted — setup can
+only happen once per deploy; delete .htpasswd on the host to redo it.
 
 Stdlib only, no dependencies — same "no build step" principle as the rest
 of this image. Binds to 127.0.0.1 only; nginx is the only thing that can
 reach it, never exposed directly.
 """
-import hmac
 import http.server
 import os
 import subprocess
+import time
 import urllib.parse
 
 HTPASSWD_PATH = "/etc/nginx/.htpasswd"
-SETUP_TOKEN = os.environ.get("SETUP_TOKEN", "")
 
 PAGE_STYLE = """
 <style>
@@ -58,10 +60,8 @@ def render(body, error=""):
 
 SETUP_FORM = """
 <h2>Set up Foyer</h2>
-<p>One-time setup for this install. The setup token is in the container's logs
-(<code>docker compose logs</code>) — only whoever deployed this can see it.</p>
+<p>One-time setup for this install — choose the login you'll use going forward.</p>
 <form method="POST" action="/setup">
-  <input name="token" placeholder="Setup token" autocomplete="off" />
   <input name="username" placeholder="Username" autocomplete="username" />
   <input name="password" type="password" placeholder="Password" autocomplete="new-password" />
   <button type="submit">Create login</button>
@@ -84,7 +84,7 @@ SUCCESS = """
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
-        pass  # container logs stay reserved for the setup token, not request noise
+        pass  # keep container logs quiet — no ongoing reason to log setup requests
 
     def _respond(self, code, html):
         body = html.encode("utf-8")
@@ -95,9 +95,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path.rstrip("/") != "/setup":
-            self._respond(404, render("<h2>Not found</h2>"))
-            return
+        # Not restricted to literally "/setup" — nginx-presetup.conf routes
+        # every path here (so landing on "/" itself shows this directly,
+        # no redirect needed), while nginx-postsetup.conf only ever routes
+        # "/setup" specifically. Either way, nginx's own config is what
+        # decides when this backend is reachable at all, not this check.
         self._respond(200, render(ALREADY_DONE if already_configured() else SETUP_FORM))
 
     def do_POST(self):
@@ -111,16 +113,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length).decode("utf-8", errors="replace")
         params = urllib.parse.parse_qs(body)
-        token = (params.get("token") or [""])[0]
         username = (params.get("username") or [""])[0].strip()
         password = (params.get("password") or [""])[0]
 
-        # Constant-time comparison — this token is the actual secret guarding
-        # setup now, so it deserves the same care as a real credential check,
-        # not a plain == that leaks timing info.
-        if not SETUP_TOKEN or not hmac.compare_digest(token, SETUP_TOKEN):
-            self._respond(403, render(SETUP_FORM, error="Wrong or missing setup token."))
-            return
         if not username or not password:
             self._respond(400, render(SETUP_FORM, error="Username and password are both required."))
             return
@@ -137,6 +132,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except FileExistsError:
             self._respond(403, render(ALREADY_DONE))
             return
+
+        # nginx is currently running the wide-open pre-setup config (see
+        # nginx-presetup.conf) — swap in the real gated one and reload so
+        # Basic Auth actually takes effect immediately, without needing a
+        # container restart. `nginx -s reload` starts new workers on the
+        # new config and gracefully drains the old ones — but that drain
+        # is asynchronous, so the command returning doesn't mean the old,
+        # auth-free workers are actually gone yet. Confirmed live: a
+        # request landing in that gap got served by the old config.
+        # Waiting briefly before responding closes the window in
+        # practice, though it isn't a hard guarantee under heavy load —
+        # workers were fully drained within under a second in testing.
+        subprocess.run(
+            ["cp", "/etc/nginx/templates/nginx-postsetup.conf", "/etc/nginx/conf.d/default.conf"],
+            check=True,
+        )
+        subprocess.run(["nginx", "-s", "reload"], check=True)
+        time.sleep(1)
+
         self._respond(200, render(SUCCESS))
 
 

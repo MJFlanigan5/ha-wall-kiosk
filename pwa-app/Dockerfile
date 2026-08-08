@@ -10,7 +10,11 @@ FROM nginx:alpine
 
 RUN apk add --no-cache openssl python3
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Both configs land in /etc/nginx/templates/ — entrypoint.sh copies
+# whichever's correct to conf.d/default.conf at boot, and setup-server.py
+# swaps in postsetup + reloads nginx the moment setup completes, so which
+# one's active flips without needing a container restart.
+COPY nginx-presetup.conf nginx-postsetup.conf /etc/nginx/templates/
 COPY entrypoint.sh /entrypoint.sh
 COPY setup-server.py /setup-server.py
 RUN chmod +x /entrypoint.sh
