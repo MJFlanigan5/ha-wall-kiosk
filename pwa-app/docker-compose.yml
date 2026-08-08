@@ -8,3 +8,13 @@ services:
     environment:
       BASIC_AUTH_USER: ${BASIC_AUTH_USER}
       BASIC_AUTH_PASS: ${BASIC_AUTH_PASS}
+    volumes:
+      # Without this, the login only ever lived in the container's own
+      # writable layer — every redeploy (docker compose up --build,
+      # down+up, etc.) silently wiped it and reopened the wide-open
+      # pre-setup state. Confirmed live: recreated the container after
+      # completing setup and it reverted to showing the setup form again.
+      - foyer-auth:/etc/nginx/auth
+
+volumes:
+  foyer-auth:

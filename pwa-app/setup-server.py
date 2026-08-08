@@ -22,7 +22,7 @@ import subprocess
 import time
 import urllib.parse
 
-HTPASSWD_PATH = "/etc/nginx/.htpasswd"
+HTPASSWD_PATH = "/etc/nginx/auth/.htpasswd"
 
 PAGE_STYLE = """
 <style>
