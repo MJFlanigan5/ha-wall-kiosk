@@ -75,9 +75,22 @@ on the host if you need to redo it.</p>
 <p><a href="/">Go to Foyer</a></p>
 """
 
+# Deliberately no clever verification here, after trying two and finding
+# each one broke something new: server-side polling from inside this
+# request severed the connection every time (this request is proxied
+# through the very nginx worker the reload recycles — confirmed live,
+# "upstream prematurely closed connection"), and a client-side fetch()
+# loop hung indefinitely instead (confirmed live via CDP timeout — same
+# underlying live-reload fragility, different symptom). Both attempts
+# were chasing "prove it's instant," which isn't actually true — nginx's
+# graceful reload takes a real, if short, amount of time no matter how
+# it's observed. Being honest about that in the copy, combined with the
+# plain wait below before responding, is more robust than a verification
+# mechanism with its own undiscovered failure modes.
 SUCCESS = """
 <h2>Foyer's ready</h2>
-<p>Your login is set. Use it the next time you're prompted.</p>
+<p>Your login is set. It can take a couple of seconds to fully take effect —
+if the next page doesn't prompt you to log in, wait a moment and reload.</p>
 <p><a href="/">Go to Foyer</a></p>
 """
 
@@ -135,15 +148,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         # nginx is currently running the wide-open pre-setup config (see
         # nginx-presetup.conf) — swap in the real gated one and reload so
-        # Basic Auth actually takes effect immediately, without needing a
-        # container restart. `nginx -s reload` starts new workers on the
-        # new config and gracefully drains the old ones — but that drain
-        # is asynchronous, so the command returning doesn't mean the old,
-        # auth-free workers are actually gone yet. Confirmed live: a
-        # request landing in that gap got served by the old config.
-        # Waiting briefly before responding closes the window in
-        # practice, though it isn't a hard guarantee under heavy load —
-        # workers were fully drained within under a second in testing.
+        # Basic Auth takes effect. `nginx -s reload`'s worker drain is
+        # asynchronous, so the command returning doesn't guarantee the old
+        # auth-free workers are gone yet — confirmed live, twice, that
+        # trying to actively verify this from inside the same request only
+        # made things worse: polling nginx from here got this exact
+        # connection severed ("upstream prematurely closed connection",
+        # since it's proxied through the very worker being recycled), and
+        # moving that same poll to client-side JS just hung indefinitely
+        # instead, presumably the same underlying fragility surfacing
+        # differently. A plain wait here isn't a hard guarantee either, but
+        # it's the one approach that hasn't broken something new across
+        # several dozen live tests — worker drain consistently completed
+        # well within it. Without any wait at all, confirmed live that
+        # auth was NOT yet enforced immediately after responding.
         subprocess.run(
             ["cp", "/etc/nginx/templates/nginx-postsetup.conf", "/etc/nginx/conf.d/default.conf"],
             check=True,
