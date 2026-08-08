@@ -683,6 +683,16 @@
     .mobile-rail .rail-item .stem { width: 22px; height: 1px; }
     .mobile-rail .rail-item .stem::after { top: 50%; left: 50%; }
     .mobile-rail .rail-item span.label { font-size: 9.5px; max-width: none; }
+
+    /* Ambient Mode has no responsive handling at all otherwise — the
+       8-column 130px-fixed grid (~1124px including gaps) just overflows
+       on a phone viewport. Collapse to 2 columns, matching the card's
+       own min-content sizing instead of a fixed px track. */
+    .ambient-actions { grid-template-columns: repeat(2, 1fr); max-width: 100%; width: 100%; padding: 0 16px; gap: 10px; }
+    .ambient-clock { font-size: clamp(48px, 16vw, 90px); }
+    .ambient-wholehouse-row, .ambient-quicknav-row { flex-wrap: wrap; justify-content: center; }
+    .ambient-theme-toggle { top: 20px; right: 20px; }
+    .ambient-admin-btn { bottom: 20px; right: 20px; }
   }
 </style>
 </head>
@@ -3136,11 +3146,21 @@ applyAmbientTheme(localStorage.getItem(AMBIENT_THEME_KEY) || "dark");
 const ROOM_OVERRIDE_KEY = "ha_room_entity_overrides";
 
 function getRoomEntityMap() {
+  const merged = JSON.parse(JSON.stringify(ROOM_ENTITY_MAP)); // deep copy of the default
   const raw = localStorage.getItem(ROOM_OVERRIDE_KEY);
-  if (raw) {
-    try { return JSON.parse(raw); } catch (e) { console.error("Bad room override JSON, falling back to default", e); }
+  if (!raw) return merged;
+  let overrides;
+  try { overrides = JSON.parse(raw); } catch (e) {
+    console.error("Bad room override JSON, falling back to default", e);
+    return merged;
   }
-  return JSON.parse(JSON.stringify(ROOM_ENTITY_MAP)); // deep copy of the default
+  // Merge per-room, not wholesale-replace — otherwise a stale override
+  // permanently shadows any later edit to rooms.config.js (new rooms,
+  // updated entity IDs) until the override is manually cleared.
+  for (const roomId of Object.keys(overrides)) {
+    merged[roomId] = Object.assign({}, merged[roomId] || {}, overrides[roomId]);
+  }
+  return merged;
 }
 
 function saveRoomEntityMap(map) {
