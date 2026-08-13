@@ -56,7 +56,7 @@ function showOnboarding(onDone) {
         One-time setup for this device. Get a long-lived access token from
         your HA profile → Security → Long-lived access tokens.
       </p>
-      <input id="ha-url-input" placeholder="ws://homeassistant.local:8123/api/websocket"
+      <input id="ha-url-input" placeholder="wss://home.mjflanigan.com/api/websocket"
         style="width:100%;padding:12px;margin-bottom:10px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;" />
       <textarea id="ha-token-input" placeholder="Long-lived access token"
         style="width:100%;padding:12px;margin-bottom:16px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;height:80px;resize:none;"></textarea>
@@ -65,7 +65,7 @@ function showOnboarding(onDone) {
       <p style="opacity:0.6;font-size:13px;margin-bottom:14px;">
         Only needed for the few things HA can't reach (hallway thermostat, moods). Skip if you don't use those.
       </p>
-      <input id="homey-url-input" placeholder="http://192.168.3.159"
+      <input id="homey-url-input" placeholder="https://65be2c9de4adc573503e1b7b.connect.athom.com"
         style="width:100%;padding:12px;margin-bottom:10px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;" />
       <input id="homey-token-input" placeholder="Personal Access Token"
         style="width:100%;padding:12px;margin-bottom:16px;background:#18181B;border:1px solid #2A2A2E;border-radius:8px;color:#EDEDEF;font-size:14px;" />
