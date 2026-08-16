@@ -3094,6 +3094,11 @@ const PRESENCE_ENTITY_BY_ROOM = {
 };
 let ambientPresenceStates = {};
 
+// Wake-on-approach (2026-08-16) — real Hallway FP2 mmWave presence sensor.
+// Ambient Mode already wakes on touch; this makes it also wake when someone
+// walks up, without needing to touch the screen first.
+const WAKE_PRESENCE_ENTITY = "binary_sensor.presence_sensor_fp2_8b3b_presence_sensor_1";
+
 // Day/night theme shift (2026-08-06, roadmap item 3) — uses HA's real
 // sun.sun entity (state: above_horizon/below_horizon) rather than a
 // guessed clock cutoff, so it's correct for wherever this is actually
@@ -3410,6 +3415,10 @@ async function initLiveData() {
         refreshWaterHeaterFromHA();
         if (currentRoom === "power" && powerTab === "waterheater") renderPowerContent();
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === WAKE_PRESENCE_ENTITY) {
+        if (newState && newState.state === "on") resetIdleTimer();
         return;
       }
       const presenceRoom = Object.keys(PRESENCE_ENTITY_BY_ROOM).find(r => PRESENCE_ENTITY_BY_ROOM[r] === entityId);
@@ -4056,15 +4065,25 @@ async function refreshAfterAdminChange(map) {
   await renderAdminRoomList();
 }
 
-document.getElementById("adminOpenBtn").addEventListener("click", (e) => { e.stopPropagation(); openAdmin(); });
+// Long-press to open Admin (2026-08-16) — was a plain single tap, which is
+// too easy to trigger by accident (or by a curious kid) on a wall-mounted
+// always-on panel. No visual hold-progress affordance on purpose: the point
+// is that this isn't discoverable by casual tapping.
+function bindLongPress(el, ms, fn) {
+  let timer = null;
+  const start = (e) => { e.stopPropagation(); timer = setTimeout(() => { timer = null; fn(); }, ms); };
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  el.addEventListener("pointerdown", start);
+  el.addEventListener("pointerup", cancel);
+  el.addEventListener("pointerleave", cancel);
+  el.addEventListener("pointercancel", cancel);
+}
+bindLongPress(document.getElementById("adminOpenBtn"), 1500, openAdmin);
 document.getElementById("adminCloseBtn").addEventListener("click", () => closeAdmin());
 document.getElementById("adminNewRoomBtn").addEventListener("click", () => {
   createNewRoom(document.getElementById("adminNewRoomName").value);
 });
-document.getElementById("ambientAdminOpenBtn").addEventListener("click", (e) => {
-  e.stopPropagation(); // don't also trigger the ambient overlay's wake-on-tap
-  openAdmin();
-});
+bindLongPress(document.getElementById("ambientAdminOpenBtn"), 1500, openAdmin);
 document.getElementById("adminOpenBtn").innerHTML = ico("settings", "i18");
 document.getElementById("adminCloseBtn").innerHTML = ico("x", "i22");
 // Wrench, not the gear (2026-08-06) — Ambient already has a gear in its own
@@ -4540,6 +4559,22 @@ setInterval(() => {
   if (document.getElementById("ambientOverlay").classList.contains("visible")) updateAmbientClock();
 }, 1000 * 15);
 resetIdleTimer();
+
+// Nightly reload (2026-08-16) — this is a Safari PWA with no OS-level
+// process supervisor, so there's no way to detect or recover from a truly
+// frozen/leaked page the way a systemd watchdog would on a Pi. A scheduled
+// reload during a quiet, idle hour is the practical equivalent: it clears
+// any silent memory/DOM drift before it becomes visible, without
+// interrupting anyone actively using the panel (only fires while Ambient
+// Mode is showing; if someone's using it right at 4:00am, it just retries
+// on the next idle minute instead of yanking the screen away).
+setInterval(() => {
+  const now = new Date();
+  if (now.getHours() === 4 && now.getMinutes() === 0 &&
+      document.getElementById("ambientOverlay").classList.contains("visible")) {
+    location.reload();
+  }
+}, 1000 * 30);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
