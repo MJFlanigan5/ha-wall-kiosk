@@ -3094,11 +3094,6 @@ const PRESENCE_ENTITY_BY_ROOM = {
 };
 let ambientPresenceStates = {};
 
-// Wake-on-approach (2026-08-16) — real Hallway FP2 mmWave presence sensor.
-// Ambient Mode already wakes on touch; this makes it also wake when someone
-// walks up, without needing to touch the screen first.
-const WAKE_PRESENCE_ENTITY = "binary_sensor.presence_sensor_fp2_8b3b_presence_sensor_1";
-
 // Day/night theme shift (2026-08-06, roadmap item 3) — uses HA's real
 // sun.sun entity (state: above_horizon/below_horizon) rather than a
 // guessed clock cutoff, so it's correct for wherever this is actually
@@ -3415,10 +3410,6 @@ async function initLiveData() {
         refreshWaterHeaterFromHA();
         if (currentRoom === "power" && powerTab === "waterheater") renderPowerContent();
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
-        return;
-      }
-      if (entityId === WAKE_PRESENCE_ENTITY) {
-        if (newState && newState.state === "on") resetIdleTimer();
         return;
       }
       const presenceRoom = Object.keys(PRESENCE_ENTITY_BY_ROOM).find(r => PRESENCE_ENTITY_BY_ROOM[r] === entityId);
