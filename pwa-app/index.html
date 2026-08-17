@@ -4523,6 +4523,11 @@ function renderAmbientQuickNav() {
 }
 
 function showAmbient() {
+  // Reset the underlying screen to home now, not on dismiss — otherwise
+  // whatever room was last open before going idle sits underneath Ambient
+  // Mode, and a presence-triggered wake (someone just walking by, not
+  // tapping anything) reveals that stale room instead of home.
+  if (currentRoom !== "living") goToRoom("living");
   updateAmbientClock();
   renderAmbientActions();
   renderAmbientQuickNav();
