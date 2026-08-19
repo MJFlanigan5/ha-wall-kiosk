@@ -161,6 +161,21 @@
   @keyframes switch-btn-flash { 0% { background: var(--on); border-color: var(--on); color: var(--base); } 100% { background: transparent; border-color: var(--hairline); color: var(--text-dim); } }
   .switch-btn.flash { animation: switch-btn-flash 700ms ease-out; }
 
+  /* Write-failure toast (2026-08-19) — every HA/Homey write mutates local
+     state optimistically before the call settles, and used to swallow
+     failures to console.error only, leaving stale state on screen with no
+     signal anything went wrong. This is a shared, generic notice (not
+     per-action wording) since a specific error message from a smart-home
+     API isn't usually meaningful to glance at on a wall-mounted kiosk. */
+  #errorToast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(12px);
+    background: var(--base-raised); border: 1px solid var(--hairline); border-radius: 12px;
+    padding: 12px 18px; font-family: var(--font-body); font-size: 13px; color: var(--text);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 9999; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  #errorToast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
   .slider-track { width: 100%; height: 4px; border-radius: 999px; background: var(--hairline); position: relative; cursor: pointer; touch-action: none; }
   .slider-fill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 999px; background: var(--accent); pointer-events: none; }
   .slider-thumb { position: absolute; top: 50%; width: 15px; height: 15px; border-radius: 50%; background: var(--text); transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 4px var(--accent-dim); }
@@ -933,6 +948,44 @@ const ROOMS = {
 };
 
 const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
+// Real bug found 2026-08-19: sliders/wheels only tracked drag state in a
+// local closure var, invisible to the render functions. Any background
+// state_changed event for the room (or, for Ambient, any of several gating
+// entities) rebuilt content.innerHTML mid-gesture, destroying the DOM node
+// holding pointer capture and snapping the slider back to its pre-drag
+// value. renderContent()/renderAmbientActions() check this counter and skip
+// their rebuild while >0 — the next natural render after the drag ends
+// (there's always one soon, e.g. from haSyncLight's write landing) picks up
+// whatever was suppressed.
+let activeDragCount = 0;
+
+// Real gap found 2026-08-19: HA/Homey writes update local state optimistically
+// before the call settles, then every one of them swallowed failures to
+// console.error only — a stale-away Zigbee device, HA restarting mid-write,
+// or Homey unreachable would leave the UI showing the wrong state
+// indefinitely with zero on-screen signal. This is the shared failure path
+// for all of them (see #errorToast CSS above); a generic message is
+// intentional since a raw API error isn't meaningful at a glance on a wall
+// tablet, and giving every call site its own toast text would be needless
+// duplication for what's ultimately always "the write didn't take."
+let errorToastTimer = null;
+function showErrorToast(message) {
+  let el = document.getElementById("errorToast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "errorToast";
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.classList.add("visible");
+  clearTimeout(errorToastTimer);
+  errorToastTimer = setTimeout(() => el.classList.remove("visible"), 3500);
+}
+function handleWriteError(err) {
+  console.error(err);
+  showErrorToast("Didn't go through — check connection and try again");
+}
+
 let currentRoom = "living";
 let currentService = "lighting";     // lighting | climate | media | security
 let lightingView = "slider";         // slider | scenes | global
@@ -1427,13 +1480,13 @@ function renderPowerContent() {
     POWER.waterHeater.vacationMode = next; // optimistic; refreshWaterHeaterFromHA() corrects it once the real state lands
     renderPowerContent();
     if (window.haClient && window.haClient.connected) {
-      window.haClient.callService("water_heater", "set_away_mode", WATER_HEATER_ENTITY, { away_mode: next ? "on" : "off" }).catch(console.error);
+      window.haClient.callService("water_heater", "set_away_mode", WATER_HEATER_ENTITY, { away_mode: next ? "on" : "off" }).catch(handleWriteError);
     }
   });
   const showerPrepTabBtn = document.querySelector("[data-shower-prep]");
   if (showerPrepTabBtn) showerPrepTabBtn.addEventListener("click", () => {
     if (!window.haClient || !window.haClient.connected) return;
-    window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(console.error);
+    window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(handleWriteError);
   });
 
   document.querySelectorAll("[data-energy-mode]").forEach(el => {
@@ -1824,16 +1877,26 @@ function revokeVisibleCameraBlobUrls() {
   });
 }
 
+// imgId -> most recently issued fetch's sequence number. Each poll cycle
+// fires its own independent fetch with no ordering guarantee (2026-08-19
+// finding) — if an earlier cycle's response resolves after a later one, it
+// would overwrite the newer frame with a stale one until the next cycle
+// self-corrects. Only the latest-issued fetch is allowed to apply its result.
+const cameraSnapshotSeq = new Map();
+
 async function refreshCameraSnapshot(entityId, imgId) {
   const base = haHttpBase();
   const imgEl = document.getElementById(imgId);
   if (!base || !imgEl || !window.haClient || !window.haClient.token) return;
+  const mySeq = (cameraSnapshotSeq.get(imgId) || 0) + 1;
+  cameraSnapshotSeq.set(imgId, mySeq);
   try {
     const res = await fetch(`${base}/api/camera_proxy/${entityId}`, {
       headers: { Authorization: `Bearer ${window.haClient.token}` },
     });
     if (!res.ok) throw new Error(`camera snapshot failed: ${res.status}`);
     const blob = await res.blob();
+    if (cameraSnapshotSeq.get(imgId) !== mySeq) return; // superseded by a later fetch
     const newUrl = URL.createObjectURL(blob);
     const oldUrl = imgEl.dataset.blobUrl;
     imgEl.src = newUrl;
@@ -1941,7 +2004,7 @@ function renderSecurityContent() {
     el.addEventListener("click", () => {
       if (!window.haClient || !window.haClient.connected) return;
       const service = { stay: "alarm_arm_home", away: "alarm_arm_away", disarmed: "alarm_disarm" }[el.dataset.arm];
-      if (service) window.haClient.callService("alarm_control_panel", service, AMBIENT_ALARM_ENTITY).catch(console.error);
+      if (service) window.haClient.callService("alarm_control_panel", service, AMBIENT_ALARM_ENTITY).catch(handleWriteError);
     });
   });
   document.querySelectorAll("[data-camera]").forEach(el => {
@@ -1952,7 +2015,7 @@ function renderSecurityContent() {
   const porchBtn = document.querySelector('[data-quick="porch"]');
   if (porchBtn) porchBtn.addEventListener("click", () => {
     if (!window.haClient || !window.haClient.connected) return;
-    window.haClient.callService("light", "turn_on", "group.front_porch_exterior_lights").catch(console.error);
+    window.haClient.callService("light", "turn_on", "group.front_porch_exterior_lights").catch(handleWriteError);
   });
 }
 
@@ -2008,9 +2071,9 @@ function renderMusicContent() {
       fill.style.width = pct + "%";
       thumb.style.left = pct + "%";
     }
-    track.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
     track.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
-    track.addEventListener("pointerup", () => dragging = false);
+    track.addEventListener("pointerup", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
   });
 }
 
@@ -2233,8 +2296,10 @@ async function checkHaErrorLog() {
 
 async function checkHomeyDevices() {
   if (!window.homeyClient) return [];
-  let devices;
-  try { devices = await window.homeyClient.listDevices(); } catch (e) { console.error(e); return []; }
+  // Failures are deliberately NOT caught here (2026-08-19) — runHealthChecks
+  // needs to tell "Homey unreachable this cycle" apart from "checked,
+  // genuinely clean," and swallowing to [] here made those look identical.
+  const devices = await window.homeyClient.listDevices();
   // Real schema confirmed against all 85 live devices 2026-08-07: there is
   // no `warning` field at all (an earlier version of this check assumed
   // one and its warning branch was dead code — never fired). The real
@@ -2253,8 +2318,8 @@ async function checkHomeyDevices() {
 
 async function checkHomeyFlows() {
   if (!window.homeyClient) return [];
-  let flows;
-  try { flows = await window.homeyClient.listFlows(); } catch (e) { console.error(e); return []; }
+  // Same reasoning as checkHomeyDevices above — let failures propagate.
+  const flows = await window.homeyClient.listFlows();
   return flows
     .filter(f => f.broken)
     .map(f => ({
@@ -2267,15 +2332,26 @@ async function checkHomeyFlows() {
 }
 
 async function runHealthChecks() {
-  // Captured before the checks run, not derived from their results — a
-  // system being unreachable and a system being genuinely clean both
-  // return zero findings, and the diff below needs to tell those apart.
+  // haReachable is a real connectivity signal (ha-client.js's own tracked
+  // WS state). homeyReachable used to just be !!window.homeyClient — the
+  // client *object* existing, not whether Homey was actually answering —
+  // so a transient Homey REST timeout looked identical to "checked,
+  // genuinely clean" and the diff-preservation logic below (already correct
+  // for HA) never kicked in for Homey. Using Promise.allSettled lets each
+  // check fail independently and tells us which ones actually completed.
   const haReachable = !!(window.haClient && window.haClient.connected);
-  const homeyReachable = !!window.homeyClient;
 
-  const [autos, errors, devices, flows] = await Promise.all([
+  const [autosResult, errorsResult, devicesResult, flowsResult] = await Promise.allSettled([
     checkHaAutomations(), checkHaErrorLog(), checkHomeyDevices(), checkHomeyFlows(),
   ]);
+  const autos = autosResult.status === "fulfilled" ? autosResult.value : [];
+  const errors = errorsResult.status === "fulfilled" ? errorsResult.value : [];
+  const devices = devicesResult.status === "fulfilled" ? devicesResult.value : [];
+  const flows = flowsResult.status === "fulfilled" ? flowsResult.value : [];
+  if (devicesResult.status === "rejected") console.error(devicesResult.reason);
+  if (flowsResult.status === "rejected") console.error(flowsResult.reason);
+  const homeyReachable = !!window.homeyClient && devicesResult.status === "fulfilled" && flowsResult.status === "fulfilled";
+
   const findings = [...autos, ...errors, ...devices, ...flows];
 
   const prevState = getHealthCheckState();
@@ -2486,6 +2562,14 @@ async function renderSettingsContent() {
 }
 
 function renderContent() {
+  // Skip while a slider/wheel drag is in progress — rebuilding innerHTML
+  // here would destroy the DOM node currently holding pointer capture,
+  // aborting the gesture (see activeDragCount's declaration comment above).
+  // Navigation can't happen mid-drag (switching rooms/tabs requires
+  // releasing the captured pointer first), so this only ever skips the
+  // background-triggered rebuilds it's meant to skip; the next call after
+  // the drag ends picks up whatever was suppressed.
+  if (activeDragCount > 0) return;
   if (currentRoom !== "security" && cameraRefreshTimer) {
     revokeVisibleCameraBlobUrls(); // old Security DOM is still present here, about to be replaced by whatever's being navigated to
     clearInterval(cameraRefreshTimer);
@@ -2697,10 +2781,10 @@ function wireInteractions(room) {
       cursor.style.background = hex;
       if (hexLabel) hexLabel.textContent = hex;
     }
-    wheel.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX, e.clientY); wheel.setPointerCapture(e.pointerId); });
+    wheel.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientX, e.clientY); wheel.setPointerCapture(e.pointerId); });
     wheel.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX, e.clientY); });
-    wheel.addEventListener("pointerup", () => { dragging = false; haSyncLight(room.lighting[i]); });
-    wheel.addEventListener("pointercancel", () => dragging = false);
+    wheel.addEventListener("pointerup", () => { (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)); haSyncLight(room.lighting[i]); });
+    wheel.addEventListener("pointercancel", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
   });
 
 
@@ -2728,14 +2812,14 @@ function wireInteractions(room) {
   const tvToggleBtn = document.querySelector("[data-tv-toggle]");
   if (tvToggleBtn) tvToggleBtn.addEventListener("click", () => {
     if (!room.tv || !room.tv.entityId || !window.haClient || !window.haClient.connected) return;
-    window.haClient.callService("media_player", room.tv.on ? "turn_off" : "turn_on", room.tv.entityId).catch(console.error);
+    window.haClient.callService("media_player", room.tv.on ? "turn_off" : "turn_on", room.tv.entityId).catch(handleWriteError);
   });
 
   document.querySelectorAll("[data-remote-cmd]").forEach(btn => {
     btn.addEventListener("click", () => {
       const remoteEntityId = room.tv && room.tv.entityId ? tvRemoteCache[room.tv.entityId] : null;
       if (!remoteEntityId || !window.haClient || !window.haClient.connected) return;
-      window.haClient.callService("remote", "send_command", remoteEntityId, { command: btn.dataset.remoteCmd }).catch(console.error);
+      window.haClient.callService("remote", "send_command", remoteEntityId, { command: btn.dataset.remoteCmd }).catch(handleWriteError);
     });
   });
 
@@ -2746,7 +2830,7 @@ function wireInteractions(room) {
   document.querySelectorAll("[data-mood]").forEach(btn => {
     btn.addEventListener("click", () => {
       if (!window.homeyClient) return;
-      window.homeyClient.triggerMood(btn.dataset.mood).catch(console.error);
+      window.homeyClient.triggerMood(btn.dataset.mood).catch(handleWriteError);
     });
   });
 
@@ -2774,10 +2858,10 @@ function wireInteractions(room) {
       const statusEl = document.querySelector(".hero-status");
       if (statusEl) statusEl.textContent = heroStatusText(room);
     }
-    track.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
     track.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
-    track.addEventListener("pointerup", () => { dragging = false; haSyncLight(room.lighting[i]); });
-    track.addEventListener("pointercancel", () => dragging = false);
+    track.addEventListener("pointerup", () => { (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)); haSyncLight(room.lighting[i]); });
+    track.addEventListener("pointercancel", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
   });
 
   document.querySelectorAll("[data-shade-slider]").forEach(track => {
@@ -2795,10 +2879,10 @@ function wireInteractions(room) {
       thumb.style.left = pct + "%";
       if (label) label.textContent = pct + "%";
     }
-    track.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
     track.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
-    track.addEventListener("pointerup", () => dragging = false);
-    track.addEventListener("pointercancel", () => dragging = false);
+    track.addEventListener("pointerup", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
+    track.addEventListener("pointercancel", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
   });
 
   const scrubTrack = document.querySelector("[data-scrub]");
@@ -2815,9 +2899,9 @@ function wireInteractions(room) {
       thumb.style.left = pct + "%";
       if (label) label.textContent = fmtTime(room.media.elapsed);
     }
-    scrubTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientX); scrubTrack.setPointerCapture(e.pointerId); });
+    scrubTrack.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientX); scrubTrack.setPointerCapture(e.pointerId); });
     scrubTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
-    scrubTrack.addEventListener("pointerup", () => dragging = false);
+    scrubTrack.addEventListener("pointerup", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
   }
 
   const shuffleBtn = document.querySelector("[data-shuffle]");
@@ -2836,9 +2920,9 @@ function wireInteractions(room) {
       room.media.volume = pct;
       fill.style.height = pct + "%";
     }
-    volTrack.addEventListener("pointerdown", e => { dragging = true; setFromEvent(e.clientY); volTrack.setPointerCapture(e.pointerId); });
+    volTrack.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientY); volTrack.setPointerCapture(e.pointerId); });
     volTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientY); });
-    volTrack.addEventListener("pointerup", () => dragging = false);
+    volTrack.addEventListener("pointerup", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
   }
 
   const playBtn = document.getElementById("playBtn");
@@ -2847,7 +2931,7 @@ function wireInteractions(room) {
     playBtn.innerHTML = ico(room.media.playing ? "pause" : "play", "i20");
     icons(playBtn);
     if (room.media.entityId && window.haClient && window.haClient.connected) {
-      window.haClient.callService("media_player", room.media.playing ? "media_play" : "media_pause", room.media.entityId).catch(console.error);
+      window.haClient.callService("media_player", room.media.playing ? "media_play" : "media_pause", room.media.entityId).catch(handleWriteError);
     }
   });
 
@@ -2936,9 +3020,9 @@ function haSyncLight(lightItem) {
     if (lightItem.color && lightItem.hue != null && lightItem.sat != null) {
       data.hs_color = [lightItem.hue, lightItem.sat];
     }
-    window.haClient.callService("light", "turn_on", lightItem.entityId, data).catch(console.error);
+    window.haClient.callService("light", "turn_on", lightItem.entityId, data).catch(handleWriteError);
   } else {
-    window.haClient.callService("light", "turn_off", lightItem.entityId).catch(console.error);
+    window.haClient.callService("light", "turn_off", lightItem.entityId).catch(handleWriteError);
   }
 }
 
@@ -3229,8 +3313,23 @@ function getRoomEntityMap() {
   return merged;
 }
 
-function saveRoomEntityMap(map) {
-  localStorage.setItem(ROOM_OVERRIDE_KEY, JSON.stringify(map));
+function saveRoomEntityMap(map, roomId) {
+  // Real bug found 2026-08-19: this used to persist the entire merged map
+  // (default + overrides for every room), not just the room actually being
+  // edited. That meant the first-ever Admin Mode save snapshotted every
+  // room's config into the override, permanently shadowing any later fix to
+  // ROOM_ENTITY_MAP in rooms.config.js for the whole house, not just the
+  // room that was touched (see getRoomEntityMap's per-room merge comment
+  // above — this defeated the whole point of merging per-room). Reading the
+  // existing raw overrides and only setting this one room's key keeps every
+  // other room free to pick up future rooms.config.js changes.
+  let overrides = {};
+  const raw = localStorage.getItem(ROOM_OVERRIDE_KEY);
+  if (raw) {
+    try { overrides = JSON.parse(raw); } catch (e) { console.error("Bad room override JSON, discarding", e); }
+  }
+  overrides[roomId] = map[roomId];
+  localStorage.setItem(ROOM_OVERRIDE_KEY, JSON.stringify(overrides));
 }
 
 // Whole-home Quick Actions (2026-08-07) — automation/script buttons not
@@ -3351,65 +3450,82 @@ function populateRoomsFromMap(map, statesById) {
   }
 }
 
+// Real bug found 2026-08-19: hydration (getStates + populate ROOMS) and the
+// onStateChanged listener used to be registered only inside initLiveData's
+// initial `await client.connect()` try-block. If that very first attempt
+// failed (HA restarting, a brief WiFi drop at boot — the exact "sporadic
+// network on a wall-mounted device" case), ha-client's own retry logic would
+// go on to reconnect later and flip the footer back to "All systems normal"
+// — but nothing had ever registered the listener or fetched state, so the
+// kiosk looked connected while every light/media/TV/energy value stayed
+// frozen at whatever it was at load, until someone force-reloaded the tab.
+// Hydrating on every onConnectionChange(true) — not just the first
+// successful connect — fixes the initial-failure case, and as a bonus also
+// refills anything missed during a later genuine outage (e.g. HA restarts
+// mid-session), which incremental state_changed events alone can't do since
+// events that occur while disconnected are never delivered.
+async function hydrateStatesFromHA(client) {
+  const states = await client.getStates();
+  const stateById = new Map(states.map(s => [s.entity_id, s]));
+
+  for (const [entityId, loc] of entityLocations) {
+    const state = stateById.get(entityId);
+    if (state) ROOMS[loc.roomId].lighting[loc.index] = haStateToLightItem(entityId, state);
+  }
+  for (const [entityId, roomId] of mediaEntityLocations) {
+    const state = stateById.get(entityId);
+    if (state) ROOMS[roomId].media = haStateToMediaItem(entityId, state);
+  }
+  for (const [entityId, roomId] of tvEntityLocations) {
+    const state = stateById.get(entityId);
+    if (state) ROOMS[roomId].tv = haStateToTvItem(entityId, state);
+  }
+  for (const [entityId, loc] of airQualityEntityLocations) {
+    const state = stateById.get(entityId);
+    if (state && ROOMS[loc.roomId].airQuality) ROOMS[loc.roomId].airQuality[loc.field] = parseFloat(state.state);
+  }
+  ambientPowerState = stateById.get(AMBIENT_POWER_ENTITY) || null;
+  ambientSolarState = stateById.get(AMBIENT_SOLAR_ENTITY) || null;
+  ambientBatteryState = stateById.get(AMBIENT_BATTERY_ENTITY) || null;
+  ambientGridState = stateById.get(AMBIENT_GRID_ENTITY) || null;
+  ambientBatteryPctState = stateById.get(AMBIENT_BATTERY_PCT_ENTITY) || null;
+  ambientHomeUsageState = stateById.get(AMBIENT_HOME_USAGE_ENTITY) || null;
+  refreshPowerFromHA();
+  waterHeaterState = stateById.get(WATER_HEATER_ENTITY) || null;
+  waterHeaterRecircState = stateById.get(WATER_HEATER_RECIRC_ENTITY) || null;
+  waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
+  refreshWaterHeaterFromHA();
+  ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
+  ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
+  ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
+  for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
+    ambientPackageStates[entityId] = stateById.get(entityId) || null;
+  }
+  for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
+    ambientPresenceStates[roomId] = stateById.get(entityId) || null;
+  }
+  const sunState = stateById.get(SUN_ENTITY);
+  if (sunState) applyNightMode(sunState.state === "below_horizon");
+}
+
 async function initLiveData() {
   const { url, token } = HAConfig.get();
   const client = new HAClient(url, token);
   window.haClient = client;
+
+  populateRoomsFromMap(getRoomEntityMap());
 
   client.onConnectionChange((isConnected) => {
     const dot = document.querySelector(".footer .dot");
     const label = document.querySelector(".footer div");
     if (dot) dot.style.background = isConnected ? "" : "#FF6B6B";
     if (label) label.lastChild.textContent = isConnected ? "All systems normal" : "Disconnected — reconnecting...";
+    if (isConnected) {
+      hydrateStatesFromHA(client).then(render).catch(err => console.error("HA state hydration failed:", err));
+    }
   });
 
-  populateRoomsFromMap(getRoomEntityMap());
-
-  try {
-    await client.connect();
-    const states = await client.getStates();
-    const stateById = new Map(states.map(s => [s.entity_id, s]));
-
-    for (const [entityId, loc] of entityLocations) {
-      const state = stateById.get(entityId);
-      if (state) ROOMS[loc.roomId].lighting[loc.index] = haStateToLightItem(entityId, state);
-    }
-    for (const [entityId, roomId] of mediaEntityLocations) {
-      const state = stateById.get(entityId);
-      if (state) ROOMS[roomId].media = haStateToMediaItem(entityId, state);
-    }
-    for (const [entityId, roomId] of tvEntityLocations) {
-      const state = stateById.get(entityId);
-      if (state) ROOMS[roomId].tv = haStateToTvItem(entityId, state);
-    }
-    for (const [entityId, loc] of airQualityEntityLocations) {
-      const state = stateById.get(entityId);
-      if (state && ROOMS[loc.roomId].airQuality) ROOMS[loc.roomId].airQuality[loc.field] = parseFloat(state.state);
-    }
-    ambientPowerState = stateById.get(AMBIENT_POWER_ENTITY) || null;
-    ambientSolarState = stateById.get(AMBIENT_SOLAR_ENTITY) || null;
-    ambientBatteryState = stateById.get(AMBIENT_BATTERY_ENTITY) || null;
-    ambientGridState = stateById.get(AMBIENT_GRID_ENTITY) || null;
-    ambientBatteryPctState = stateById.get(AMBIENT_BATTERY_PCT_ENTITY) || null;
-    ambientHomeUsageState = stateById.get(AMBIENT_HOME_USAGE_ENTITY) || null;
-    refreshPowerFromHA();
-    waterHeaterState = stateById.get(WATER_HEATER_ENTITY) || null;
-    waterHeaterRecircState = stateById.get(WATER_HEATER_RECIRC_ENTITY) || null;
-    waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
-    refreshWaterHeaterFromHA();
-    ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
-    ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
-    ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
-    for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
-      ambientPackageStates[entityId] = stateById.get(entityId) || null;
-    }
-    for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
-      ambientPresenceStates[roomId] = stateById.get(entityId) || null;
-    }
-    const sunState = stateById.get(SUN_ENTITY);
-    if (sunState) applyNightMode(sunState.state === "below_horizon");
-
-    client.onStateChanged((entityId, newState) => {
+  client.onStateChanged((entityId, newState) => {
       if (!newState) return;
       const loc = entityLocations.get(entityId);
       if (loc) {
@@ -3488,10 +3604,19 @@ async function initLiveData() {
         applyNightMode(newState.state === "below_horizon");
       }
     });
+
+  try {
+    // Hydration itself happens in the onConnectionChange(true) handler
+    // above, not here — it fires for this first successful connect too, so
+    // doing it again here would just double up the work.
+    await client.connect();
   } catch (err) {
-    console.error("HA connection failed:", err);
+    // Not fatal: ha-client.js keeps retrying internally, and the
+    // onConnectionChange(true) handler above will hydrate + render once a
+    // later attempt actually succeeds.
+    console.error("HA connection failed, will keep retrying:", err);
     const label = document.querySelector(".footer div");
-    if (label) label.lastChild.textContent = "Connection failed — check Settings";
+    if (label) label.lastChild.textContent = "Connection failed — retrying...";
   }
 
   render();
@@ -3611,7 +3736,7 @@ async function createNewRoom(name) {
   // a page reload — ROOMS/ROOM_ORDER are rebuilt fresh from the static
   // mockup on every load, they don't know this room exists otherwise.
   map[roomId] = { name: name.trim(), lighting: [] };
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   renderRail();
   document.getElementById("adminNewRoomName").value = "";
   await refreshAfterAdminChange(map);
@@ -3951,7 +4076,7 @@ async function addActionToRoom(roomId, entityId) {
   if (!map[roomId]) map[roomId] = { lighting: [] };
   if (!map[roomId].automationButtons) map[roomId].automationButtons = [];
   if (!map[roomId].automationButtons.includes(entityId)) map[roomId].automationButtons.push(entityId);
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -3959,7 +4084,7 @@ async function removeActionFromRoom(roomId, entityId) {
   const map = getRoomEntityMap();
   if (map[roomId]) map[roomId].automationButtons = (map[roomId].automationButtons || []).filter(id => id !== entityId);
   if (ROOMS[roomId]) ROOMS[roomId].automationButtons = map[roomId] ? map[roomId].automationButtons : [];
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4016,7 +4141,7 @@ async function toggleAmbientForRoom(roomId) {
     ? map[roomId].showOnAmbient
     : AMBIENT_ROOMS_DEFAULT.includes(roomId);
   map[roomId].showOnAmbient = !current;
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4049,14 +4174,14 @@ async function addEntityToRoom(roomId, entityId) {
   if (!map[roomId]) map[roomId] = { lighting: [] };
   if (!map[roomId].lighting) map[roomId].lighting = [];
   if (!map[roomId].lighting.includes(entityId)) map[roomId].lighting.push(entityId);
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
 async function removeEntityFromRoom(roomId, entityId) {
   const map = getRoomEntityMap();
   if (map[roomId]) map[roomId].lighting = (map[roomId].lighting || []).filter(id => id !== entityId);
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4064,7 +4189,7 @@ async function addMediaToRoom(roomId, entityId) {
   const map = getRoomEntityMap();
   if (!map[roomId]) map[roomId] = { lighting: [] };
   map[roomId].media_player = entityId;
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4072,7 +4197,7 @@ async function removeMediaFromRoom(roomId) {
   const map = getRoomEntityMap();
   if (map[roomId]) delete map[roomId].media_player;
   if (ROOMS[roomId]) ROOMS[roomId].media = defaultRoomShape("").media;
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4080,7 +4205,7 @@ async function addTvToRoom(roomId, entityId) {
   const map = getRoomEntityMap();
   if (!map[roomId]) map[roomId] = { lighting: [] };
   map[roomId].tv = entityId;
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4088,7 +4213,7 @@ async function removeTvFromRoom(roomId) {
   const map = getRoomEntityMap();
   if (map[roomId]) delete map[roomId].tv;
   if (ROOMS[roomId]) ROOMS[roomId].tv = null;
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4096,7 +4221,7 @@ async function addClimateToRoom(roomId, deviceId) {
   const map = getRoomEntityMap();
   if (!map[roomId]) map[roomId] = { lighting: [] };
   map[roomId].climateDeviceId = deviceId;
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4104,7 +4229,7 @@ async function removeClimateFromRoom(roomId) {
   const map = getRoomEntityMap();
   if (map[roomId]) delete map[roomId].climateDeviceId;
   if (ROOMS[roomId]) ROOMS[roomId].climateDeviceId = null;
-  saveRoomEntityMap(map);
+  saveRoomEntityMap(map, roomId);
   await refreshAfterAdminChange(map);
 }
 
@@ -4175,7 +4300,13 @@ document.getElementById("homeySaveBtn").addEventListener("click", async () => {
   homeyStatusEl.textContent = "Checking...";
   try {
     const client = new HomeyClient(url, token);
-    await client.getDevice(NEST_THERMOSTAT_DEVICE_ID);
+    // Validate with a generic call, not a specific device (real bug found
+    // 2026-08-19: this used to fetch NEST_THERMOSTAT_DEVICE_ID — if that one
+    // device is ever removed/replaced in Homey, re-entering an otherwise-
+    // correct URL/token here would always show "Couldn't connect", which is
+    // misleading). listZones() only needs Homey to answer authenticated at
+    // all — every Homey has at least the default "Home" zone.
+    await client.listZones();
     HomeyConfig.set(url, token);
     window.homeyClient = client;
     homeyStatusEl.textContent = "Connected.";
@@ -4228,6 +4359,9 @@ function ambientBrightnessWord(pct) {
 function renderAmbientActions() {
   const el = document.getElementById("ambientActions");
   if (!el) return;
+  // Skip while a drag is in progress — see activeDragCount's declaration
+  // comment above (same rebuild-destroys-pointer-capture issue as renderContent).
+  if (activeDragCount > 0) return;
 
   // Room cards (2026-08-06, merged) — one card per room now, combining
   // what were two separate tiles: the room's representative light and its
@@ -4458,10 +4592,10 @@ function renderAmbientActions() {
       light.on = pct > 0;
       fill.style.height = pct + "%";
     }
-    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; setFromEvent(e.clientY); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; activeDragCount++; setFromEvent(e.clientY); track.setPointerCapture(e.pointerId); });
     track.addEventListener("pointermove", e => { e.stopPropagation(); if (dragging) setFromEvent(e.clientY); });
-    track.addEventListener("pointerup", e => { e.stopPropagation(); dragging = false; haSyncLight(light); renderAmbientActions(); });
-    track.addEventListener("pointercancel", e => { e.stopPropagation(); dragging = false; });
+    track.addEventListener("pointerup", e => { e.stopPropagation(); (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)); haSyncLight(light); renderAmbientActions(); });
+    track.addEventListener("pointercancel", e => { e.stopPropagation(); (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)); });
     track.addEventListener("click", e => e.stopPropagation());
   });
 
@@ -4471,7 +4605,7 @@ function renderAmbientActions() {
       const r = ROOMS[btn.dataset.ambientPlaypause];
       r.media.playing = !r.media.playing;
       if (r.media.entityId && window.haClient && window.haClient.connected) {
-        window.haClient.callService("media_player", r.media.playing ? "media_play" : "media_pause", r.media.entityId).catch(console.error);
+        window.haClient.callService("media_player", r.media.playing ? "media_play" : "media_pause", r.media.entityId).catch(handleWriteError);
       }
       renderAmbientActions();
     });
@@ -4482,7 +4616,7 @@ function renderAmbientActions() {
       e.stopPropagation();
       const r = ROOMS[btn.dataset.ambientPrev];
       if (r.media.entityId && window.haClient && window.haClient.connected) {
-        window.haClient.callService("media_player", "media_previous_track", r.media.entityId).catch(console.error);
+        window.haClient.callService("media_player", "media_previous_track", r.media.entityId).catch(handleWriteError);
       }
     });
   });
@@ -4491,7 +4625,7 @@ function renderAmbientActions() {
       e.stopPropagation();
       const r = ROOMS[btn.dataset.ambientNext];
       if (r.media.entityId && window.haClient && window.haClient.connected) {
-        window.haClient.callService("media_player", "media_next_track", r.media.entityId).catch(console.error);
+        window.haClient.callService("media_player", "media_next_track", r.media.entityId).catch(handleWriteError);
       }
     });
   });
@@ -4509,12 +4643,12 @@ function renderAmbientActions() {
       fill.style.width = pct + "%";
       thumb.style.left = pct + "%";
     }
-    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
+    track.addEventListener("pointerdown", e => { e.stopPropagation(); dragging = true; activeDragCount++; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
     track.addEventListener("pointermove", e => { e.stopPropagation(); if (dragging) setFromEvent(e.clientX); });
     track.addEventListener("pointerup", e => {
-      e.stopPropagation(); dragging = false;
+      e.stopPropagation(); (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1));
       if (r.media.entityId && window.haClient && window.haClient.connected) {
-        window.haClient.callService("media_player", "volume_set", r.media.entityId, { volume_level: r.media.volume / 100 }).catch(console.error);
+        window.haClient.callService("media_player", "volume_set", r.media.entityId, { volume_level: r.media.volume / 100 }).catch(handleWriteError);
       }
     });
     track.addEventListener("click", e => e.stopPropagation());
@@ -4527,7 +4661,7 @@ function renderAmbientActions() {
       e.stopPropagation();
       if (!window.haClient || !window.haClient.connected) return;
       const service = isArmed ? "alarm_disarm" : "alarm_arm_away";
-      window.haClient.callService("alarm_control_panel", service, AMBIENT_ALARM_ENTITY).catch(console.error);
+      window.haClient.callService("alarm_control_panel", service, AMBIENT_ALARM_ENTITY).catch(handleWriteError);
     });
   }
 
@@ -4536,7 +4670,7 @@ function renderAmbientActions() {
     showerPrepBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!window.haClient || !window.haClient.connected) return;
-      window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(console.error);
+      window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(handleWriteError);
     });
   }
 
@@ -4628,14 +4762,26 @@ resetIdleTimer();
 // reload during a quiet, idle hour is the practical equivalent: it clears
 // any silent memory/DOM drift before it becomes visible, without
 // interrupting anyone actively using the panel (only fires while Ambient
-// Mode is showing; if someone's using it right at 4:00am, it just retries
-// on the next idle minute instead of yanking the screen away).
+// Mode is showing; if someone's using it right at 4am, it retries on the
+// next idle 30s tick instead of yanking the screen away).
+//
+// Real bug found 2026-08-19: the original condition only matched the exact
+// getMinutes() === 0 tick — a single one-minute window per day — so if
+// Ambient wasn't visible at exactly 4:00am (kiosk actively in use), the
+// reload was skipped entirely until the next day, not retried later that
+// hour like the comment claimed. Widened to the whole 4am hour, guarded by
+// a localStorage date flag (persists across the reload itself) so it still
+// only actually reloads once per day, whenever in that hour Ambient first
+// happens to be showing.
+const NIGHTLY_RELOAD_KEY = "ha_last_nightly_reload_date";
 setInterval(() => {
   const now = new Date();
-  if (now.getHours() === 4 && now.getMinutes() === 0 &&
-      document.getElementById("ambientOverlay").classList.contains("visible")) {
-    location.reload();
-  }
+  if (now.getHours() !== 4) return;
+  if (!document.getElementById("ambientOverlay").classList.contains("visible")) return;
+  const today = now.toDateString();
+  if (localStorage.getItem(NIGHTLY_RELOAD_KEY) === today) return;
+  localStorage.setItem(NIGHTLY_RELOAD_KEY, today);
+  location.reload();
 }, 1000 * 30);
 
 if ("serviceWorker" in navigator) {

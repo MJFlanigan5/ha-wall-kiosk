@@ -63,27 +63,42 @@ class HAClient {
   }
 
   connect() {
-    return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.url);
+    // Re-entrancy guard — found 2026-08-19: _forceReconnectNow() (fired on
+    // visibilitychange/online, both routine for a tablet that sleeps/wakes)
+    // could call connect() while a previous attempt from _scheduleReconnect()
+    // was still CONNECTING. Each call built a brand-new WebSocket without
+    // tearing down the old one, so two live sockets ended up both feeding
+    // the shared stateListeners (every real event processed twice) and both
+    // racing to call _setConnected()/_scheduleReconnect() on close. A single
+    // in-flight promise means a second call just waits on the first instead
+    // of opening a second socket.
+    if (this._connectPromise) return this._connectPromise;
 
-      this.ws.onopen = () => {
+    this._connectPromise = new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url);
+      this.ws = ws;
+
+      ws.onopen = () => {
         // wait for auth_required before sending auth
       };
 
-      this.ws.onerror = (err) => {
+      ws.onerror = (err) => {
+        if (ws !== this.ws) return; // stale socket superseded after a fresh connect()
         if (!this.connected) reject(err);
       };
 
-      this.ws.onclose = () => {
+      ws.onclose = () => {
+        if (ws !== this.ws) return; // stale socket superseded after a fresh connect()
         this._setConnected(false);
         this._scheduleReconnect();
       };
 
-      this.ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
+        if (ws !== this.ws) return; // stale socket superseded after a fresh connect()
         const msg = JSON.parse(event.data);
 
         if (msg.type === "auth_required") {
-          this.ws.send(JSON.stringify({ type: "auth", access_token: this.token }));
+          ws.send(JSON.stringify({ type: "auth", access_token: this.token }));
           return;
         }
 
@@ -115,7 +130,11 @@ class HAClient {
           return;
         }
       };
+    }).finally(() => {
+      this._connectPromise = null;
     });
+
+    return this._connectPromise;
   }
 
   _scheduleReconnect() {

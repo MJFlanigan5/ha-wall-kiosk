@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./index.html",
   "./config.js",
   "./ha-client.js",
+  "./homey-client.js",
   "./rooms.config.js",
   "./manifest.json",
   "./icons/icon-192.png",
