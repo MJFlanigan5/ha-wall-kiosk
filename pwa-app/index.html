@@ -148,6 +148,18 @@
     border-radius: 999px; border: 1px solid var(--hairline); background: transparent; color: var(--text-dim); cursor: pointer;
   }
   .switch-btn.on { background: var(--on-dim); border-color: rgba(52,199,89,0.5); color: var(--on); }
+  /* Unavailable action — greyed + inert, distinct from the plain "off/inactive"
+     look above so it's clear the button won't do anything if tapped, not just
+     that the thing it controls is currently off. Applies to any .switch-btn
+     via the native disabled attribute, not a class, so it can't be left on
+     accidentally by forgetting to remove a class. */
+  .switch-btn:disabled { opacity: 0.35; cursor: default; }
+  /* Momentary-trigger confirmation — a brief illuminate-then-fade for actions
+     with no persistent state (run a flow/scene), so tapping still gives real
+     feedback without implying the button is now "on". Class is added on tap
+     and removed automatically after the animation completes. */
+  @keyframes switch-btn-flash { 0% { background: var(--on); border-color: var(--on); color: var(--base); } 100% { background: transparent; border-color: var(--hairline); color: var(--text-dim); } }
+  .switch-btn.flash { animation: switch-btn-flash 700ms ease-out; }
 
   .slider-track { width: 100%; height: 4px; border-radius: 999px; background: var(--hairline); position: relative; cursor: pointer; touch-action: none; }
   .slider-fill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 999px; background: var(--accent); pointer-events: none; }
@@ -2380,6 +2392,17 @@ async function renderSettingsContent() {
   }
   const globalActionIds = getGlobalActions().buttons || [];
 
+  let homeyAvailable = false;
+  let vacationModeOn = false;
+  if (window.homeyClient) {
+    try {
+      const vars = await window.homeyClient.getLogicVariables();
+      const v = vars.find(x => x.id === HOMEY_VACATION_MODE_VAR_ID);
+      vacationModeOn = !!(v && v.value);
+      homeyAvailable = true; // reaching here means the Homey call itself succeeded
+    } catch (e) { console.error("Homey quick actions unavailable", e); }
+  }
+
   content.innerHTML = `
     <div class="header">
       <div class="header-title-row"><span>${ico("settings", "i24")}</span><h1>Settings</h1></div>
@@ -2400,6 +2423,17 @@ async function renderSettingsContent() {
         <div class="light-row-name">${globalActionLabels.get(id) || id}</div>
         <button class="switch-btn" data-quick-action="${id}">Run</button>
       </div>`).join("")}</div>` : ""}
+    <div class="section-label-sm" style="margin-top:24px">${ico("zap", "i14")}Homey Quick Actions</div>
+    <div class="light-list">
+      <div class="switch-row">
+        <div class="light-row-name">Vacation Mode</div>
+        <button class="switch-btn ${vacationModeOn ? "on" : ""}" data-homey-toggle="vacation" ${homeyAvailable ? "" : "disabled"}>${vacationModeOn ? "On" : "Off"}</button>
+      </div>
+      <div class="switch-row">
+        <div class="light-row-name">Morning Shower Routine</div>
+        <button class="switch-btn" data-homey-trigger="${HOMEY_MORNING_SHOWER_FLOW_ID}" ${homeyAvailable ? "" : "disabled"}>Run</button>
+      </div>
+    </div>
     <div class="section-label-sm" style="margin-top:24px">${ico("users", "i14")}Users</div>
     <div class="kv-section">
       ${USERS.map(u => `
@@ -2427,6 +2461,27 @@ async function renderSettingsContent() {
   });
   document.querySelectorAll("[data-quick-action]").forEach(el => {
     el.addEventListener("click", () => triggerQuickAction(el.dataset.quickAction));
+  });
+
+  const vacationBtn = document.querySelector("[data-homey-toggle='vacation']");
+  if (vacationBtn) vacationBtn.addEventListener("click", async () => {
+    if (!window.homeyClient || vacationBtn.disabled) return;
+    const turningOn = !vacationBtn.classList.contains("on");
+    vacationBtn.disabled = true; // guard against a double-tap firing the flow twice while the request is in flight
+    try {
+      await window.homeyClient.triggerAdvancedFlow(turningOn ? HOMEY_VACATION_MODE_ON_FLOW_ID : HOMEY_VACATION_MODE_OFF_FLOW_ID);
+    } catch (e) { console.error("Vacation Mode toggle failed", e); }
+    renderSettingsContent(); // re-fetches the real variable value rather than assuming the flow did what we expect
+  });
+
+  document.querySelectorAll("[data-homey-trigger]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!window.homeyClient || btn.disabled) return;
+      btn.classList.remove("flash"); void btn.offsetWidth; btn.classList.add("flash"); // restart the animation even on rapid re-taps
+      try {
+        await window.homeyClient.triggerAdvancedFlow(btn.dataset.homeyTrigger);
+      } catch (e) { console.error("Homey flow trigger failed", e); }
+    });
   });
 }
 
@@ -3022,6 +3077,17 @@ const MOOD_DINNER_GUESTS_ID = "800dd834-bb68-44e0-af0b-e5964ecc605c"; // Dining 
 // virtual device's capabilities — confirmed live, real readings. Read via
 // window.homeyClient like the thermostat, not through rooms.config.js/HA.
 const DINING_ROOM_AQ_DEVICE_ID = "c67c1682-3d18-43d9-b08c-5d3de6e640e9";
+
+// Homey-native quick actions surfaced in Settings (2026-08-18) — these are
+// Advanced Flows/Logic variables that live only in Homey, not HA, so they
+// can't go through the existing HA-only Quick Actions system above.
+// Vacation Mode is a real toggle (illuminates from the variable's live
+// value); Morning Shower Routine is a one-shot trigger (flash-confirm only,
+// no persistent state — it just turns lights on, there's nothing to reflect).
+const HOMEY_VACATION_MODE_VAR_ID = "1944d3fa-2990-427d-bc37-8ea5e2733dd5";
+const HOMEY_VACATION_MODE_ON_FLOW_ID = "94ab964b-559a-4f4e-9ba0-930f105f8a27";
+const HOMEY_VACATION_MODE_OFF_FLOW_ID = "6758ddac-e598-4ec9-b1f2-20db5435f49f";
+const HOMEY_MORNING_SHOWER_FLOW_ID = "4ab825b1-4421-415b-a135-fae70a9ea0fd";
 
 // Water Usage tile (2026-08-06) — swapped in for the old CO2/grid-intensity
 // tile per Mike's direction. Real Flo shutoff valve sensor, confirmed live

@@ -45,6 +45,23 @@ class HomeyClient {
     return this._fetch(`/api/manager/moods/mood/${moodId}/trigger`, { method: "POST" });
   }
 
+  // Logic variables (Homey's boolean/number/text globals) — used to read a
+  // toggle-style flow's current state (e.g. Vacation Mode) so a Foyer button
+  // can illuminate correctly instead of guessing. Same map-not-array shape
+  // as listDevices/listZones/listFlows.
+  async getLogicVariables() {
+    const map = await this._fetch("/api/manager/logic/variable/");
+    return Object.values(map || {});
+  }
+
+  // Starts an Advanced Flow's "start" node — the same mechanism the Homey
+  // app's own flow "play" button uses. Only works on flows built with a
+  // start node (no regular trigger card); Homey returns an error otherwise,
+  // which callers should surface rather than swallow.
+  triggerAdvancedFlow(flowId) {
+    return this._fetch(`/api/manager/flow/advancedflow/${flowId}/trigger`, { method: "POST" });
+  }
+
   // Both return an { id: {...} } map, not an array — Homey's own API shape
   // when no specific ID is given. Used by device discovery (Admin Mode's
   // Climate picker), not by any always-on polling path.
