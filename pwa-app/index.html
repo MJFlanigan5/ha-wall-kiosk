@@ -732,6 +732,7 @@
     <div class="footer">
       <div><span class="dot"></span>All systems normal</div>
       <div style="display:flex; align-items:center; gap:14px;">
+        <span id="footerHealthScore"></span>
         <button class="admin-btn" id="adminOpenBtn" title="Admin"></button>
       </div>
     </div>
@@ -3179,6 +3180,23 @@ const HOMEY_MORNING_SHOWER_FLOW_ID = "4ab825b1-4421-415b-a135-fae70a9ea0fd";
 const AMBIENT_WATER_USAGE_ENTITY = "sensor.flo_shutoff_today_s_water_usage";
 let ambientWaterUsageState = null;
 
+// Footer health score (2026-08-20) — Mike wanted the whole-house HA health
+// score somewhere "good to know but not something we have to know", so it
+// lives in the persistent footer rather than competing for a status-row
+// card slot (that row is deliberately locked at 8 cards) or getting buried
+// in Foyer's own separate internal Health nav page (a different concept —
+// that page tracks this dashboard's own stale-sensor diagnostics).
+const HEALTH_SCORE_ENTITY = "sensor.system_ha_global_health_score";
+let healthScoreState = null;
+function renderFooterHealth() {
+  const el = document.getElementById("footerHealthScore");
+  if (!el) return;
+  const score = healthScoreState ? parseFloat(healthScoreState.state) : NaN;
+  if (isNaN(score)) { el.textContent = ""; return; }
+  el.textContent = `System Health ${Math.round(score)}%`;
+  el.style.color = score >= 90 ? "" : score >= 70 ? "#FF9F0A" : "#FF453A";
+}
+
 // Packages tile (2026-08-06) — real Mail and Packages integration, replaces
 // the static "Front window" cover placeholder (no cover entity exists in
 // this house). Sums the per-carrier "packages" count sensors — genuinely
@@ -3498,6 +3516,8 @@ async function hydrateStatesFromHA(client) {
   ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
   ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
   ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
+  healthScoreState = stateById.get(HEALTH_SCORE_ENTITY) || null;
+  renderFooterHealth();
   for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
     ambientPackageStates[entityId] = stateById.get(entityId) || null;
   }
@@ -3578,6 +3598,11 @@ async function initLiveData() {
       if (entityId === AMBIENT_WATER_USAGE_ENTITY) {
         ambientWaterUsageState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === HEALTH_SCORE_ENTITY) {
+        healthScoreState = newState;
+        renderFooterHealth();
         return;
       }
       if (AMBIENT_PACKAGE_ENTITIES.includes(entityId)) {
