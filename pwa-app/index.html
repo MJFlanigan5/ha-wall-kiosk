@@ -2487,14 +2487,29 @@ async function renderSettingsContent() {
 
   let homeyAvailable = false;
   let vacationModeOn = false;
+  let homeyHealthScoreVal = null;
+  let homeyHealthSummaryVal = null;
   if (window.homeyClient) {
     try {
       const vars = await window.homeyClient.getLogicVariables();
       const v = vars.find(x => x.id === HOMEY_VACATION_MODE_VAR_ID);
       vacationModeOn = !!(v && v.value);
       homeyAvailable = true; // reaching here means the Homey call itself succeeded
+      const scoreVar = vars.find(x => x.id === HOMEY_HEALTH_SCORE_VAR_ID);
+      const summaryVar = vars.find(x => x.id === HOMEY_HEALTH_SUMMARY_VAR_ID);
+      homeyHealthScoreVal = scoreVar ? scoreVar.value : null;
+      homeyHealthSummaryVal = summaryVar ? summaryVar.value : null;
     } catch (e) { console.error("Homey quick actions unavailable", e); }
   }
+
+  const haScoreNum = healthScoreState ? parseFloat(healthScoreState.state) : NaN;
+  const haScoreText = isNaN(haScoreNum) ? "Unavailable" : `${Math.round(haScoreNum)}%`;
+  const haScoreColor = isNaN(haScoreNum) ? "" : haScoreNum >= 90 ? "" : haScoreNum >= 70 ? "#FF9F0A" : "#FF453A";
+  const haRecommendation = healthScoreState && healthScoreState.attributes ? healthScoreState.attributes.recommendations : "";
+  const homeyScoreText = homeyAvailable && typeof homeyHealthScoreVal === "number" ? `${homeyHealthScoreVal}%` : "Unavailable";
+  const homeyScoreColor = homeyAvailable && typeof homeyHealthScoreVal === "number"
+    ? (homeyHealthScoreVal >= 90 ? "" : homeyHealthScoreVal >= 70 ? "#FF9F0A" : "#FF453A") : "";
+  const homeySummaryText = homeyAvailable && homeyHealthSummaryVal ? homeyHealthSummaryVal : "";
 
   content.innerHTML = `
     <div class="header">
@@ -2526,6 +2541,13 @@ async function renderSettingsContent() {
         <div class="light-row-name">Morning Shower Routine</div>
         <button class="switch-btn" data-homey-trigger="${HOMEY_MORNING_SHOWER_FLOW_ID}" ${homeyAvailable ? "" : "disabled"}>Run</button>
       </div>
+    </div>
+    <div class="section-label-sm" style="margin-top:24px">${ico("activity", "i14")}System Health</div>
+    <div class="kv-section">
+      <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("home", "i18")}</div><div class="kv-name">Home Assistant</div></div><div class="kv-value" style="color:${haScoreColor}">${haScoreText}</div></div>
+      ${haRecommendation ? `<div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("alert-triangle", "i18")}</div><div class="kv-name">HA Findings</div></div><div class="kv-value" style="text-align:right;max-width:55%;opacity:0.75;font-size:13px;font-weight:400">${escapeHealthText(haRecommendation)}</div></div>` : ""}
+      <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("smartphone", "i18")}</div><div class="kv-name">Homey</div></div><div class="kv-value" style="color:${homeyScoreColor}">${homeyScoreText}</div></div>
+      ${homeySummaryText ? `<div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("alert-triangle", "i18")}</div><div class="kv-name">Homey Findings</div></div><div class="kv-value" style="text-align:right;max-width:55%;opacity:0.75;font-size:13px;font-weight:400">${escapeHealthText(homeySummaryText)}</div></div>` : ""}
     </div>
     <div class="section-label-sm" style="margin-top:24px">${ico("users", "i14")}Users</div>
     <div class="kv-section">
@@ -3203,8 +3225,42 @@ let ambientWaterUsageState = null;
 // that page tracks this dashboard's own stale-sensor diagnostics).
 const HEALTH_SCORE_ENTITY = "sensor.system_ha_global_health_score";
 let healthScoreState = null;
+
+// Homey Health Score (2026-08-20) — mirrors HAGHS on the Homey side: a
+// HomeyScript run every 30 min by the "Homey Health Score Update" flow
+// writes a 0-100 score + a plain-text summary into these two Logic
+// variables. No push/WS updates for Logic variables, so this is polled
+// (see pollHomeyHealthScore below), unlike healthScoreState above which
+// rides HA's existing WS state-change stream.
+const HOMEY_HEALTH_SCORE_VAR_ID = "0a684742-528d-4e79-8ec5-6f7d48d76292";
+const HOMEY_HEALTH_SUMMARY_VAR_ID = "7c2b9490-cea7-4760-ba81-fad6b54f4f11";
+let homeyHealthScore = null;
+let homeyHealthSummary = null;
+
+async function pollHomeyHealthScore() {
+  if (!window.homeyClient) return;
+  try {
+    const vars = await window.homeyClient.getLogicVariables();
+    const scoreVar = vars.find(v => v.id === HOMEY_HEALTH_SCORE_VAR_ID);
+    const summaryVar = vars.find(v => v.id === HOMEY_HEALTH_SUMMARY_VAR_ID);
+    homeyHealthScore = scoreVar ? scoreVar.value : null;
+    homeyHealthSummary = summaryVar ? summaryVar.value : null;
+    renderFooterHealth();
+    if (currentRoom === "settings") renderSettingsContent();
+  } catch (e) {
+    console.error("pollHomeyHealthScore failed", e);
+  }
+}
+
+// Aggregate score (2026-08-20) — average of HA + Homey when both are
+// available, so the footer/ambient number reflects the whole house, not
+// just HA. Falls back to whichever one is available if the other isn't
+// (Homey not configured, or its poll hasn't landed yet) rather than
+// showing nothing.
 function renderFooterHealth() {
-  const score = healthScoreState ? parseFloat(healthScoreState.state) : NaN;
+  const haScore = healthScoreState ? parseFloat(healthScoreState.state) : NaN;
+  const scores = [haScore, homeyHealthScore].filter(s => typeof s === "number" && !isNaN(s));
+  const score = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : NaN;
   const text = isNaN(score) ? "" : `System Health ${Math.round(score)}%`;
   const color = score >= 90 ? "" : score >= 70 ? "#FF9F0A" : "#FF453A";
   for (const id of ["footerHealthScore", "ambientHealthScore"]) {
@@ -3701,6 +3757,8 @@ if (HomeyConfig.isConfigured()) {
   window.homeyClient = new HomeyClient(url, token);
   pollDiningRoomAQ();
   setInterval(pollDiningRoomAQ, 5 * 60 * 1000);
+  pollHomeyHealthScore();
+  setInterval(pollHomeyHealthScore, 5 * 60 * 1000);
 }
 
 async function pollDiningRoomAQ() {
