@@ -598,6 +598,14 @@
     margin-top: 18px; font-size: 12px; color: var(--text-dim);
     letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6;
   }
+  /* System health (2026-08-20) — was only in the regular .footer, which the
+     ambient overlay (position: fixed, covers the full screen) sits on top
+     of and hides entirely, so it never actually showed on the ambient
+     screen Mike glances at — only on inner pages. Mirrored here. */
+  .ambient-health-score {
+    margin-top: 8px; font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-dim); letter-spacing: 0.3px;
+  }
   .ambient-wholehouse-row { display: flex; gap: 12px; margin-top: 28px; }
   .ambient-wholehouse-btn {
     padding: 12px 26px; border-radius: 12px; border: 1px solid var(--hairline);
@@ -804,6 +812,7 @@
     <div class="ambient-actions" id="ambientActions"></div>
     <div class="ambient-quicknav-row" id="ambientQuickNav"></div>
     <div class="ambient-hint">Tap a card to open that room · tap anywhere else to wake</div>
+    <div class="ambient-health-score" id="ambientHealthScore"></div>
     <button class="admin-btn ambient-admin-btn" id="ambientAdminOpenBtn" title="Admin"></button>
   </div>
 
@@ -2522,7 +2531,6 @@ async function renderSettingsContent() {
     <div class="section-label-sm" style="margin-top:24px">${ico("info", "i14")}About</div>
     <div class="kv-section">
       <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("info", "i18")}</div><div class="kv-name">Version</div></div><div class="kv-value">2026.8.3</div></div>
-      <div class="kv-row"><div class="kv-left"><div class="kv-icon">${ico("store", "i18")}</div><div class="kv-name">Home Store</div></div><div class="kv-value linked">Browse <span class="kv-chevron">›</span></div></div>
     </div>
   `;
   updateClock();
@@ -3189,12 +3197,15 @@ let ambientWaterUsageState = null;
 const HEALTH_SCORE_ENTITY = "sensor.system_ha_global_health_score";
 let healthScoreState = null;
 function renderFooterHealth() {
-  const el = document.getElementById("footerHealthScore");
-  if (!el) return;
   const score = healthScoreState ? parseFloat(healthScoreState.state) : NaN;
-  if (isNaN(score)) { el.textContent = ""; return; }
-  el.textContent = `System Health ${Math.round(score)}%`;
-  el.style.color = score >= 90 ? "" : score >= 70 ? "#FF9F0A" : "#FF453A";
+  const text = isNaN(score) ? "" : `System Health ${Math.round(score)}%`;
+  const color = score >= 90 ? "" : score >= 70 ? "#FF9F0A" : "#FF453A";
+  for (const id of ["footerHealthScore", "ambientHealthScore"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.textContent = text;
+    el.style.color = color;
+  }
 }
 
 // Packages tile (2026-08-06) — real Mail and Packages integration, replaces
