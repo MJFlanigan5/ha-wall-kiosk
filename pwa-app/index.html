@@ -602,12 +602,15 @@
      ambient overlay (position: fixed, covers the full screen) sits on top
      of and hides entirely, so it never actually showed on the ambient
      screen Mike glances at — only on inner pages. Mirrored here.
-     Margin kept tight (not 8px) — live-tested at a 682px viewport height,
-     the previous spacing pushed this line past the bottom edge entirely
-     since .ambient-overlay is vertically centered with no scroll fallback
-     (now also has overflow-y:auto as a belt-and-suspenders backstop). */
+     Restyled to match the ambient screen's actual corner-icon language
+     (bare text/icon, opacity 0.5, absolute-positioned bottom corner) —
+     mirrors .ambient-admin-btn's position on the opposite (left) side,
+     rather than sitting inline in the centered content stack. Being
+     absolute also removes it from that stack's flow entirely, so it no
+     longer contributes to the overflow issue found via live testing. */
   .ambient-health-score {
-    margin-top: 4px; font-family: var(--font-mono); font-size: 11px;
+    position: absolute; bottom: 40px; left: 40px; opacity: 0.5;
+    font-family: var(--font-mono); font-size: 11px;
     color: var(--text-dim); letter-spacing: 0.3px;
   }
   .ambient-wholehouse-row { display: flex; gap: 12px; margin-top: 28px; }
@@ -732,6 +735,7 @@
     .ambient-wholehouse-row, .ambient-quicknav-row { flex-wrap: wrap; justify-content: center; }
     .ambient-theme-toggle { top: 20px; right: 20px; }
     .ambient-admin-btn { bottom: 20px; right: 20px; }
+    .ambient-health-score { bottom: 20px; left: 20px; }
   }
 </style>
 </head>
