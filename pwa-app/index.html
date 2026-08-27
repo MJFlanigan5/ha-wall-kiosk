@@ -962,9 +962,17 @@ const ROOMS = {
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     shades: [],
   },
+  remote: {
+    name: "Remote",
+    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "", scenes: [], activeScene: "",
+    lighting: [],
+    media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
+    shades: [],
+  },
 };
 
-const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
+const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3", "remote"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
 // Real bug found 2026-08-19: sliders/wheels only tracked drag state in a
 // local closure var, invisible to the render functions. Any background
 // state_changed event for the room (or, for Ambient, any of several gating
@@ -1083,10 +1091,12 @@ function renderRail() {
   const healthActive = currentRoom === "health" ? "active" : "";
   const healthDot = healthFindingCount > 0 ? `<span class="rail-health-dot"></span>` : "";
   const healthHtml = `<button class="rail-item ${healthActive}" data-room="health">${healthDot}<span class="stem"></span><span class="label">Health</span></button>`;
+  const remoteActive = currentRoom === "remote" ? "active" : "";
+  const remoteHtml = `<button class="rail-item ${remoteActive}" data-room="remote"><span class="stem"></span><span class="label">Remote</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
   const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
-  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + `<div class="rail-divider"></div>` + settingsHtml);
-  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + settingsHtml);
+  rail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + `<div class="rail-divider"></div>` + settingsHtml);
+  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + settingsHtml);
 
   document.querySelectorAll("[data-room]").forEach(el => {
     el.addEventListener("click", () => goToRoom(el.dataset.room));
@@ -2471,6 +2481,69 @@ async function renderHealthContent() {
   }
 }
 
+const LIVING_ROOM_MEDIA_FLOWS = [
+  { id: "83481ce9-bd64-4c10-b902-3d34e21934d4", name: "Plex" },
+  { id: "76ef3696-0d34-4518-aa61-52ef76b2cc1b", name: "Netflix" },
+  { id: "b805f2a5-6f1b-4371-84e0-4da4dcf72855", name: "Disney+" },
+  { id: "e04de766-4c25-4efb-a4f9-2b4deb2cc645", name: "HBO Max" },
+  { id: "2e9c571e-9ae1-4207-81d8-080e01003b40", name: "Prime Video" },
+  { id: "e8936773-c8e5-4a11-888d-554b983e9a6e", name: "Hulu" },
+  { id: "f9b556b0-2816-4eb9-8e5a-8ef4e07d4a6d", name: "YouTube" },
+  { id: "f34d30c6-6898-4109-a8c4-df6d8bafab81", name: "Movie (Apple TV)" },
+  { id: "a7425324-c954-448a-b27a-f616c8c31aa0", name: "HDHomeRun" },
+  { id: "8e544e82-8e3b-48f3-8c43-87d12465637e", name: "Spotify" },
+];
+
+const REMOTE_QUICK_ACTIONS = [
+  { script: "script.office_focus_mode", name: "Office Focus Mode" },
+  { script: "script.heading_out", name: "Heading Out" },
+  { script: "script.utility_room_chore_tap", name: "Utility Room Chore" },
+];
+
+async function renderRemoteContent() {
+  const content = document.getElementById("content");
+  const homeyAvailable = !!window.homeyClient;
+  const haAvailable = !!(window.haClient && window.haClient.connected);
+  content.innerHTML = `
+    <div class="header">
+      <div class="header-title-row"><span>${ico("tv", "i24")}</span><h1>Remote</h1></div>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Living Room media &amp; quick actions</div></div>
+    </div>
+    <div class="section-label-sm">${ico("tv", "i14")}Living Room Media</div>
+    <div class="light-list">${LIVING_ROOM_MEDIA_FLOWS.map(f => `
+      <div class="switch-row">
+        <div class="light-row-name">${f.name}</div>
+        <button class="switch-btn" data-remote-flow="${f.id}" ${homeyAvailable ? "" : "disabled"}>Open</button>
+      </div>`).join("")}</div>
+    <div class="section-label-sm" style="margin-top:24px">${ico("zap", "i14")}Quick Actions</div>
+    <div class="light-list">${REMOTE_QUICK_ACTIONS.map(a => `
+      <div class="switch-row">
+        <div class="light-row-name">${a.name}</div>
+        <button class="switch-btn" data-remote-script="${a.script}" ${haAvailable ? "" : "disabled"}>Run</button>
+      </div>`).join("")}</div>
+  `;
+  updateClock();
+  icons();
+
+  document.querySelectorAll("[data-remote-flow]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!window.homeyClient || btn.disabled) return;
+      btn.classList.remove("flash"); void btn.offsetWidth; btn.classList.add("flash"); // restart the animation even on rapid re-taps
+      try {
+        window.homeyClient.triggerAdvancedFlow(btn.dataset.remoteFlow);
+      } catch (e) { console.error("Remote media flow trigger failed", e); }
+    });
+  });
+
+  document.querySelectorAll("[data-remote-script]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!window.haClient || !window.haClient.connected || btn.disabled) return;
+      btn.classList.remove("flash"); void btn.offsetWidth; btn.classList.add("flash");
+      window.haClient.callService("script", "turn_on", btn.dataset.remoteScript).catch(handleWriteError);
+    });
+  });
+}
+
 async function renderSettingsContent() {
   const content = document.getElementById("content");
 
@@ -2625,6 +2698,7 @@ function renderContent() {
   if (currentRoom === "security") { renderSecurityContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
   if (currentRoom === "sensors") { renderSensorsContent(); return; }
+  if (currentRoom === "remote") { renderRemoteContent(); return; }
   if (currentRoom === "health") { renderHealthContent(); return; }
   if (currentRoom === "settings") { renderSettingsContent(); return; }
   const room = ROOMS[currentRoom];
