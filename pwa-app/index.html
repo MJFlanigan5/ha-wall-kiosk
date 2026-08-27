@@ -962,9 +962,17 @@ const ROOMS = {
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     shades: [],
   },
+  remote: {
+    name: "Remote",
+    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "", scenes: [], activeScene: "",
+    lighting: [],
+    media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
+    shades: [],
+  },
 };
 
-const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
+const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3", "remote"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
 // Real bug found 2026-08-19: sliders/wheels only tracked drag state in a
 // local closure var, invisible to the render functions. Any background
 // state_changed event for the room (or, for Ambient, any of several gating
@@ -1083,10 +1091,12 @@ function renderRail() {
   const healthActive = currentRoom === "health" ? "active" : "";
   const healthDot = healthFindingCount > 0 ? `<span class="rail-health-dot"></span>` : "";
   const healthHtml = `<button class="rail-item ${healthActive}" data-room="health">${healthDot}<span class="stem"></span><span class="label">Health</span></button>`;
+  const remoteActive = currentRoom === "remote" ? "active" : "";
+  const remoteHtml = `<button class="rail-item ${remoteActive}" data-room="remote"><span class="stem"></span><span class="label">Remote</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
   const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
-  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + `<div class="rail-divider"></div>` + settingsHtml);
-  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + settingsHtml);
+  rail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + `<div class="rail-divider"></div>` + settingsHtml);
+  mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + settingsHtml);
 
   document.querySelectorAll("[data-room]").forEach(el => {
     el.addEventListener("click", () => goToRoom(el.dataset.room));
@@ -2625,6 +2635,7 @@ function renderContent() {
   if (currentRoom === "security") { renderSecurityContent(); return; }
   if (currentRoom === "music") { renderMusicContent(); return; }
   if (currentRoom === "sensors") { renderSensorsContent(); return; }
+  if (currentRoom === "remote") { renderRemoteContent(); return; }
   if (currentRoom === "health") { renderHealthContent(); return; }
   if (currentRoom === "settings") { renderSettingsContent(); return; }
   const room = ROOMS[currentRoom];
