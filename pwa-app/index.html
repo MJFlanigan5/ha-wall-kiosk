@@ -2500,16 +2500,81 @@ const REMOTE_QUICK_ACTIONS = [
   { script: "script.utility_room_chore_tap", name: "Utility Room Chore" },
 ];
 
+// Living Room Sony Bravia 7 — connected in Homey via the dedicated native
+// Sony Bravia app (not the generic Android TV Remote driver used by the
+// other TCL/Hisense sets), which exposes real input switching, audio
+// output routing, and a screen-off/ambient mode that the HA media_player
+// entity used elsewhere in this app (Living Room's own page) doesn't have.
+const LIVING_ROOM_SONY_DEVICE_ID = "7f41f6fd-57dc-4fa8-bf9d-7e812ef6ea32";
+const SONY_INPUTS = [
+  { id: "extInput:hdmi?port=1", label: "HDMI 1" },
+  { id: "extInput:hdmi?port=2", label: "HDMI 2" },
+  { id: "extInput:hdmi?port=3", label: "HDMI 3" },
+  { id: "extInput:hdmi?port=4", label: "HDMI 4" },
+];
+const SONY_AUDIO_OUTPUTS = [
+  { id: "speaker", label: "TV Speaker" },
+  { id: "audioSystem", label: "Audio System" },
+  { id: "hdmi", label: "HDMI" },
+  { id: "speaker_hdmi", label: "Speaker + HDMI" },
+];
+
 async function renderRemoteContent() {
   const content = document.getElementById("content");
   const homeyAvailable = !!window.homeyClient;
   const haAvailable = !!(window.haClient && window.haClient.connected);
+
+  // Real current state, not assumed — same principle as the rest of the
+  // app (e.g. Settings' Vacation Mode reads the real logic variable
+  // rather than guessing). Non-fatal if it fails: controls just render
+  // with no active-state highlighting instead of crashing the page.
+  let sony = null;
+  if (homeyAvailable) {
+    try {
+      sony = await window.homeyClient.getDevice(LIVING_ROOM_SONY_DEVICE_ID);
+    } catch (e) { console.error("Sony Bravia device fetch failed", e); }
+  }
+  const sonyOn = sony?.capabilitiesObj?.onoff?.value === true;
+  const sonyInput = sony?.capabilitiesObj?.input?.value || null;
+  const sonyAudioOut = sony?.capabilitiesObj?.audio_output?.value || null;
+  const sonyMuted = sony?.capabilitiesObj?.volume_mute?.value === true;
+  const sonyScreenOff = sony?.capabilitiesObj?.screen_off?.value === true;
+  const sonyReady = homeyAvailable && sony !== null;
+
   content.innerHTML = `
     <div class="header">
       <div class="header-title-row"><span>${ico("tv", "i24")}</span><h1>Remote</h1></div>
-      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Living Room media &amp; quick actions</div></div>
+      <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">Living Room TV &amp; media</div></div>
     </div>
-    <div class="section-label-sm">${ico("tv", "i14")}Living Room Media</div>
+    <div class="section-label-sm">${ico("tv", "i14")}Living Room TV</div>
+    <div class="light-list">
+      <div class="switch-row">
+        <div class="light-row-name">Power</div>
+        <button class="switch-btn ${sonyOn ? "on" : ""}" data-sony-power ${sonyReady ? "" : "disabled"}>${sonyOn ? "ON" : "OFF"}</button>
+      </div>
+      <div class="switch-row">
+        <div class="light-row-name">Mute</div>
+        <button class="switch-btn ${sonyMuted ? "on" : ""}" data-sony-mute ${sonyReady ? "" : "disabled"}>${sonyMuted ? "Muted" : "Unmuted"}</button>
+      </div>
+      <div class="switch-row">
+        <div class="light-row-name">Volume</div>
+        <div style="display:flex; gap:8px">
+          <button class="stepper" data-sony-vol="-0.02" ${sonyReady ? "" : "disabled"}>${ico("minus", "i16")}</button>
+          <button class="stepper" data-sony-vol="0.02" ${sonyReady ? "" : "disabled"}>${ico("plus", "i16")}</button>
+        </div>
+      </div>
+      <div class="switch-row">
+        <div class="light-row-name">Screen Off (ambient)</div>
+        <button class="switch-btn ${sonyScreenOff ? "on" : ""}" data-sony-screen-off ${sonyReady ? "" : "disabled"}>${sonyScreenOff ? "On" : "Off"}</button>
+      </div>
+    </div>
+    <div class="service-tabs" style="margin-top:14px">
+      ${SONY_INPUTS.map(i => `<button class="service-tab ${sonyInput === i.id ? "active" : ""}" data-sony-input="${i.id}" ${sonyReady ? "" : "disabled"}>${i.label}</button>`).join("")}
+    </div>
+    <div class="service-tabs">
+      ${SONY_AUDIO_OUTPUTS.map(o => `<button class="service-tab ${sonyAudioOut === o.id ? "active" : ""}" data-sony-audio="${o.id}" ${sonyReady ? "" : "disabled"}>${o.label}</button>`).join("")}
+    </div>
+    <div class="section-label-sm" style="margin-top:24px">${ico("music", "i14")}Living Room Media</div>
     <div class="light-list">${LIVING_ROOM_MEDIA_FLOWS.map(f => `
       <div class="switch-row">
         <div class="light-row-name">${f.name}</div>
@@ -2540,6 +2605,73 @@ async function renderRemoteContent() {
       if (!window.haClient || !window.haClient.connected || btn.disabled) return;
       btn.classList.remove("flash"); void btn.offsetWidth; btn.classList.add("flash");
       window.haClient.callService("script", "turn_on", btn.dataset.remoteScript).catch(handleWriteError);
+    });
+  });
+
+  const sonyPowerBtn = document.querySelector("[data-sony-power]");
+  if (sonyPowerBtn) sonyPowerBtn.addEventListener("click", async () => {
+    if (!window.homeyClient || sonyPowerBtn.disabled) return;
+    sonyPowerBtn.disabled = true; // guard against a double-tap firing two toggles while the request is in flight
+    const next = !sonyPowerBtn.classList.contains("on");
+    try {
+      await window.homeyClient.setCapability(LIVING_ROOM_SONY_DEVICE_ID, "onoff", next);
+    } catch (e) { console.error("Sony Bravia power toggle failed", e); }
+    if (currentRoom === "remote") renderRemoteContent(); // re-fetches real state rather than assuming the write succeeded
+  });
+
+  const sonyMuteBtn = document.querySelector("[data-sony-mute]");
+  if (sonyMuteBtn) sonyMuteBtn.addEventListener("click", async () => {
+    if (!window.homeyClient || sonyMuteBtn.disabled) return;
+    sonyMuteBtn.disabled = true;
+    const next = !sonyMuteBtn.classList.contains("on");
+    try {
+      await window.homeyClient.setCapability(LIVING_ROOM_SONY_DEVICE_ID, "volume_mute", next);
+    } catch (e) { console.error("Sony Bravia mute toggle failed", e); }
+    if (currentRoom === "remote") renderRemoteContent();
+  });
+
+  const sonyScreenOffBtn = document.querySelector("[data-sony-screen-off]");
+  if (sonyScreenOffBtn) sonyScreenOffBtn.addEventListener("click", async () => {
+    if (!window.homeyClient || sonyScreenOffBtn.disabled) return;
+    sonyScreenOffBtn.disabled = true;
+    const next = !sonyScreenOffBtn.classList.contains("on");
+    try {
+      await window.homeyClient.setCapability(LIVING_ROOM_SONY_DEVICE_ID, "screen_off", next);
+    } catch (e) { console.error("Sony Bravia screen-off toggle failed", e); }
+    if (currentRoom === "remote") renderRemoteContent();
+  });
+
+  document.querySelectorAll("[data-sony-vol]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!window.homeyClient || btn.disabled || sony?.capabilitiesObj?.volume_set?.value == null) return;
+      document.querySelectorAll("[data-sony-vol]").forEach(b => b.disabled = true); // guard both stepper buttons against rapid re-taps stacking requests
+      const current = sony.capabilitiesObj.volume_set.value;
+      const delta = parseFloat(btn.dataset.sonyVol);
+      const next = Math.round(Math.min(1, Math.max(0, current + delta)) * 100) / 100;
+      try {
+        await window.homeyClient.setCapability(LIVING_ROOM_SONY_DEVICE_ID, "volume_set", next);
+      } catch (e) { console.error("Sony Bravia volume change failed", e); }
+      if (currentRoom === "remote") renderRemoteContent();
+    });
+  });
+
+  document.querySelectorAll("[data-sony-input]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!window.homeyClient || btn.disabled) return;
+      try {
+        await window.homeyClient.setCapability(LIVING_ROOM_SONY_DEVICE_ID, "input", btn.dataset.sonyInput);
+      } catch (e) { console.error("Sony Bravia input switch failed", e); }
+      if (currentRoom === "remote") renderRemoteContent();
+    });
+  });
+
+  document.querySelectorAll("[data-sony-audio]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!window.homeyClient || btn.disabled) return;
+      try {
+        await window.homeyClient.setCapability(LIVING_ROOM_SONY_DEVICE_ID, "audio_output", btn.dataset.sonyAudio);
+      } catch (e) { console.error("Sony Bravia audio output switch failed", e); }
+      if (currentRoom === "remote") renderRemoteContent();
     });
   });
 }

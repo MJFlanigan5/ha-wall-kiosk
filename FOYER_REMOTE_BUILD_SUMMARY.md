@@ -29,6 +29,49 @@ against the three real, already-working HA scripts named in the spec:
 exact same call pattern already used for `script.shower_prep_now` elsewhere
 in this file (Power tab) — no new scripts, no new HA-side changes needed.
 
+### Living Room Sony Bravia TV controls (added after initial merge)
+Found that the Living Room Sony Bravia 7 is connected in Homey via a
+**dedicated native Sony Bravia app**
+(`homey:app:name.ricardoismy.sonybraviaandroidtv:sony-bravia-android-tv`),
+not the generic Android TV Remote driver used elsewhere — confirmed live via
+the Homey API, with a real PSK/IP already configured. This exposes real
+capabilities the existing HA-based Living Room room page (media_player +
+D-pad only) doesn't have: input switching (HDMI 1-4), audio output routing
+(TV speaker / audio system / HDMI / speaker+HDMI), and a screen-off/ambient
+mode. Added to the Remote page:
+
+- Power toggle, mute toggle, volume +/- steppers, screen-off toggle
+- Input tabs (HDMI 1-4) and audio-output tabs — all reflect real current
+  device state, fetched via `homeyClient.getDevice()` on every render (not
+  assumed/static), matching the app's existing philosophy (e.g. how Settings'
+  Vacation Mode toggle reads the real logic variable rather than guessing).
+- All write actions use `homeyClient.setCapability(deviceId, capability, value)`
+  — an existing client method, not something new I had to build.
+- Double-tap guards: power/mute/screen-off disable themselves immediately on
+  click; the two volume steppers disable each other together to prevent
+  stacked requests.
+- Volume math rounds to 2 decimal places (caught and fixed a real floating-
+  point precision issue during testing: naive addition produced
+  `0.42000000000000004` sent to the real device API).
+
+**Real edge cases tested via mocked render + click-through** (no real device
+calls made): renders correctly with live-fetched real state (power/input/
+audio-output all correctly reflected and highlighted); double-tap guards
+verified to actually disable buttons synchronously on click; graceful
+degradation confirmed for two real failure modes — `getDevice()` throwing
+(Homey reachable but that one call fails) and `window.homeyClient` being
+entirely absent (not configured on this device) — neither crashes the page,
+both correctly render all Sony/media controls as disabled.
+
+**One real, disclosed uncertainty**: `getDevice()`/`setCapability()` call
+Homey's *local* device-manager REST API (`/api/manager/devices/device/...`),
+which I have not been able to literally test against the real device in this
+session (no device credentials in this workdir, and I didn't want to guess/
+extract them). I'm inferring the response shape (`capabilitiesObj.<cap>.value`)
+from Homey's standard Device object serialization, which the Homey Web/cloud
+API (used elsewhere this session via MCP tools) confirmed matches exactly for
+this specific device — high confidence, not a live-tested certainty.
+
 ## What was NOT built / left out
 
 - No general lighting/climate controls were added to this page — the spec
