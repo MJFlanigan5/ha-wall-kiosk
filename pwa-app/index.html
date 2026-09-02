@@ -29,6 +29,8 @@
     --accent-dim: rgba(255, 255, 255, 0.10);
     --on: #34C759;
     --on-dim: rgba(52, 199, 89, 0.16);
+    --heat: #FF9F0A;
+    --cool: #0A84FF;
     /* -apple-system/BlinkMacSystemFont render actual San Francisco on Mac/iPad/iPhone —
        Savant's app is Apple-first (Siri, HomeKit, Apple TV), this is almost certainly
        the real font. Inter is the fallback everywhere else (closest open cousin). */
@@ -160,6 +162,12 @@
      and removed automatically after the animation completes. */
   @keyframes switch-btn-flash { 0% { background: var(--on); border-color: var(--on); color: var(--base); } 100% { background: transparent; border-color: var(--hairline); color: var(--text-dim); } }
   .switch-btn.flash { animation: switch-btn-flash 700ms ease-out; }
+  /* Room-header double-tap quick action confirm (2026-09-01) — same
+     one-shot-confirm precedent as switch-btn-flash above, not a continuous
+     effect. */
+  @keyframes header-quicktap-flash { 0% { color: var(--on); } 100% { color: var(--text); } }
+  .header-title-row.quicktap-flash h1 { animation: header-quicktap-flash 700ms ease-out; }
+
 
   /* Write-failure toast (2026-08-19) — every HA/Homey write mutates local
      state optimistically before the call settles, and used to swallow
@@ -220,6 +228,11 @@
     font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.5px; color: var(--text-dim);
     background: rgba(255,255,255,0.06); padding: 4px 12px; border-radius: 999px; margin-top: 10px;
   }
+  /* Heating/cooling at-a-glance color — static swap on state change, no
+     transition (Pi 5 2GB perf rules). Applied to the .climate-face wrapper
+     so both the big temp number and the mode badge pick it up. */
+  .climate-face.state-heat .climate-temp, .climate-face.state-heat .climate-mode-badge { color: var(--heat); }
+  .climate-face.state-cool .climate-temp, .climate-face.state-cool .climate-mode-badge { color: var(--cool); }
   .climate-target-row { display: flex; align-items: center; gap: 16px; margin-top: 22px; }
   /* Bare icon chrome (2026-08-06) — no button background/border, matching
      Ambient Mode's plain-glyph buttons instead of a boxed control. */
@@ -526,6 +539,63 @@
   }
   .ambient-overlay.visible { display: flex; }
   @keyframes ambientFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  /* Weather-reactive background (2026-09-01) — Ambient Mode only, not behind
+     every page (see INTERACTION_GAPS.md's idle/screensaver entry: no
+     dedicated idle view exists yet, so this rides on the existing Ambient
+     overlay rather than a new subsystem). 3 flat-gradient states, static
+     swap via class — no images, no backdrop-filter/blur per perf rules. */
+  .ambient-overlay.weather-clear { background: linear-gradient(180deg, #0d1b2e 0%, var(--base) 65%); }
+  .ambient-overlay.weather-cloudy { background: linear-gradient(180deg, #1a1c1f 0%, var(--base) 65%); }
+  .ambient-overlay.weather-night { background: linear-gradient(180deg, #05060a 0%, var(--base) 60%); }
+
+  /* ---------- Confirm-style interrupt card (2026-09-01) — generic renderer for
+     the NOTIFICATIONS_SPEC.md event contract (title/message/image/actions).
+     Wall panel only for now — no push infra, just a state_changed-triggered
+     overlay (see showConfirmCard). No entrance animation on purpose: this is
+     an "attention now" interrupt, not an ambient reveal — same static-swap
+     philosophy as the climate state colors, not a fade. ---------- */
+  .confirm-card-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 6000;
+    display: none; align-items: center; justify-content: center; padding: 24px;
+  }
+  .confirm-card-overlay.visible { display: flex; }
+  .confirm-card {
+    width: 100%; max-width: 420px; background: var(--base-raised);
+    border: 1px solid var(--hairline); border-radius: 18px; padding: 20px; text-align: center;
+  }
+  .confirm-card-image {
+    width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 12px;
+    background: var(--base); margin-bottom: 16px;
+  }
+  .confirm-card-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .confirm-card-message { font-size: 14px; color: var(--text-dim); line-height: 1.4; margin-bottom: 20px; }
+  .confirm-card-actions { display: flex; gap: 10px; }
+  .confirm-card-btn {
+    flex: 1; padding: 13px; border-radius: 10px; border: 1px solid var(--hairline);
+    background: none; color: var(--text); font-family: var(--font-body); font-size: 14px; font-weight: 500;
+    cursor: pointer;
+  }
+  .confirm-card-btn.primary { background: var(--accent); color: var(--base); border-color: var(--accent); }
+
+  /* ---------- Timer (2026-09-01) — presets + countdown, Homey Portal-inspired
+     minus the physical dial (tap a preset instead of twist-to-adjust; see
+     "Not being ported" in the build spec). Countdown tick updates one
+     textContent target only (#timerCountdown) — no renderContent() call,
+     per the "no polling-loop full-document DOM work" constraint. ---------- */
+  .ambient-timer-btn {
+    position: absolute; top: 40px; left: 40px; background: none; border: none;
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); cursor: pointer;
+  }
+  .timer-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .timer-countdown {
+    font-family: var(--font-mono); font-size: 56px; font-weight: 500; color: var(--text);
+    margin: 8px 0 20px; font-variant-numeric: tabular-nums;
+  }
+  /* One-shot completion flash — static keyframe, not a running/looping
+     animation, same precedent as switch-btn-flash / header-quicktap-flash. */
+  @keyframes timer-done-flash { 0%, 100% { color: var(--text); } 50% { color: var(--on); } }
+  .timer-countdown.done { animation: timer-done-flash 600ms ease-in-out 3; }
   .ambient-clock {
     font-family: var(--font-mono); font-size: clamp(64px, 12vw, 140px); font-weight: 600;
     color: var(--text); letter-spacing: -1px; font-variant-numeric: tabular-nums;
@@ -734,6 +804,7 @@
     .ambient-clock { font-size: clamp(48px, 16vw, 90px); }
     .ambient-wholehouse-row, .ambient-quicknav-row { flex-wrap: wrap; justify-content: center; }
     .ambient-theme-toggle { top: 20px; right: 20px; }
+    .ambient-timer-btn { top: 20px; left: 20px; }
     .ambient-admin-btn { bottom: 20px; right: 20px; }
     .ambient-health-score { bottom: 20px; left: 20px; }
   }
@@ -815,12 +886,38 @@
 
   <div class="ambient-overlay" id="ambientOverlay">
     <button class="ambient-theme-toggle" id="ambientThemeToggle" title="Light / dark"></button>
+    <button class="ambient-timer-btn" id="ambientTimerBtn" title="Timer"></button>
     <div class="ambient-clock" id="ambientClock">--:--</div>
     <div class="ambient-date" id="ambientDate"></div>
     <div class="ambient-actions" id="ambientActions"></div>
     <div class="ambient-quicknav-row" id="ambientQuickNav"></div>
     <div class="ambient-health-score" id="ambientHealthScore"></div>
     <button class="admin-btn ambient-admin-btn" id="ambientAdminOpenBtn" title="Admin"></button>
+  </div>
+
+  <div class="confirm-card-overlay" id="timerOverlay">
+    <div class="confirm-card" id="timerCard">
+      <div class="confirm-card-title" id="timerTitle">Timer</div>
+      <div class="timer-presets" id="timerPresets">
+        <button class="confirm-card-btn" data-timer-preset="60">1 min</button>
+        <button class="confirm-card-btn" data-timer-preset="300">5 min</button>
+        <button class="confirm-card-btn" data-timer-preset="600">10 min</button>
+        <button class="confirm-card-btn" data-timer-preset="1800">30 min</button>
+      </div>
+      <div class="timer-countdown" id="timerCountdown" style="display:none">--:--</div>
+      <div class="confirm-card-actions">
+        <button class="confirm-card-btn" id="timerCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="confirm-card-overlay" id="confirmCardOverlay">
+    <div class="confirm-card">
+      <img class="confirm-card-image" id="confirmCardImage" style="display:none" alt="" />
+      <div class="confirm-card-title" id="confirmCardTitle"></div>
+      <div class="confirm-card-message" id="confirmCardMessage"></div>
+      <div class="confirm-card-actions" id="confirmCardActions"></div>
+    </div>
   </div>
 
 <script src="config.js"></script>
@@ -1756,7 +1853,16 @@ function renderClimate(room) {
        </div>` : "";
   const humidityHtml = caps.measureHumidity
     ? `<div class="climate-row-label">Humidity</div><div class="climate-mode-badge">${caps.measureHumidity.value}%</div>` : "";
-  return `<div class="panel climate-face">${tempHtml}${activityHtml}${targetsHtml}${modeHtml}${humidityHtml}</div>`;
+  // Heating/cooling state class — matched by substring against whatever this
+  // device's activity enum actually calls it (title or raw id), since the
+  // vocabulary isn't standardized across Homey thermostat vendors (see
+  // homeyThermostatCapabilities comment in homey-client.js).
+  const activityText = caps.activityCap
+    ? `${(caps.activityCap.values.find(v => v.id === caps.activityCap.value) || {}).title || ""} ${caps.activityCap.value || ""}`.toLowerCase()
+    : "";
+  const activityStateClass = /heat/.test(activityText) ? "state-heat"
+    : /cool/.test(activityText) ? "state-cool" : "";
+  return `<div class="panel climate-face ${activityStateClass}">${tempHtml}${activityHtml}${targetsHtml}${modeHtml}${humidityHtml}</div>`;
 }
 
 // Homey-only right now (2026-08-07) — no real HA `climate` domain entities
@@ -1922,6 +2028,54 @@ async function refreshCameraSnapshot(entityId, imgId) {
   } catch (e) {
     console.error("camera snapshot failed", e);
   }
+}
+
+// Generic confirm-card renderer — matches NOTIFICATIONS_SPEC.md's event
+// contract shape (title/message/image entity/actions) so this isn't
+// per-event-type app code; automations decide *when* to fire, this just
+// renders whatever it's given. Wall panel only right now — see the spec's
+// "iPad — a real gap" section for why (needs a Web Push server, not built).
+let confirmCardImageEntityId = null;
+function showConfirmCard({ title, message, imageEntityId, actions }) {
+  document.getElementById("confirmCardTitle").textContent = title || "";
+  document.getElementById("confirmCardMessage").textContent = message || "";
+  const imgEl = document.getElementById("confirmCardImage");
+  confirmCardImageEntityId = imageEntityId || null;
+  if (imageEntityId) {
+    imgEl.style.display = "";
+    refreshCameraSnapshot(imageEntityId, "confirmCardImage");
+  } else {
+    imgEl.style.display = "none";
+  }
+  const actionsEl = document.getElementById("confirmCardActions");
+  actionsEl.innerHTML = (actions || []).map((a, i) =>
+    `<button class="confirm-card-btn ${i === 0 ? "primary" : ""}" data-confirm-action="${i}">${a.label}</button>`).join("");
+  actionsEl.querySelectorAll("[data-confirm-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const action = actions[+btn.dataset.confirmAction];
+      hideConfirmCard();
+      if (action && action.onSelect) action.onSelect();
+    });
+  });
+  document.getElementById("confirmCardOverlay").classList.add("visible");
+}
+function hideConfirmCard() {
+  document.getElementById("confirmCardOverlay").classList.remove("visible");
+  const imgEl = document.getElementById("confirmCardImage");
+  if (imgEl.dataset.blobUrl) { URL.revokeObjectURL(imgEl.dataset.blobUrl); delete imgEl.dataset.blobUrl; }
+  imgEl.src = "";
+  confirmCardImageEntityId = null;
+}
+
+// Jumps straight to the Security > Cameras > fullscreen view for one
+// camera — same end state as tapping a camera tile, used by the Door
+// Entry confirm-card's "View Camera" action.
+function viewCameraFullscreen(entityId) {
+  currentRoom = "security"; currentService = "lighting"; lightingView = "slider"; colorWheelIndex = null;
+  mediaView = "now"; powerTab = "overview";
+  securityView = "cameras";
+  securityCameraFullscreen = CAMERAS.findIndex(c => c.entityId === entityId);
+  render();
 }
 
 function renderSecurityArm() {
@@ -2632,7 +2786,7 @@ function renderContent() {
 
   content.innerHTML = `
     <div class="header">
-      <div class="header-title-row"><span>${ico("home", "i24")}</span><h1>${room.name}</h1></div>
+      <div class="header-title-row" data-room-quicktap="${(room.automationButtons && room.automationButtons[0]) || ""}"><span>${ico("home", "i24")}</span><h1>${room.name}</h1></div>
       <div class="meta"><div class="clock" id="clock"></div><div class="outdoor">${room.outdoor}</div></div>
     </div>
 
@@ -2774,6 +2928,26 @@ function renderRoomSections(room) {
 }
 
 function wireInteractions(room) {
+  // Per-room double-tap quick action (2026-09-01) — mirrors Homey Portal's
+  // double-tap-for-favorite-action pattern, minus the physical dial. Binding
+  // is just "whichever Quick Action is first in this room's existing
+  // automationButtons list" — reuses the admin picker that already exists
+  // for that list instead of building a separate settings screen (see
+  // Homey Portal build-spec's open question — decided here: no new UI).
+  const quicktapEl = document.querySelector("[data-room-quicktap]");
+  if (quicktapEl && quicktapEl.dataset.roomQuicktap) {
+    let lastTap = 0;
+    quicktapEl.addEventListener("click", () => {
+      const now = Date.now();
+      const isDouble = now - lastTap < 350;
+      lastTap = now;
+      if (!isDouble) return;
+      lastTap = 0; // consume — a third rapid tap shouldn't fire again immediately
+      triggerQuickAction(quicktapEl.dataset.roomQuicktap);
+      quicktapEl.classList.remove("quicktap-flash"); void quicktapEl.offsetWidth;
+      quicktapEl.classList.add("quicktap-flash");
+    });
+  }
   document.querySelectorAll("[data-hero-jump]").forEach(el => {
     el.addEventListener("click", () => {
       const target = document.getElementById(`section-${el.dataset.heroJump}`);
@@ -3169,6 +3343,29 @@ let waterHeaterFlowState = null;
 const AMBIENT_ALARM_ENTITY = "alarm_control_panel.alarmo";
 let ambientAlarmState = null;
 
+// Door Entry confirm-card (2026-09-01) — real UniFi Protect person-detection
+// pulse, gated by the same input_boolean the Notifications settings screen
+// already toggles (see NOTIFICATION_ENTITIES). The input_boolean is a
+// preference switch, not the event itself — confirmed via live entity
+// search (front_door_entry_person_detected is the actual detection pulse).
+const DOOR_ENTRY_GATE_ENTITY = "input_boolean.notify_door_entry";
+const DOOR_ENTRY_PERSON_ENTITY = "binary_sensor.front_door_entry_person_detected";
+let doorEntryGateOn = true; // assume enabled until hydration says otherwise
+let doorEntryPersonPrevState = null; // for edge-detection (off -> on only)
+
+// Weather-reactive Ambient Mode background (2026-09-01).
+const WEATHER_ENTITY = "weather.forecast_home";
+let weatherState = null;
+function applyAmbientWeatherClass() {
+  const overlay = document.getElementById("ambientOverlay");
+  overlay.classList.remove("weather-clear", "weather-cloudy", "weather-night");
+  const cond = weatherState ? weatherState.state : "";
+  const cls = /night/.test(cond) ? "weather-night"
+    : /^(sunny|clear)$/.test(cond) ? "weather-clear"
+    : "weather-cloudy"; // default bucket — cloudy/overcast/rain/fog/etc.
+  overlay.classList.add(cls);
+}
+
 // Comfort/climate tile (2026-08-06, exact-grid rebuild) — this house has no
 // climate/thermostat entities (confirmed via search_entities earlier), but
 // it does have real per-room temperature sensors. Kitchen's, confirmed live,
@@ -3379,6 +3576,73 @@ document.getElementById("ambientThemeToggle").addEventListener("click", (e) => {
 });
 applyAmbientTheme(localStorage.getItem(AMBIENT_THEME_KEY) || "dark");
 
+// --- Timer (2026-09-01, Homey Portal-inspired quick action) ---
+let timerEndAt = null;   // ms epoch, or null when idle
+let timerTickHandle = null;
+function timerFormatMMSS(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+// Short synthesized beep via Web Audio — no external asset file, and a
+// silent no-op on hardware with no audio output rather than a load error.
+function timerBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+  } catch (e) { /* no audio output — fine, the visual flash still fires */ }
+}
+function timerTick() {
+  const remaining = Math.round((timerEndAt - Date.now()) / 1000);
+  const el = document.getElementById("timerCountdown");
+  if (remaining <= 0) {
+    el.textContent = "0:00";
+    el.classList.add("done");
+    timerBeep();
+    clearInterval(timerTickHandle);
+    timerTickHandle = null;
+    timerEndAt = null;
+    return;
+  }
+  el.textContent = timerFormatMMSS(remaining); // scoped textContent write only — no renderContent()
+}
+function startTimer(seconds) {
+  timerEndAt = Date.now() + seconds * 1000;
+  document.getElementById("timerPresets").style.display = "none";
+  const el = document.getElementById("timerCountdown");
+  el.classList.remove("done");
+  el.style.display = "";
+  el.textContent = timerFormatMMSS(seconds);
+  if (timerTickHandle) clearInterval(timerTickHandle);
+  timerTickHandle = setInterval(timerTick, 1000);
+}
+function stopTimer() {
+  if (timerTickHandle) clearInterval(timerTickHandle);
+  timerTickHandle = null;
+  timerEndAt = null;
+  document.getElementById("timerOverlay").classList.remove("visible");
+  document.getElementById("timerPresets").style.display = "";
+  document.getElementById("timerCountdown").style.display = "none";
+  document.getElementById("timerCountdown").classList.remove("done");
+}
+document.getElementById("ambientTimerBtn").innerHTML = ico("timer", "i18");
+icons();
+document.getElementById("ambientTimerBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("timerOverlay").classList.add("visible");
+});
+document.getElementById("timerCancelBtn").addEventListener("click", stopTimer);
+document.querySelectorAll("[data-timer-preset]").forEach(btn => {
+  btn.addEventListener("click", () => startTimer(+btn.dataset.timerPreset));
+});
+
 // --- Admin Mode config layer (2026-08-05) ---
 // rooms.config.js's ROOM_ENTITY_MAP is the shipped default. Admin Mode
 // changes persist as a localStorage override on top of it — the browser
@@ -3588,6 +3852,11 @@ async function hydrateStatesFromHA(client) {
   waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
   refreshWaterHeaterFromHA();
   ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
+  const gateState = stateById.get(DOOR_ENTRY_GATE_ENTITY);
+  doorEntryGateOn = gateState ? gateState.state === "on" : true;
+  const personState = stateById.get(DOOR_ENTRY_PERSON_ENTITY);
+  doorEntryPersonPrevState = personState ? personState.state : null;
+  weatherState = stateById.get(WEATHER_ENTITY) || null;
   ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
   ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
   healthScoreState = stateById.get(HEALTH_SCORE_ENTITY) || null;
@@ -3662,6 +3931,31 @@ async function initLiveData() {
       if (entityId === AMBIENT_ALARM_ENTITY) {
         ambientAlarmState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === DOOR_ENTRY_GATE_ENTITY) {
+        doorEntryGateOn = newState.state === "on";
+        return;
+      }
+      if (entityId === WEATHER_ENTITY) {
+        weatherState = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) applyAmbientWeatherClass();
+        return;
+      }
+      if (entityId === DOOR_ENTRY_PERSON_ENTITY) {
+        const wasOff = doorEntryPersonPrevState !== "on";
+        doorEntryPersonPrevState = newState.state;
+        if (doorEntryGateOn && wasOff && newState.state === "on") {
+          showConfirmCard({
+            title: "Front Door",
+            message: "Someone's at the door",
+            imageEntityId: "camera.front_door_entry_high_resolution_channel",
+            actions: [
+              { label: "View Camera", onSelect: () => viewCameraFullscreen("camera.front_door_entry_high_resolution_channel") },
+              { label: "Dismiss" },
+            ],
+          });
+        }
         return;
       }
       if (entityId === AMBIENT_KITCHEN_TEMP_ENTITY) {
@@ -4823,6 +5117,7 @@ function showAmbient() {
   updateAmbientClock();
   renderAmbientActions();
   renderAmbientQuickNav();
+  applyAmbientWeatherClass();
   document.getElementById("ambientOverlay").classList.add("visible");
   // Comfort tile's data source (climateLiveCache) is shared with the room
   // Climate section, which only gets populated by actually visiting a
