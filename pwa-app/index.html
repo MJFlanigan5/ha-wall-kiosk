@@ -634,6 +634,11 @@
   }
   .ambient-card-primary { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.2; }
   .ambient-card-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
+  /* Same heat/cool color-coding as the room Climate panel, applied to the
+     Comfort tile since this house's one real thermostat is whole-home and
+     never gets assigned to a room via Admin Mode. */
+  .ambient-card.state-heat .ambient-card-primary, .ambient-card.state-heat .ambient-card-sub { color: var(--heat); }
+  .ambient-card.state-cool .ambient-card-primary, .ambient-card.state-cool .ambient-card-sub { color: var(--cool); }
   .ambient-card-value { font-size: 16px; font-weight: 600; color: var(--text); }
   .ambient-card-controls { display: flex; gap: 8px; margin-top: 14px; }
   .ambient-stepper-btn {
@@ -5025,7 +5030,15 @@ function renderAmbientActions() {
       <button class="ambient-stepper-btn" data-comfort-temp="down" style="flex:1">−</button>
       <button class="ambient-stepper-btn" data-comfort-temp="up" style="flex:1">+</button>
     </div>` : "";
-  const comfortCard = `<div class="ambient-card" style="cursor:default">
+  // Same substring match against the activity capability as renderClimate
+  // (see comment there) — kept identical since it's the same device.
+  const nestActivityCap = nestCaps ? nestCaps.activityCap : null;
+  const nestActivityText = nestActivityCap
+    ? `${(nestActivityCap.values.find(v => v.id === nestActivityCap.value) || {}).title || ""} ${nestActivityCap.value || ""}`.toLowerCase()
+    : "";
+  const nestStateClass = /heat/.test(nestActivityText) ? "state-heat"
+    : /cool/.test(nestActivityText) ? "state-cool" : "";
+  const comfortCard = `<div class="ambient-card ${nestStateClass}" style="cursor:default">
     <div class="ambient-card-header">
       ${ico("thermometer", "ambient-card-icon")}
       <div class="ambient-card-roomlabel">Hallway</div>
