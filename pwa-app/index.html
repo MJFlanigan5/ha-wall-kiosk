@@ -564,7 +564,13 @@
     border: 1px solid var(--hairline); border-radius: 18px; padding: 20px; text-align: center;
   }
   .confirm-card-image {
-    width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 12px;
+    /* 3/4, not 16/9 (2026-09-04 fix) — the only camera wired to this card is
+       the UniFi Front Door doorbell, which shoots a native 1920x2560 portrait
+       feed for full-body-at-the-door framing. object-fit:cover against a
+       16/9 box cropped out the person's face/head, which is what actually
+       made the first attempt at this feature look "broken" and get pulled
+       on 2026-09-02 — the fetch/blob pipeline itself was fine. */
+    width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 12px;
     background: var(--base); margin-bottom: 16px;
   }
   .confirm-card-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
@@ -937,9 +943,14 @@ const CAMERAS = [
   { name: "Front Door", entityId: "camera.front_door_entry_high_resolution_channel" },
 ];
 // Real HA automations behind each of these (2026-08-07), gated by these
-// exact input_boolean entities — not local-only state.
+// exact input_boolean entities — not local-only state. Descriptions match
+// what each automation actually does, not the earlier draft copy: the
+// literal doorbell "ring" push is native to the UniFi Protect app and
+// unreachable from HA/Foyer, so Door Entry gates the two person-detected
+// automations instead (confirmed with Mike rather than silently relabeling).
 const NOTIFICATION_ENTITIES = [
   { name: "Climate", desc: "The home's thermostat reading drops below 40° or rises above 78°.", entityId: "input_boolean.notify_climate" },
+  { name: "Door Entry", desc: "A person is detected on the front door camera (arriving or away).", entityId: "input_boolean.notify_door_entry" },
   { name: "Lighting", desc: "A light is still on 10 minutes after everyone has left the house.", entityId: "input_boolean.notify_lighting" },
   { name: "Entertainment", desc: "A TV or media device is still playing at 1:00 AM.", entityId: "input_boolean.notify_entertainment" },
 ];
@@ -3549,6 +3560,17 @@ let waterHeaterFlowState = null;
 const AMBIENT_ALARM_ENTITY = "alarm_control_panel.alarmo";
 let ambientAlarmState = null;
 
+// Door Entry confirm-card (2026-09-01, re-added 2026-09-04 with the
+// aspect-ratio fix above) — real UniFi Protect person-detection pulse,
+// gated by the same input_boolean the Notifications settings screen
+// already toggles (see NOTIFICATION_ENTITIES). The input_boolean is a
+// preference switch, not the event itself — confirmed via live entity
+// search (front_door_entry_person_detected is the actual detection pulse).
+const DOOR_ENTRY_GATE_ENTITY = "input_boolean.notify_door_entry";
+const DOOR_ENTRY_PERSON_ENTITY = "binary_sensor.front_door_entry_person_detected";
+let doorEntryGateOn = true; // assume enabled until hydration says otherwise
+let doorEntryPersonPrevState = null; // for edge-detection (off -> on only)
+
 // Weather-reactive Ambient Mode background (2026-09-01).
 const WEATHER_ENTITY = "weather.forecast_home";
 let weatherState = null;
@@ -4048,6 +4070,10 @@ async function hydrateStatesFromHA(client) {
   waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
   refreshWaterHeaterFromHA();
   ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
+  const gateState = stateById.get(DOOR_ENTRY_GATE_ENTITY);
+  doorEntryGateOn = gateState ? gateState.state === "on" : true;
+  const personState = stateById.get(DOOR_ENTRY_PERSON_ENTITY);
+  doorEntryPersonPrevState = personState ? personState.state : null;
   weatherState = stateById.get(WEATHER_ENTITY) || null;
   ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
   ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
@@ -4123,6 +4149,26 @@ async function initLiveData() {
       if (entityId === AMBIENT_ALARM_ENTITY) {
         ambientAlarmState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === DOOR_ENTRY_GATE_ENTITY) {
+        doorEntryGateOn = newState.state === "on";
+        return;
+      }
+      if (entityId === DOOR_ENTRY_PERSON_ENTITY) {
+        const wasOff = doorEntryPersonPrevState !== "on";
+        doorEntryPersonPrevState = newState.state;
+        if (doorEntryGateOn && wasOff && newState.state === "on") {
+          showConfirmCard({
+            title: "Front Door",
+            message: "Someone's at the door",
+            imageEntityId: "camera.front_door_entry_high_resolution_channel",
+            actions: [
+              { label: "View Camera", onSelect: () => viewCameraFullscreen("camera.front_door_entry_high_resolution_channel") },
+              { label: "Dismiss" },
+            ],
+          });
+        }
         return;
       }
       if (entityId === WEATHER_ENTITY) {
