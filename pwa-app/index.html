@@ -3560,17 +3560,6 @@ let waterHeaterFlowState = null;
 const AMBIENT_ALARM_ENTITY = "alarm_control_panel.alarmo";
 let ambientAlarmState = null;
 
-// Door Entry confirm-card (2026-09-01, re-added 2026-09-04 with the
-// aspect-ratio fix above) — real UniFi Protect person-detection pulse,
-// gated by the same input_boolean the Notifications settings screen
-// already toggles (see NOTIFICATION_ENTITIES). The input_boolean is a
-// preference switch, not the event itself — confirmed via live entity
-// search (front_door_entry_person_detected is the actual detection pulse).
-const DOOR_ENTRY_GATE_ENTITY = "input_boolean.notify_door_entry";
-const DOOR_ENTRY_PERSON_ENTITY = "binary_sensor.front_door_entry_person_detected";
-let doorEntryGateOn = true; // assume enabled until hydration says otherwise
-let doorEntryPersonPrevState = null; // for edge-detection (off -> on only)
-
 // Weather-reactive Ambient Mode background (2026-09-01).
 const WEATHER_ENTITY = "weather.forecast_home";
 let weatherState = null;
@@ -4070,10 +4059,6 @@ async function hydrateStatesFromHA(client) {
   waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
   refreshWaterHeaterFromHA();
   ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
-  const gateState = stateById.get(DOOR_ENTRY_GATE_ENTITY);
-  doorEntryGateOn = gateState ? gateState.state === "on" : true;
-  const personState = stateById.get(DOOR_ENTRY_PERSON_ENTITY);
-  doorEntryPersonPrevState = personState ? personState.state : null;
   weatherState = stateById.get(WEATHER_ENTITY) || null;
   ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
   ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
@@ -4149,26 +4134,6 @@ async function initLiveData() {
       if (entityId === AMBIENT_ALARM_ENTITY) {
         ambientAlarmState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
-        return;
-      }
-      if (entityId === DOOR_ENTRY_GATE_ENTITY) {
-        doorEntryGateOn = newState.state === "on";
-        return;
-      }
-      if (entityId === DOOR_ENTRY_PERSON_ENTITY) {
-        const wasOff = doorEntryPersonPrevState !== "on";
-        doorEntryPersonPrevState = newState.state;
-        if (doorEntryGateOn && wasOff && newState.state === "on") {
-          showConfirmCard({
-            title: "Front Door",
-            message: "Someone's at the door",
-            imageEntityId: "camera.front_door_entry_high_resolution_channel",
-            actions: [
-              { label: "View Camera", onSelect: () => viewCameraFullscreen("camera.front_door_entry_high_resolution_channel") },
-              { label: "Dismiss" },
-            ],
-          });
-        }
         return;
       }
       if (entityId === WEATHER_ENTITY) {
