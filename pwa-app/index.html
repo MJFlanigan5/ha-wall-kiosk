@@ -1078,9 +1078,21 @@ const ROOMS = {
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
     shades: [],
   },
+  // Master Bathroom (added 2026-09-09) — no lighting/media/shades wired,
+  // exists only to host its 4 real Homey moods (Quick/Cleaning, Morning
+  // Shower, Evening Shower, Bath/Soak), same minimal-shape precedent as
+  // "remote" hosting only Quick Actions with nothing else wired.
+  masterbath: {
+    name: "Master Bathroom",
+    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    outdoor: "", scenes: [], activeScene: "",
+    lighting: [],
+    media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
+    shades: [],
+  },
 };
 
-const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "dining", "bedroom4", "bedroom3", "remote"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js)
+const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "masterbath", "dining", "bedroom4", "bedroom3", "remote"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js); masterbath added 2026-09-09 for its 4 moods
 // Real bug found 2026-08-19: sliders/wheels only tracked drag state in a
 // local closure var, invisible to the render functions. Any background
 // state_changed event for the room (or, for Ambient, any of several gating
@@ -1935,26 +1947,29 @@ function fmtTime(s) {
 
 function renderMediaNowPlaying(room) {
   const m = room.media;
+  const canSeek = mediaSupports(m, MEDIA_FEATURE.SEEK);
+  const canShuffle = mediaSupports(m, MEDIA_FEATURE.SHUFFLE_SET);
+  const canRepeat = mediaSupports(m, MEDIA_FEATURE.REPEAT_SET);
   return `
-    <div class="panel media-panel">
+    <div class="panel media-panel" data-media-entity="${m.entityId || ""}">
       <div class="media-name">${m.name}</div>
       <div class="music-art">${ico("music", "i28")}</div>
       <div class="music-track-title">${m.track}</div>
       ${m.artist ? `<div class="media-artist">${m.artist}</div>` : `<div class="media-artist">&nbsp;</div>`}
       <div class="music-scrub-row">
         <span class="music-time" data-elapsed-label>${fmtTime(m.elapsed)}</span>
-        <div class="slider-track" style="flex:1" data-scrub>
+        <div class="slider-track ${canSeek ? "" : "scrub-readonly"}" style="flex:1" data-scrub="${canSeek ? "1" : "0"}">
           <div class="slider-fill" style="width:${m.duration ? (m.elapsed / m.duration) * 100 : 0}%"></div>
           <div class="slider-thumb" style="left:${m.duration ? (m.elapsed / m.duration) * 100 : 0}%"></div>
         </div>
         <span class="music-time right">${fmtTime(m.duration)}</span>
       </div>
       <div class="music-transport">
-        <button class="music-btn-sm ${m.shuffle ? "active" : ""}" data-shuffle>${ico("shuffle", "i18")}</button>
+        ${canShuffle ? `<button class="music-btn-sm ${m.shuffle ? "active" : ""}" data-shuffle>${ico("shuffle", "i18")}</button>` : `<div class="music-btn-sm" style="visibility:hidden">${ico("shuffle", "i18")}</div>`}
         <button class="music-btn-sm" id="prevBtn">${ico("skip-back", "i20")}</button>
         <button class="media-btn-lg" id="playBtn">${ico(m.playing ? "pause" : "play", "i20")}</button>
         <button class="music-btn-sm" id="nextBtn">${ico("skip-forward", "i20")}</button>
-        <button class="music-btn-sm ${m.repeat ? "active" : ""}" data-repeat>${ico("repeat", "i18")}</button>
+        ${canRepeat ? `<button class="music-btn-sm ${m.repeat ? "active" : ""}" data-repeat>${ico("repeat", "i18")}</button>` : `<div class="music-btn-sm" style="visibility:hidden">${ico("repeat", "i18")}</div>`}
       </div>
       <div class="media-vol-row">
         <div style="color:var(--text-faint)">${ico("volume-1", "i16")}</div>
@@ -2057,7 +2072,19 @@ async function refreshCameraSnapshot(entityId, imgId) {
 // renders whatever it's given. Wall panel only right now — see the spec's
 // "iPad — a real gap" section for why (needs a Web Push server, not built).
 let confirmCardImageEntityId = null;
-function showConfirmCard({ title, message, imageEntityId, actions }) {
+let confirmCardDismissTimer = null;
+let confirmCardQueue = [];
+// Auto-dismiss (2026-09-09, Mike's call): nothing sits on screen forever,
+// including high-priority events — the original spec's "requires explicit
+// dismiss" reasoning was rejected in favor of always clearing itself.
+// Explicit tap still dismisses immediately either way.
+function showConfirmCard({ title, message, imageEntityId, actions, autoDismissMs }) {
+  if (document.getElementById("confirmCardOverlay").classList.contains("visible")) {
+    // Something's already up — queue this one rather than clobber it or
+    // drop it silently. Shown in order once the current card is dismissed.
+    confirmCardQueue.push({ title, message, imageEntityId, actions, autoDismissMs });
+    return;
+  }
   document.getElementById("confirmCardTitle").textContent = title || "";
   document.getElementById("confirmCardMessage").textContent = message || "";
   const imgEl = document.getElementById("confirmCardImage");
@@ -2079,13 +2106,20 @@ function showConfirmCard({ title, message, imageEntityId, actions }) {
     });
   });
   document.getElementById("confirmCardOverlay").classList.add("visible");
+  if (confirmCardDismissTimer) clearTimeout(confirmCardDismissTimer);
+  if (autoDismissMs) confirmCardDismissTimer = setTimeout(hideConfirmCard, autoDismissMs);
 }
 function hideConfirmCard() {
+  if (confirmCardDismissTimer) { clearTimeout(confirmCardDismissTimer); confirmCardDismissTimer = null; }
   document.getElementById("confirmCardOverlay").classList.remove("visible");
   const imgEl = document.getElementById("confirmCardImage");
   if (imgEl.dataset.blobUrl) { URL.revokeObjectURL(imgEl.dataset.blobUrl); delete imgEl.dataset.blobUrl; }
   imgEl.src = "";
   confirmCardImageEntityId = null;
+  if (confirmCardQueue.length) {
+    const next = confirmCardQueue.shift();
+    showConfirmCard(next);
+  }
 }
 
 // Jumps straight to the Security > Cameras > fullscreen view for one
@@ -2248,6 +2282,9 @@ function renderMusicContent() {
       const m = ROOMS[el.dataset.musicplay].media;
       m.playing = !m.playing;
       renderMusicContent();
+      if (m.entityId && window.haClient && window.haClient.connected) {
+        window.haClient.callService("media_player", m.playing ? "media_play" : "media_pause", m.entityId).catch(handleWriteError);
+      }
     });
   });
   document.querySelectorAll("[data-musicvol]").forEach(track => {
@@ -2265,7 +2302,12 @@ function renderMusicContent() {
     }
     track.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientX); track.setPointerCapture(e.pointerId); });
     track.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
-    track.addEventListener("pointerup", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
+    track.addEventListener("pointerup", () => {
+      dragging = false; activeDragCount = Math.max(0, activeDragCount - 1);
+      if (m.entityId && window.haClient && window.haClient.connected) {
+        window.haClient.callService("media_player", "volume_set", m.entityId, { volume_level: m.volume / 100 }).catch(handleWriteError);
+      }
+    });
   });
 }
 
@@ -3130,16 +3172,15 @@ function renderRoomSections(room) {
   if (room.automationButtons && room.automationButtons.length) {
     sections += `<div class="section-label-sm" id="section-quickactions" style="margin-top:32px">${ico("zap", "i14")}Quick Actions</div>${renderQuickActionButtons(room.automationButtons)}`;
   }
-  // Moods — real Homey moods, only exist for these 2 rooms (Goodnight is
-  // whole-home, not room-specific, so it's not shown here).
-  if (window.homeyClient && (currentRoom === "living" || currentRoom === "dining")) {
-    const moodId = currentRoom === "living" ? MOOD_MOVIE_NIGHT_ID : MOOD_DINNER_GUESTS_ID;
-    const moodName = currentRoom === "living" ? "Movie Night" : "Dinner / Guests";
+  // Moods — real Homey moods, per room (Goodnight is whole-home, surfaced
+  // as its own Ambient Mode card instead — see ROOM_MOODS/renderAmbientActions).
+  const moods = ROOM_MOODS[currentRoom];
+  if (window.homeyClient && moods && moods.length) {
     sections += `<div class="section-label-sm" id="section-moods" style="margin-top:32px">${ico("sparkles", "i14")}Moods</div>
-      <div class="light-list"><div class="switch-row">
-        <div class="light-row-name">${moodName}</div>
-        <button class="switch-btn" data-mood="${moodId}">Activate</button>
-      </div></div>`;
+      <div class="light-list">${moods.map(mood => `<div class="switch-row">
+        <div class="light-row-name">${mood.name}</div>
+        <button class="switch-btn" data-mood="${mood.id}">Activate</button>
+      </div>`).join("")}</div>`;
   }
   return sections;
 }
@@ -3314,8 +3355,10 @@ function wireInteractions(room) {
     track.addEventListener("pointercancel", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
   });
 
+  const mediaCanWrite = () => room.media.entityId && window.haClient && window.haClient.connected;
+
   const scrubTrack = document.querySelector("[data-scrub]");
-  if (scrubTrack) {
+  if (scrubTrack && scrubTrack.dataset.scrub === "1") {
     let dragging = false;
     const fill = scrubTrack.querySelector(".slider-fill");
     const thumb = scrubTrack.querySelector(".slider-thumb");
@@ -3328,15 +3371,37 @@ function wireInteractions(room) {
       thumb.style.left = pct + "%";
       if (label) label.textContent = fmtTime(room.media.elapsed);
     }
-    scrubTrack.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientX); scrubTrack.setPointerCapture(e.pointerId); });
+    scrubTrack.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; scrubTrack.dataset.dragging = "1"; setFromEvent(e.clientX); scrubTrack.setPointerCapture(e.pointerId); });
     scrubTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientX); });
-    scrubTrack.addEventListener("pointerup", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
+    scrubTrack.addEventListener("pointerup", () => {
+      dragging = false; activeDragCount = Math.max(0, activeDragCount - 1);
+      delete scrubTrack.dataset.dragging;
+      if (mediaCanWrite()) {
+        window.haClient.callService("media_player", "media_seek", room.media.entityId, { seek_position: room.media.elapsed }).catch(handleWriteError);
+      }
+      // Re-anchor the interpolation clock to the seek target so the ticker
+      // doesn't immediately snap back to the pre-seek position on its next tick.
+      room.media.position = room.media.elapsed;
+      room.media.positionUpdatedAt = Date.now();
+    });
   }
 
   const shuffleBtn = document.querySelector("[data-shuffle]");
-  if (shuffleBtn) shuffleBtn.addEventListener("click", () => { room.media.shuffle = !room.media.shuffle; renderContent(); });
+  if (shuffleBtn) shuffleBtn.addEventListener("click", () => {
+    room.media.shuffle = !room.media.shuffle;
+    renderContent();
+    if (mediaCanWrite()) {
+      window.haClient.callService("media_player", "shuffle_set", room.media.entityId, { shuffle: room.media.shuffle }).catch(handleWriteError);
+    }
+  });
   const repeatBtn = document.querySelector("[data-repeat]");
-  if (repeatBtn) repeatBtn.addEventListener("click", () => { room.media.repeat = !room.media.repeat; renderContent(); });
+  if (repeatBtn) repeatBtn.addEventListener("click", () => {
+    room.media.repeat = !room.media.repeat;
+    renderContent();
+    if (mediaCanWrite()) {
+      window.haClient.callService("media_player", "repeat_set", room.media.entityId, { repeat: room.media.repeat ? "all" : "off" }).catch(handleWriteError);
+    }
+  });
 
   const volTrack = document.querySelector("[data-volume]");
   if (volTrack) {
@@ -3351,15 +3416,29 @@ function wireInteractions(room) {
     }
     volTrack.addEventListener("pointerdown", e => { dragging = true; activeDragCount++; setFromEvent(e.clientY); volTrack.setPointerCapture(e.pointerId); });
     volTrack.addEventListener("pointermove", e => { if (dragging) setFromEvent(e.clientY); });
-    volTrack.addEventListener("pointerup", () => (dragging = false, activeDragCount = Math.max(0, activeDragCount - 1)));
+    volTrack.addEventListener("pointerup", () => {
+      dragging = false; activeDragCount = Math.max(0, activeDragCount - 1);
+      if (mediaCanWrite()) {
+        window.haClient.callService("media_player", "volume_set", room.media.entityId, { volume_level: room.media.volume / 100 }).catch(handleWriteError);
+      }
+    });
   }
+
+  const prevBtn = document.getElementById("prevBtn");
+  if (prevBtn) prevBtn.addEventListener("click", () => {
+    if (mediaCanWrite()) window.haClient.callService("media_player", "media_previous_track", room.media.entityId).catch(handleWriteError);
+  });
+  const nextBtn = document.getElementById("nextBtn");
+  if (nextBtn) nextBtn.addEventListener("click", () => {
+    if (mediaCanWrite()) window.haClient.callService("media_player", "media_next_track", room.media.entityId).catch(handleWriteError);
+  });
 
   const playBtn = document.getElementById("playBtn");
   if (playBtn) playBtn.addEventListener("click", () => {
     room.media.playing = !room.media.playing;
     playBtn.innerHTML = ico(room.media.playing ? "pause" : "play", "i20");
     icons(playBtn);
-    if (room.media.entityId && window.haClient && window.haClient.connected) {
+    if (mediaCanWrite()) {
       window.haClient.callService("media_player", room.media.playing ? "media_play" : "media_pause", room.media.entityId).catch(handleWriteError);
     }
   });
@@ -3470,8 +3549,28 @@ function haImageUrl(relativePath) {
   return base + relativePath;
 }
 
+// HA media_player supported_features bitmask flags actually used here —
+// see https://www.home-assistant.io/integrations/media_player/ (stable
+// across HA versions, safe to hardcode rather than fetch from anywhere).
+const MEDIA_FEATURE = {
+  SEEK: 2,
+  PREVIOUS_TRACK: 16,
+  NEXT_TRACK: 32,
+  SHUFFLE_SET: 32768,
+  REPEAT_SET: 262144,
+};
+function mediaSupports(mediaItem, flag) {
+  return !!(mediaItem.supportedFeatures & flag);
+}
+
 function haStateToMediaItem(entityId, state) {
   const attrs = state.attributes || {};
+  // media_position is a snapshot, not a ticking value — media_position_updated_at
+  // (ISO timestamp) is the anchor a 1s ticker uses to interpolate elapsed time
+  // client-side while state === "playing" (see MUSIC_SPEC.md and the ticker
+  // in wireInteractions/renderMediaNowPlaying).
+  const position = attrs.media_position || 0;
+  const positionUpdatedAt = attrs.media_position_updated_at ? Date.parse(attrs.media_position_updated_at) : null;
   return {
     name: attrs.friendly_name || entityId,
     track: attrs.media_title || "—",
@@ -3479,8 +3578,10 @@ function haStateToMediaItem(entityId, state) {
     source: attrs.source || "",
     playing: state.state === "playing",
     volume: attrs.volume_level != null ? Math.round(attrs.volume_level * 100) : 0,
-    elapsed: 0, duration: 0, // not interpolated yet, see MUSIC_SPEC.md
-    shuffle: false, repeat: false, favorites: [],
+    elapsed: position, duration: attrs.media_duration || 0,
+    position, positionUpdatedAt,
+    supportedFeatures: attrs.supported_features || 0,
+    shuffle: !!attrs.shuffle, repeat: attrs.repeat && attrs.repeat !== "off", favorites: [],
     art: attrs.entity_picture ? haImageUrl(attrs.entity_picture) : null, // real album art, used by Ambient Mode's media card (2026-08-06)
     entityId,
   };
@@ -3559,6 +3660,32 @@ let waterHeaterFlowState = null;
 // a single tap arm/disarm needs no PIN-entry UI.
 const AMBIENT_ALARM_ENTITY = "alarm_control_panel.alarmo";
 let ambientAlarmState = null;
+let alarmPrevState = null; // for edge-detection (not "triggered" -> "triggered")
+
+// High-priority confirm-card takeover for a real alarm trip — genuinely new
+// (2026-09-09), the Security card only ever showed state passively before.
+// Auto-dismisses like everything else now, but Disarm is one tap away
+// since this is the one event type where doing something fast matters.
+const CONFIRM_CARD_HIGH_PRIORITY_MS = 40000;
+const CONFIRM_CARD_NORMAL_PRIORITY_MS = 10000;
+
+// Door Entry confirm-card (2026-09-01, re-added 2026-09-04 with the
+// aspect-ratio fix, reverted 2026-09-05 after Mike still saw a blank image,
+// re-added again 2026-09-09). The aspect-ratio bug was real and is still
+// fixed (see .confirm-card-image CSS) but evidently wasn't the whole story —
+// this entity/fetch path is proven working in the Security > Cameras grid
+// (same refreshCameraSnapshot, same entity id), so the leading hypothesis
+// is a race: the popup used to fetch the snapshot the instant the
+// person-detected sensor flips, which may be before UniFi Protect's own
+// buffer has a frame for that exact moment. Added a short delay before the
+// first fetch as a hedge. Flagging honestly: this couldn't be tested from
+// here (no live access to the physical panel) — if the image is still
+// blank after this, that race theory is wrong and needs real console logs
+// off the device to diagnose further, not another guess.
+const DOOR_ENTRY_GATE_ENTITY = "input_boolean.notify_door_entry";
+const DOOR_ENTRY_PERSON_ENTITY = "binary_sensor.front_door_entry_person_detected";
+let doorEntryGateOn = true; // assume enabled until hydration says otherwise
+let doorEntryPersonPrevState = null; // for edge-detection (off -> on only)
 
 // Weather-reactive Ambient Mode background (2026-09-01).
 const WEATHER_ENTITY = "weather.forecast_home";
@@ -3593,8 +3720,39 @@ let ambientKitchenTempState = null;
 // bridged into HA at all). Read via window.homeyClient, HomeyConfig
 // permitting — see homey-client.js.
 const NEST_THERMOSTAT_DEVICE_ID = "7d030c67-4001-483b-8765-75f7d34efa59";
-const MOOD_MOVIE_NIGHT_ID = "ff9f13b2-7aa4-4cbf-861a-860d2cdc9ab0"; // Living Room
-const MOOD_DINNER_GUESTS_ID = "800dd834-bb68-44e0-af0b-e5964ecc605c"; // Dining Room
+
+// All 14 real Homey moods (confirmed live via moods_list, 2026-09-09) —
+// previously only Movie Night/Dinner Guests were wired, the other 12 sat
+// unsurfaced anywhere in the app. Goodnight is whole-home, not room-specific
+// — see the Ambient Mode Goodnight card instead of ROOM_MOODS.
+const MOOD_GOODNIGHT_ID = "3a066c8a-2700-4707-a265-d7fe3e7aaebe";
+const ROOM_MOODS = {
+  living: [
+    { id: "ff9f13b2-7aa4-4cbf-861a-860d2cdc9ab0", name: "Movie Night" },
+    { id: "712e2cf6-5380-4c19-88cc-0c3f2fa4a5fa", name: "Movie Playing" },
+    { id: "797e0c68-f273-4237-b597-9244a2baf524", name: "Movie Paused" },
+  ],
+  dining: [
+    { id: "800dd834-bb68-44e0-af0b-e5964ecc605c", name: "Dinner / Guests" },
+  ],
+  kitchen: [
+    { id: "4bad03f8-e1b0-4c57-8f1c-fcb53ee6b017", name: "Sink Night Light" },
+    { id: "74b3620f-29b4-44e2-b850-d1b696629619", name: "Ceiling Night Light" },
+    { id: "ad67b2d0-b11d-4c91-957f-594e0dc9cb8a", name: "Task Lighting" },
+  ],
+  office: [
+    { id: "cdd381e3-30db-45c1-bff2-2f8c13b912e9", name: "Task Lighting" },
+  ],
+  master: [
+    { id: "87fa1d1e-6c30-4938-b370-53564dff5ab7", name: "Movie Playing" },
+  ],
+  masterbath: [
+    { id: "41259d7b-b45b-482f-a7f3-67a7808557c6", name: "Quick / Cleaning" },
+    { id: "bbcf6ba3-893f-4b13-8cb6-fd5c4ccdb777", name: "Morning Shower" },
+    { id: "bd24fdf9-3d2a-4d52-9257-eb4d05342636", name: "Evening Shower" },
+    { id: "e8d5bb18-1b6e-474d-a5a3-ffa05368b98a", name: "Bath / Soak" },
+  ],
+};
 
 // Dining Room's Qingping air monitor (2026-08-06) — HA's qingping_cgs1
 // integration never loads (cloud-polling custom component, config broken).
@@ -3806,6 +3964,7 @@ function timerBeep() {
     osc.stop(ctx.currentTime + 0.4);
   } catch (e) { /* no audio output — fine, the visual flash still fires */ }
 }
+let timerAutoDismissHandle = null;
 function timerTick() {
   const remaining = Math.round((timerEndAt - Date.now()) / 1000);
   const el = document.getElementById("timerCountdown");
@@ -3816,11 +3975,16 @@ function timerTick() {
     clearInterval(timerTickHandle);
     timerTickHandle = null;
     timerEndAt = null;
+    // Normal priority — auto-dismiss after 10s like every other event now,
+    // but a tap on Cancel before then still dismisses immediately (stopTimer
+    // already clears timerEndAt/handle, harmless to also call it again here).
+    timerAutoDismissHandle = setTimeout(stopTimer, CONFIRM_CARD_NORMAL_PRIORITY_MS);
     return;
   }
   el.textContent = timerFormatMMSS(remaining); // scoped textContent write only — no renderContent()
 }
 function startTimer(seconds) {
+  if (timerAutoDismissHandle) { clearTimeout(timerAutoDismissHandle); timerAutoDismissHandle = null; }
   timerEndAt = Date.now() + seconds * 1000;
   document.getElementById("timerPresets").style.display = "none";
   const el = document.getElementById("timerCountdown");
@@ -3833,6 +3997,7 @@ function startTimer(seconds) {
 function stopTimer() {
   if (timerTickHandle) clearInterval(timerTickHandle);
   timerTickHandle = null;
+  if (timerAutoDismissHandle) { clearTimeout(timerAutoDismissHandle); timerAutoDismissHandle = null; }
   timerEndAt = null;
   document.getElementById("timerOverlay").classList.remove("visible");
   document.getElementById("timerPresets").style.display = "";
@@ -4059,6 +4224,11 @@ async function hydrateStatesFromHA(client) {
   waterHeaterFlowState = stateById.get(WATER_HEATER_FLOW_ENTITY) || null;
   refreshWaterHeaterFromHA();
   ambientAlarmState = stateById.get(AMBIENT_ALARM_ENTITY) || null;
+  alarmPrevState = ambientAlarmState ? ambientAlarmState.state : null;
+  const doorGateState = stateById.get(DOOR_ENTRY_GATE_ENTITY);
+  doorEntryGateOn = doorGateState ? doorGateState.state === "on" : true;
+  const doorPersonState = stateById.get(DOOR_ENTRY_PERSON_ENTITY);
+  doorEntryPersonPrevState = doorPersonState ? doorPersonState.state : null;
   weatherState = stateById.get(WEATHER_ENTITY) || null;
   ambientKitchenTempState = stateById.get(AMBIENT_KITCHEN_TEMP_ENTITY) || null;
   ambientWaterUsageState = stateById.get(AMBIENT_WATER_USAGE_ENTITY) || null;
@@ -4102,7 +4272,10 @@ async function initLiveData() {
       const mediaRoomId = mediaEntityLocations.get(entityId);
       if (mediaRoomId) {
         ROOMS[mediaRoomId].media = haStateToMediaItem(entityId, newState);
-        if (currentRoom === mediaRoomId) renderContent();
+        // "music" is the cross-room nav screen (renderMusicContent), not a
+        // room id — it never equals mediaRoomId but still needs to refresh
+        // when any room's media_player changes, or it goes stale while open.
+        if (currentRoom === mediaRoomId || currentRoom === "music") renderContent();
         return;
       }
       const tvRoomId = tvEntityLocations.get(entityId);
@@ -4132,8 +4305,47 @@ async function initLiveData() {
         return;
       }
       if (entityId === AMBIENT_ALARM_ENTITY) {
+        const wasTriggered = alarmPrevState === "triggered";
+        alarmPrevState = newState.state;
         ambientAlarmState = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        if (!wasTriggered && newState.state === "triggered") {
+          showConfirmCard({
+            title: "Alarm Triggered",
+            message: "The security system was triggered.",
+            autoDismissMs: CONFIRM_CARD_HIGH_PRIORITY_MS,
+            actions: [
+              { label: "Disarm", onSelect: () => { if (window.haClient && window.haClient.connected) window.haClient.callService("alarm_control_panel", "alarm_disarm", AMBIENT_ALARM_ENTITY).catch(handleWriteError); } },
+              { label: "Dismiss" },
+            ],
+          });
+        }
+        return;
+      }
+      if (entityId === DOOR_ENTRY_GATE_ENTITY) {
+        doorEntryGateOn = newState.state === "on";
+        return;
+      }
+      if (entityId === DOOR_ENTRY_PERSON_ENTITY) {
+        const wasOff = doorEntryPersonPrevState !== "on";
+        doorEntryPersonPrevState = newState.state;
+        if (doorEntryGateOn && wasOff && newState.state === "on") {
+          // Short delay before the snapshot fetch — see the constants comment
+          // above for why (hypothesis: a race with UniFi Protect's own frame
+          // buffer, not yet confirmed against the real device).
+          setTimeout(() => {
+            showConfirmCard({
+              title: "Front Door",
+              message: "Someone's at the door",
+              imageEntityId: "camera.front_door_entry_high_resolution_channel",
+              autoDismissMs: CONFIRM_CARD_HIGH_PRIORITY_MS,
+              actions: [
+                { label: "View Camera", onSelect: () => viewCameraFullscreen("camera.front_door_entry_high_resolution_channel") },
+                { label: "Dismiss" },
+              ],
+            });
+          }, 1500);
+        }
         return;
       }
       if (entityId === WEATHER_ENTITY) {
@@ -4256,6 +4468,33 @@ async function pollDiningRoomAQ() {
 }
 
 setInterval(updateClock, 1000 * 15);
+
+// Media progress-bar interpolation (see MUSIC_SPEC.md's "nonobvious part").
+// HA's media_position is a snapshot, not a stream — this ticks the visible
+// Music panel's scrubber once a second between real state_changed pushes.
+// Scoped textContent/style writes only, same discipline as timerTick — no
+// renderContent() here, this must not fight the drag handler for the DOM.
+setInterval(() => {
+  const panel = document.querySelector("[data-media-entity]");
+  if (!panel) return;
+  const entityId = panel.dataset.mediaEntity;
+  const room = ROOMS[currentRoom];
+  if (!room || !room.media || room.media.entityId !== entityId) return;
+  const m = room.media;
+  if (!m.playing || m.positionUpdatedAt == null) return;
+  const elapsed = Math.min(m.duration || Infinity, m.position + (Date.now() - m.positionUpdatedAt) / 1000);
+  m.elapsed = elapsed;
+  const label = panel.querySelector("[data-elapsed-label]");
+  const scrub = panel.querySelector("[data-scrub]");
+  if (label) label.textContent = fmtTime(elapsed);
+  if (scrub && !scrub.dataset.dragging) {
+    const pct = m.duration ? (elapsed / m.duration) * 100 : 0;
+    const fill = scrub.querySelector(".slider-fill");
+    const thumb = scrub.querySelector(".slider-thumb");
+    if (fill) fill.style.width = pct + "%";
+    if (thumb) thumb.style.left = pct + "%";
+  }
+}, 1000);
 
 // Recurring cadence for the health check — the first run is kicked off
 // from inside initLiveData() instead, once the HA connection has actually
@@ -5141,6 +5380,20 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
+  // Goodnight: whole-home Homey mood, no per-room home so it gets its own
+  // small card here (2026-09-09) — appended after the dictated layout below
+  // rather than inserted into it, so Mike's specified order is untouched.
+  const goodnightCard = window.homeyClient ? `<div class="ambient-card">
+    <div class="ambient-card-header">
+      ${ico("moon", "ambient-card-icon")}
+    </div>
+    <div class="ambient-card-primary">Goodnight</div>
+    <div class="ambient-card-sub">Whole home</div>
+    <div class="ambient-card-controls">
+      <button class="ambient-stepper-btn" data-ambient-goodnight-btn style="flex:1">Activate</button>
+    </div>
+  </div>` : "";
+
   // Exact layout dictated by Mike 2026-08-06. Row 1 (status): Music,
   // Comfort, Packages, Energy Flow, Water Usage, Home Usage, Water Heater
   // (CO2 swapped for Water Usage per Mike's direction). Row 2 (rooms):
@@ -5149,7 +5402,7 @@ function renderAmbientActions() {
   // per this spec.
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
   el.innerHTML = musicCard + comfortCard + packagesCard + energyCard + waterUsageCard + energyProducedCard
-    + waterHeaterCard + roomCards + securityCard;
+    + waterHeaterCard + roomCards + securityCard + goodnightCard;
   icons(el);
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
@@ -5257,6 +5510,15 @@ function renderAmbientActions() {
       e.stopPropagation();
       if (!window.haClient || !window.haClient.connected) return;
       window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(handleWriteError);
+    });
+  }
+
+  const goodnightBtn = el.querySelector("[data-ambient-goodnight-btn]");
+  if (goodnightBtn) {
+    goodnightBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!window.homeyClient) return;
+      window.homeyClient.triggerMood(MOOD_GOODNIGHT_ID).catch(handleWriteError);
     });
   }
 
