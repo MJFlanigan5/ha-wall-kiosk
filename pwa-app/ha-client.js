@@ -90,6 +90,7 @@ class HAClient {
       ws.onclose = () => {
         if (ws !== this.ws) return; // stale socket superseded after a fresh connect()
         this._setConnected(false);
+        this._rejectAllPending(new Error("HA connection closed"));
         this._scheduleReconnect();
       };
 
@@ -145,12 +146,30 @@ class HAClient {
     this._reconnectDelay = Math.min(this._reconnectDelay * 2, 30000);
   }
 
-  _send(payload) {
+  // Bug found 2026-09-21 (Foyer bug sweep): nothing rejected entries left in
+  // `pending` when the socket dropped mid-request, so a request in flight at
+  // disconnect time never settled. Promise.allSettled() callers (the health
+  // check) then hung forever waiting on that one never-resolving promise,
+  // freezing health reporting silently. onclose now rejects everything
+  // in-flight, and this also carries its own timeout so a half-open socket
+  // that never fires onclose/onerror can't cause the same hang.
+  _send(payload, timeoutMs = 10000) {
     return new Promise((resolve, reject) => {
       const id = this.msgId++;
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) reject(new Error("HA request timed out"));
+      }, timeoutMs);
+      this.pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+      });
       this.ws.send(JSON.stringify({ id, ...payload }));
     });
+  }
+
+  _rejectAllPending(err) {
+    for (const { reject } of this.pending.values()) reject(err);
+    this.pending.clear();
   }
 
   _subscribeStateChanged() {
