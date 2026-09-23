@@ -10,33 +10,15 @@ class HomeyClient {
     this.token = token;
   }
 
-  // Same bug class already fixed in ha-client.js's _send() (2026-09-21): a
-  // plain fetch() with no timeout means a stalled Homey call never settles.
-  // runHealthChecks() awaits this via Promise.allSettled, which itself never
-  // resolves until every promise in it settles — so one hung Homey request
-  // leaves a permanently-pending network connection and blocks all future
-  // health-check cycles. Recurred on the physical kiosk (blank screen,
-  // stuck at document_idle) after being flagged-but-not-fixed once already.
-  async _fetch(path, options = {}, timeoutMs = 10000) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res;
-    try {
-      res = await fetch(`${this.url}${path}`, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          "Authorization": `Bearer ${this.token}`,
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
-      });
-    } catch (e) {
-      if (e.name === "AbortError") throw new Error(`Homey request timed out after ${timeoutMs}ms: ${path}`);
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
+  async _fetch(path, options = {}) {
+    const res = await fetch(`${this.url}${path}`, {
+      ...options,
+      headers: {
+        "Authorization": `Bearer ${this.token}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(`Homey ${res.status}: ${body || res.statusText}`);
