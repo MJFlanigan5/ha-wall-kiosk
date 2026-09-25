@@ -61,19 +61,20 @@
   .rail-brand:active { color: var(--text); }
   .rail-item {
     position: relative; width: 100%; display: flex; flex-direction: column; align-items: center;
-    gap: 8px; padding: 14px 4px; cursor: pointer; border: none; background: transparent;
-    color: var(--text-dim); font-family: var(--font-body); font-size: 10.5px; letter-spacing: 0.3px;
+    gap: 6px; padding: 8px 4px; cursor: pointer; border: none; background: transparent;
+    color: var(--text-dim); font-family: var(--font-body); font-size: 10px; letter-spacing: 0.2px;
     -webkit-user-select: none; user-select: none;
   }
-  .rail-item .stem { width: 1px; height: 22px; background: var(--hairline); position: relative; transition: background 0.35s ease; }
-  .rail-item .stem::after {
-    content: ""; position: absolute; left: 50%; top: 0; width: 7px; height: 7px; border-radius: 50%;
-    background: var(--text-dim); transform: translate(-50%, -50%); transition: background 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease;
+  /* Icon-forward nav (2026-09-25 restyle) — a rounded highlight block behind
+     the icon on the active item, WallUp-style, replacing the old
+     dot-and-stem line indicator entirely. */
+  .rail-item .icon-wrap {
+    width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center;
+    justify-content: center; border: 1px solid transparent; transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
   .rail-item.active { color: var(--text); }
-  .rail-item.active .stem { background: var(--accent); }
-  .rail-item.active .stem::after { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-dim); transform: translate(-50%, -50%) scale(1.15); }
-  .rail-item span.label { max-width: 60px; text-align: center; line-height: 1.3; }
+  .rail-item.active .icon-wrap { background: var(--base-raised); border-color: var(--hairline); color: var(--accent); }
+  .rail-item span.label { max-width: 64px; text-align: center; line-height: 1.25; }
   .rail-health-dot { position: absolute; top: 8px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: #FF9F0A; box-shadow: 0 0 0 3px rgba(255,159,10,0.16); }
   .mobile-rail .rail-health-dot { top: 4px; right: 6px; }
 
@@ -800,9 +801,8 @@
     .climate-temp { font-size: 52px; }
 
     .mobile-rail { display: flex; flex-shrink: 0; justify-content: flex-start; align-items: center; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: var(--base-raised); border-top: 1px solid var(--hairline); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .mobile-rail .rail-item { flex-direction: row; flex-shrink: 0; gap: 6px; padding: 8px 12px; width: auto; }
-    .mobile-rail .rail-item .stem { width: 22px; height: 1px; }
-    .mobile-rail .rail-item .stem::after { top: 50%; left: 50%; }
+    .mobile-rail .rail-item { flex-direction: row; flex-shrink: 0; gap: 8px; padding: 8px 12px; width: auto; }
+    .mobile-rail .rail-item .icon-wrap { width: 32px; height: 32px; border-radius: 10px; }
     .mobile-rail .rail-item span.label { font-size: 9.5px; max-width: none; }
 
     /* Ambient Mode has no responsive handling at all otherwise — the
@@ -816,6 +816,54 @@
     .ambient-timer-btn { top: 20px; left: 20px; }
     .ambient-admin-btn { bottom: 20px; right: 20px; }
     .ambient-health-score { bottom: 20px; left: 20px; }
+  }
+
+  /* ---------- Device-control card grid (2026-09-25 restyle) — Lighting,
+     Climate, Media, TV and Quick Actions on a room page now render as a
+     grid of device cards (Brax WallUp-inspired, matches the approved
+     Master Bedroom mockup) instead of the old list-rows. Pure markup/CSS
+     change — every interactive element below still carries the exact
+     same data-* attributes and child structure wireInteractions() already
+     expects, so no JS wiring changed. ---------- */
+  .dc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+  .dc-card {
+    background: var(--base-raised); border: 1px solid var(--hairline); border-radius: 16px;
+    padding: 22px; display: flex; flex-direction: column; min-height: 168px;
+  }
+  .dc-card-label { font-size: 13px; color: var(--text-dim); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .dc-card-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+  .dc-card-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+  .dc-big-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 36px; font-weight: 500; line-height: 1; color: var(--text); }
+  .dc-toggle {
+    width: 40px; height: 24px; border-radius: 999px; background: var(--hairline-soft);
+    border: 1px solid var(--hairline); position: relative; flex-shrink: 0; cursor: pointer; padding: 0;
+  }
+  .dc-toggle.on { background: var(--accent); border-color: var(--accent); }
+  .dc-toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--text-faint); transition: left 0.15s ease, background 0.15s ease;
+  }
+  .dc-toggle.on::after { background: var(--base); left: 19px; }
+  .dc-steppers { display: flex; align-items: center; gap: 8px; }
+  .dc-stepper-btn {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--hairline);
+    background: var(--base); color: var(--text-dim); cursor: pointer; font-family: var(--font-mono);
+    font-size: 16px; display: flex; align-items: center; justify-content: center;
+  }
+  .dc-stepper-btn:active { background: var(--accent-dim); color: var(--text); }
+  .dc-pills { margin-top: 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dc-pills-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); margin-right: 2px; }
+  .dc-pill {
+    border: 1px solid var(--hairline); background: var(--base-raised); color: var(--text-dim);
+    font-family: var(--font-body); font-size: 13px; padding: 9px 18px; border-radius: 10px; cursor: pointer;
+  }
+  .dc-pill.active { background: var(--accent); color: var(--base); border-color: var(--accent); font-weight: 600; }
+  .dc-media-card { grid-column: span 2; }
+  .dc-climate-card.state-heat .dc-big-num, .dc-climate-card.state-heat .dc-card-sub.target { color: var(--heat); }
+  .dc-climate-card.state-cool .dc-big-num, .dc-climate-card.state-cool .dc-card-sub.target { color: var(--cool); }
+  @media (max-width: 640px) {
+    .dc-grid { grid-template-columns: repeat(2, 1fr); }
+    .dc-media-card { grid-column: span 2; }
   }
 </style>
 </head>
@@ -1186,6 +1234,18 @@ const POWER = {
   },
 };
 
+// Icon-forward rail (2026-09-25 restyle) — one lucide icon per rail
+// destination, replacing the old dot-and-stem line indicator. Room icons
+// are a best-effort per-id lookup, not real per-room config — falls back
+// to a plain circle for any id not covered here.
+const RAIL_ICONS = {
+  living: "sofa", kitchen: "cooking-pot", utility: "washing-machine", office: "briefcase",
+  master: "bed", masterbath: "bath", dining: "utensils-crossed", bedroom4: "bed", bedroom3: "bed",
+  remote: "tv", power: "zap", security: "shield", music: "music", sensors: "activity",
+  health: "heart-pulse", settings: "settings",
+};
+function railIcon(id) { return RAIL_ICONS[id] || "circle"; }
+
 function renderRail() {
   const rail = document.getElementById("rail");
   const mobileRail = document.getElementById("mobileRail");
@@ -1194,25 +1254,25 @@ function renderRail() {
   ROOM_ORDER.forEach(id => {
     const room = ROOMS[id];
     const active = id === currentRoom ? "active" : "";
-    const itemHtml = `<button class="rail-item ${active}" data-room="${id}"><span class="stem"></span><span class="label">${room.name}</span></button>`;
+    const itemHtml = `<button class="rail-item ${active}" data-room="${id}"><div class="icon-wrap">${ico(railIcon(id), "i20")}</div><span class="label">${room.name}</span></button>`;
     rail.insertAdjacentHTML("beforeend", itemHtml);
     mobileRail.insertAdjacentHTML("beforeend", itemHtml);
   });
   const powerActive = currentRoom === "power" ? "active" : "";
-  const powerHtml = `<button class="rail-item ${powerActive}" data-room="power"><span class="stem"></span><span class="label">Energy</span></button>`;
+  const powerHtml = `<button class="rail-item ${powerActive}" data-room="power"><div class="icon-wrap">${ico(railIcon("power"), "i20")}</div><span class="label">Energy</span></button>`;
   const securityActive = currentRoom === "security" ? "active" : "";
-  const securityHtml = `<button class="rail-item ${securityActive}" data-room="security"><span class="stem"></span><span class="label">Security</span></button>`;
+  const securityHtml = `<button class="rail-item ${securityActive}" data-room="security"><div class="icon-wrap">${ico(railIcon("security"), "i20")}</div><span class="label">Security</span></button>`;
   const musicActive = currentRoom === "music" ? "active" : "";
-  const musicHtml = `<button class="rail-item ${musicActive}" data-room="music"><span class="stem"></span><span class="label">Music</span></button>`;
+  const musicHtml = `<button class="rail-item ${musicActive}" data-room="music"><div class="icon-wrap">${ico(railIcon("music"), "i20")}</div><span class="label">Music</span></button>`;
   const sensorsActive = currentRoom === "sensors" ? "active" : "";
-  const sensorsHtml = `<button class="rail-item ${sensorsActive}" data-room="sensors"><span class="stem"></span><span class="label">Sensors</span></button>`;
+  const sensorsHtml = `<button class="rail-item ${sensorsActive}" data-room="sensors"><div class="icon-wrap">${ico(railIcon("sensors"), "i20")}</div><span class="label">Sensors</span></button>`;
   const healthActive = currentRoom === "health" ? "active" : "";
   const healthDot = healthFindingCount > 0 ? `<span class="rail-health-dot"></span>` : "";
-  const healthHtml = `<button class="rail-item ${healthActive}" data-room="health">${healthDot}<span class="stem"></span><span class="label">Health</span></button>`;
+  const healthHtml = `<button class="rail-item ${healthActive}" data-room="health">${healthDot}<div class="icon-wrap">${ico(railIcon("health"), "i20")}</div><span class="label">Health</span></button>`;
   const remoteActive = currentRoom === "remote" ? "active" : "";
-  const remoteHtml = `<button class="rail-item ${remoteActive}" data-room="remote"><span class="stem"></span><span class="label">Remote</span></button>`;
+  const remoteHtml = `<button class="rail-item ${remoteActive}" data-room="remote"><div class="icon-wrap">${ico(railIcon("remote"), "i20")}</div><span class="label">Remote</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
-  const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><span class="stem"></span><span class="label">Settings</span></button>`;
+  const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><div class="icon-wrap">${ico(railIcon("settings"), "i20")}</div><span class="label">Settings</span></button>`;
   rail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + `<div class="rail-divider"></div>` + settingsHtml);
   mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + settingsHtml);
 
@@ -1715,23 +1775,26 @@ function renderHero(room) {
 }
 
 function renderLightingSlider(room) {
-  return `<div class="light-list">${room.lighting.map((l, i) => {
+  return `<div class="dc-grid">${room.lighting.map((l, i) => {
     if (l.type === "switch") {
       return `
-        <div class="switch-row">
-          <div><div class="light-row-name">${l.name}</div><div class="light-row-sub">${l.sub}</div></div>
-          <button class="switch-btn ${l.on ? "on" : ""}" data-switch="${i}">${l.on ? "ON" : "OFF"}</button>
+        <div class="dc-card">
+          <div class="dc-card-label">${l.name}<div class="dc-card-sub">${l.sub}</div></div>
+          <div class="dc-card-body">
+            <div style="display:flex; align-items:center; justify-content:space-between">
+              <span style="font-size:20px; font-weight:600; ${l.on ? "" : "color:var(--text-dim)"}">${l.on ? "On" : "Off"}</span>
+              <button class="dc-toggle ${l.on ? "on" : ""}" data-switch="${i}"></button>
+            </div>
+          </div>
         </div>`;
     }
     return `
-      <div class="light-row">
-        <div class="light-row-top">
-          <div><div class="light-row-name">${l.name}</div><div class="light-row-sub">${l.sub}</div></div>
-          <div style="display:flex; align-items:center; gap:10px">
-            ${l.color ? `<button class="color-swatch-btn" style="background:${hslToHex(l.hue, l.sat)}" data-color-open="${i}" title="Color"></button>` : ""}
-            <div class="light-row-pct" data-brightness-label="${i}">${l.brightness}%</div>
-          </div>
+      <div class="dc-card">
+        <div class="dc-card-label">${l.name}<div class="dc-card-sub">${l.sub}</div></div>
+        <div class="dc-card-body">
+          <div class="dc-big-num" data-brightness-label="${i}">${l.brightness}%</div>
         </div>
+        ${l.color ? `<div style="display:flex; justify-content:flex-end; margin-bottom:10px"><button class="color-swatch-btn" style="background:${hslToHex(l.hue, l.sat)}" data-color-open="${i}" title="Color"></button></div>` : ""}
         <div class="slider-track" data-slider="${i}">
           <div class="slider-fill" style="width:${l.brightness}%"></div>
           <div class="slider-thumb" style="left:${l.brightness}%"></div>
@@ -1834,9 +1897,10 @@ function renderLightingScenes(room) {
 
 function renderLightingGlobal(room) {
   const levels = [["Bright", 100], ["Mid", 60], ["Dim", 30], ["Off", 0]];
-  return `<div class="global-list">${levels.map(([label, pct]) => `
-    <button class="global-btn" data-global="${pct}">${label.toUpperCase()}</button>
-  `).join("")}</div>`;
+  return `<div class="dc-pills">
+    <span class="dc-pills-label">All Lights</span>
+    ${levels.map(([label, pct]) => `<button class="dc-pill" data-global="${pct}">${label}</button>`).join("")}
+  </div>`;
 }
 
 // Simplified 2026-08-05: dropped the sliders/scenes/global mode-switcher
@@ -1863,37 +1927,41 @@ function renderLighting(room) {
 function renderClimate(room) {
   const device = climateLiveCache[room.climateDeviceId];
   if (!device) {
-    return `<div class="light-list"><div class="switch-row"><div class="light-row-name" style="opacity:0.5">Loading…</div></div></div>`;
+    return `<div class="dc-grid"><div class="dc-card"><div class="dc-card-label" style="opacity:0.5">Loading…</div></div></div>`;
   }
   const caps = homeyThermostatCapabilities(device);
+  const activityLabel = caps.activityCap
+    ? (caps.activityCap.values.find(v => v.id === caps.activityCap.value) || {}).title || caps.activityCap.value : "";
   const tempHtml = caps.measureTemp
-    ? `<div class="climate-temp">${caps.measureTemp.value}°</div>` : "";
-  const activityHtml = caps.activityCap
-    ? `<div class="climate-mode-badge">${(caps.activityCap.values.find(v => v.id === caps.activityCap.value) || {}).title || caps.activityCap.value}</div>` : "";
+    ? `<div class="dc-big-num">${caps.measureTemp.value}°</div>` : "";
   const targetsHtml = caps.targets.map(t => `
-    <div class="climate-row-label">${t.title || t.id}</div>
-    <div class="climate-target-row">
-      <button class="stepper" data-climate-target-down="${t.id}">−</button>
-      <div class="climate-target-label" data-climate-target-label="${t.id}">TARGET ${t.value}°</div>
-      <button class="stepper" data-climate-target-up="${t.id}">+</button>
+    <div class="dc-steppers" style="margin-top:14px">
+      <button class="dc-stepper-btn" data-climate-target-down="${t.id}">−</button>
+      <div class="dc-card-sub target" data-climate-target-label="${t.id}" style="flex:1; text-align:center; font-size:12px">${t.title || t.id} · ${t.value}°</div>
+      <button class="dc-stepper-btn" data-climate-target-up="${t.id}">+</button>
     </div>`).join("");
   const modeHtml = caps.modeCap
-    ? `<div class="climate-row-label">Mode</div>
-       <div class="climate-tabs">
+    ? `<div class="climate-tabs" style="justify-content:flex-start; margin-top:16px">
          ${caps.modeCap.values.map(v => `<button class="climate-tab-btn ${v.id === caps.modeCap.value ? "active" : ""}" data-climate-mode="${v.id}">${v.title.toUpperCase()}</button>`).join("")}
        </div>` : "";
   const humidityHtml = caps.measureHumidity
-    ? `<div class="climate-row-label">Humidity</div><div class="climate-mode-badge">${caps.measureHumidity.value}%</div>` : "";
+    ? `<div class="dc-card-sub" style="margin-top:12px">Humidity · ${caps.measureHumidity.value}%</div>` : "";
   // Heating/cooling state class — matched by substring against whatever this
   // device's activity enum actually calls it (title or raw id), since the
   // vocabulary isn't standardized across Homey thermostat vendors (see
   // homeyThermostatCapabilities comment in homey-client.js).
-  const activityText = caps.activityCap
-    ? `${(caps.activityCap.values.find(v => v.id === caps.activityCap.value) || {}).title || ""} ${caps.activityCap.value || ""}`.toLowerCase()
-    : "";
+  const activityText = `${activityLabel || ""} ${caps.activityCap ? caps.activityCap.value || "" : ""}`.toLowerCase();
   const activityStateClass = /heat/.test(activityText) ? "state-heat"
     : /cool/.test(activityText) ? "state-cool" : "";
-  return `<div class="panel climate-face ${activityStateClass}">${tempHtml}${activityHtml}${targetsHtml}${modeHtml}${humidityHtml}</div>`;
+  return `<div class="dc-grid">
+    <div class="dc-card dc-climate-card ${activityStateClass}">
+      <div class="dc-card-label">Climate${activityLabel ? `<div class="dc-card-sub">${activityLabel}</div>` : ""}</div>
+      <div class="dc-card-body">${tempHtml}</div>
+      ${targetsHtml}
+      ${modeHtml}
+      ${humidityHtml}
+    </div>
+  </div>`;
 }
 
 // Homey-only right now (2026-08-07) — no real HA `climate` domain entities
@@ -1948,13 +2016,17 @@ function renderMediaNowPlaying(room) {
   const canSeek = mediaSupports(m, MEDIA_FEATURE.SEEK);
   const canShuffle = mediaSupports(m, MEDIA_FEATURE.SHUFFLE_SET);
   const canRepeat = mediaSupports(m, MEDIA_FEATURE.REPEAT_SET);
-  return `
-    <div class="panel media-panel" data-media-entity="${m.entityId || ""}">
-      <div class="media-name">${m.name}</div>
-      <div class="music-art">${ico("music", "i28")}</div>
-      <div class="music-track-title">${m.track}</div>
-      ${m.artist ? `<div class="media-artist">${m.artist}</div>` : `<div class="media-artist">&nbsp;</div>`}
-      <div class="music-scrub-row">
+  return `<div class="dc-grid">
+    <div class="dc-card dc-media-card" data-media-entity="${m.entityId || ""}">
+      <div class="dc-card-label">${m.name}<div class="dc-card-sub">${m.source.toUpperCase()}</div></div>
+      <div style="display:flex; gap:18px; align-items:center; margin-top:14px">
+        <div class="music-art" style="width:88px; height:88px; margin-bottom:0; flex-shrink:0">${ico("music", "i24")}</div>
+        <div style="flex:1; min-width:0">
+          <div class="music-track-title" style="font-size:16px">${m.track}</div>
+          ${m.artist ? `<div class="media-artist" style="margin-bottom:0">${m.artist}</div>` : ""}
+        </div>
+      </div>
+      <div class="music-scrub-row" style="margin-top:18px">
         <span class="music-time" data-elapsed-label>${fmtTime(m.elapsed)}</span>
         <div class="slider-track ${canSeek ? "" : "scrub-readonly"}" style="flex:1" data-scrub="${canSeek ? "1" : "0"}">
           <div class="slider-fill" style="width:${m.duration ? (m.elapsed / m.duration) * 100 : 0}%"></div>
@@ -1962,22 +2034,22 @@ function renderMediaNowPlaying(room) {
         </div>
         <span class="music-time right">${fmtTime(m.duration)}</span>
       </div>
-      <div class="music-transport">
+      <div class="music-transport" style="justify-content:center">
         ${canShuffle ? `<button class="music-btn-sm ${m.shuffle ? "active" : ""}" data-shuffle>${ico("shuffle", "i18")}</button>` : `<div class="music-btn-sm" style="visibility:hidden">${ico("shuffle", "i18")}</div>`}
         <button class="music-btn-sm" id="prevBtn">${ico("skip-back", "i20")}</button>
         <button class="media-btn-lg" id="playBtn">${ico(m.playing ? "pause" : "play", "i20")}</button>
         <button class="music-btn-sm" id="nextBtn">${ico("skip-forward", "i20")}</button>
         ${canRepeat ? `<button class="music-btn-sm ${m.repeat ? "active" : ""}" data-repeat>${ico("repeat", "i18")}</button>` : `<div class="music-btn-sm" style="visibility:hidden">${ico("repeat", "i18")}</div>`}
       </div>
-      <div class="media-vol-row">
+      <div class="media-vol-row" style="margin-top:4px">
         <div style="color:var(--text-faint)">${ico("volume-1", "i16")}</div>
         <div class="ambient-vpill-track" data-volume style="width:13px; height:40px">
           <div class="ambient-vpill-fill" style="height:${m.volume}%; background:var(--text-dim)"></div>
         </div>
         <div style="color:var(--text-faint)">${ico("volume-2", "i16")}</div>
       </div>
-      <div class="music-source-pill">${m.source.toUpperCase()}</div>
-    </div>`;
+    </div>
+  </div>`;
 }
 
 // Simplified 2026-08-05: dropped the Now Playing/Favorites mode-switcher.
@@ -3092,25 +3164,33 @@ function renderTv(room) {
   const tv = room.tv;
   const remoteEntityId = tvRemoteCache[tv.entityId];
   const dpad = remoteEntityId ? `
-    <div class="light-list" style="margin-top:12px">
+    <div style="margin-top:18px; max-width:200px; margin-left:auto; margin-right:auto">
       <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; justify-items:center">
-        <div></div><button class="stepper" data-remote-cmd="up">${ico("chevron-up", "i18")}</button><div></div>
-        <button class="stepper" data-remote-cmd="left">${ico("chevron-left", "i18")}</button>
-        <button class="stepper" data-remote-cmd="select">${ico("circle", "i16")}</button>
-        <button class="stepper" data-remote-cmd="right">${ico("chevron-right", "i18")}</button>
-        <div></div><button class="stepper" data-remote-cmd="down">${ico("chevron-down", "i18")}</button><div></div>
+        <div></div><button class="dc-stepper-btn" data-remote-cmd="up">${ico("chevron-up", "i18")}</button><div></div>
+        <button class="dc-stepper-btn" data-remote-cmd="left">${ico("chevron-left", "i18")}</button>
+        <button class="dc-stepper-btn" data-remote-cmd="select">${ico("circle", "i16")}</button>
+        <button class="dc-stepper-btn" data-remote-cmd="right">${ico("chevron-right", "i18")}</button>
+        <div></div><button class="dc-stepper-btn" data-remote-cmd="down">${ico("chevron-down", "i18")}</button><div></div>
       </div>
       <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:10px">
-        <button class="climate-tab-btn" data-remote-cmd="menu">MENU</button>
-        <button class="climate-tab-btn" data-remote-cmd="home">HOME</button>
-        <button class="climate-tab-btn" data-remote-cmd="play">PLAY</button>
-        <button class="climate-tab-btn" data-remote-cmd="pause">PAUSE</button>
+        <button class="dc-pill" data-remote-cmd="menu">MENU</button>
+        <button class="dc-pill" data-remote-cmd="home">HOME</button>
+        <button class="dc-pill" data-remote-cmd="play">PLAY</button>
+        <button class="dc-pill" data-remote-cmd="pause">PAUSE</button>
       </div>
     </div>` : "";
-  return `<div class="light-list"><div class="switch-row">
-    <div><div class="light-row-name">${tv.name}</div><div class="light-row-sub">Home Assistant</div></div>
-    <button class="switch-btn ${tv.on ? "on" : ""}" data-tv-toggle>${tv.on ? "ON" : "OFF"}</button>
-  </div></div>${dpad}`;
+  return `<div class="dc-grid">
+    <div class="dc-card ${remoteEntityId ? "dc-media-card" : ""}">
+      <div class="dc-card-label">${tv.name}<div class="dc-card-sub">Home Assistant</div></div>
+      <div class="dc-card-body">
+        <div style="display:flex; align-items:center; justify-content:space-between">
+          <span style="font-size:20px; font-weight:600; ${tv.on ? "" : "color:var(--text-dim)"}">${tv.on ? "On" : "Off"}</span>
+          <button class="dc-toggle ${tv.on ? "on" : ""}" data-tv-toggle></button>
+        </div>
+      </div>
+      ${dpad}
+    </div>
+  </div>`;
 }
 
 // Generic device-registry pairing, not a hardcoded entity id — any TV
@@ -3146,12 +3226,12 @@ async function refreshActionStates(entityIds) {
 }
 
 function renderQuickActionButtons(entityIds) {
-  return `<div class="light-list">${entityIds.map(id => {
+  return `<div class="dc-grid">${entityIds.map(id => {
     const state = actionStateCache[id];
     const label = state ? (state.attributes.friendly_name || id) : id;
-    return `<div class="switch-row">
-      <div class="light-row-name">${label}</div>
-      <button class="switch-btn" data-quick-action="${id}">Run</button>
+    return `<div class="dc-card" style="min-height:auto">
+      <div class="dc-card-label">${label}</div>
+      <button class="dc-pill" data-quick-action="${id}" style="margin-top:16px; width:100%; text-align:center">Run</button>
     </div>`;
   }).join("")}</div>`;
 }
@@ -3176,10 +3256,7 @@ function renderRoomSections(room) {
   const moods = ROOM_MOODS[currentRoom];
   if (window.homeyClient && moods && moods.length) {
     sections += `<div class="section-label-sm" id="section-moods" style="margin-top:32px">${ico("sparkles", "i14")}Moods</div>
-      <div class="light-list">${moods.map(mood => `<div class="switch-row">
-        <div class="light-row-name">${mood.name}</div>
-        <button class="switch-btn" data-mood="${mood.id}">Activate</button>
-      </div>`).join("")}</div>`;
+      <div class="dc-pills" style="margin-top:0">${moods.map(mood => `<button class="dc-pill" data-mood="${mood.id}">${mood.name}</button>`).join("")}</div>`;
   }
   return sections;
 }
