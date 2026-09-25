@@ -3170,8 +3170,9 @@ function renderRoomSections(room) {
   if (room.automationButtons && room.automationButtons.length) {
     sections += `<div class="section-label-sm" id="section-quickactions" style="margin-top:32px">${ico("zap", "i14")}Quick Actions</div>${renderQuickActionButtons(room.automationButtons)}`;
   }
-  // Moods — real Homey moods, per room (Goodnight is whole-home, surfaced
-  // as its own Ambient Mode card instead — see ROOM_MOODS/renderAmbientActions).
+  // Moods — real Homey moods, per room. Goodnight is whole-home, excluded
+  // from ROOM_MOODS — its Ambient Mode card was removed 2026-09-13, no
+  // replacement built, so it is not currently reachable from this app.
   const moods = ROOM_MOODS[currentRoom];
   if (window.homeyClient && moods && moods.length) {
     sections += `<div class="section-label-sm" id="section-moods" style="margin-top:32px">${ico("sparkles", "i14")}Moods</div>
@@ -3703,9 +3704,9 @@ const NEST_THERMOSTAT_DEVICE_ID = "7d030c67-4001-483b-8765-75f7d34efa59";
 
 // All 14 real Homey moods (confirmed live via moods_list, 2026-09-09) —
 // previously only Movie Night/Dinner Guests were wired, the other 12 sat
-// unsurfaced anywhere in the app. Goodnight is whole-home, not room-specific
-// — see the Ambient Mode Goodnight card instead of ROOM_MOODS.
-const MOOD_GOODNIGHT_ID = "3a066c8a-2700-4707-a265-d7fe3e7aaebe";
+// unsurfaced anywhere in the app. Goodnight is whole-home, not room-specific,
+// so it's excluded from ROOM_MOODS (its Ambient Mode card was removed
+// 2026-09-13 — broke the dictated 2-row/16-card grid, no replacement built).
 const ROOM_MOODS = {
   living: [
     { id: "ff9f13b2-7aa4-4cbf-861a-860d2cdc9ab0", name: "Movie Night" },
@@ -5330,20 +5331,6 @@ function renderAmbientActions() {
     </div>
   </div>`;
 
-  // Goodnight: whole-home Homey mood, no per-room home so it gets its own
-  // small card here (2026-09-09) — appended after the dictated layout below
-  // rather than inserted into it, so Mike's specified order is untouched.
-  const goodnightCard = window.homeyClient ? `<div class="ambient-card">
-    <div class="ambient-card-header">
-      ${ico("moon", "ambient-card-icon")}
-    </div>
-    <div class="ambient-card-primary">Goodnight</div>
-    <div class="ambient-card-sub">Whole home</div>
-    <div class="ambient-card-controls">
-      <button class="ambient-stepper-btn" data-ambient-goodnight-btn style="flex:1">Activate</button>
-    </div>
-  </div>` : "";
-
   // Exact layout dictated by Mike 2026-08-06. Row 1 (status): Music,
   // Comfort, Packages, Energy Flow, Water Usage, Home Usage, Water Heater
   // (CO2 swapped for Water Usage per Mike's direction). Row 2 (rooms):
@@ -5352,7 +5339,7 @@ function renderAmbientActions() {
   // per this spec.
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
   el.innerHTML = musicCard + comfortCard + packagesCard + energyCard + waterUsageCard + energyProducedCard
-    + waterHeaterCard + roomCards + securityCard + goodnightCard;
+    + waterHeaterCard + roomCards + securityCard;
   icons(el);
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
@@ -5460,15 +5447,6 @@ function renderAmbientActions() {
       e.stopPropagation();
       if (!window.haClient || !window.haClient.connected) return;
       window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(handleWriteError);
-    });
-  }
-
-  const goodnightBtn = el.querySelector("[data-ambient-goodnight-btn]");
-  if (goodnightBtn) {
-    goodnightBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (!window.homeyClient) return;
-      window.homeyClient.triggerMood(MOOD_GOODNIGHT_ID).catch(handleWriteError);
     });
   }
 
