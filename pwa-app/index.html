@@ -10,33 +10,31 @@
 <title>Foyer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
-  /* Palette matched directly to real Savant app screenshots (savant.com/savant-app,
-     savant.com/power/savant-app) — near-black base, white/gray text, color reserved for
-     data (ring gauge / consumer icons) and green for on/active states, not a single tinted
-     accent used everywhere. See dashboard-design-spec.md for the source screenshots. */
+  /* Palette matched to Brax WallUp's real UI screens (roadmap event video,
+     2026-09-25) — dark near-black ground, muted warm-gray surfaces, restrained
+     off-white accent, color reserved for state (good/warn) rather than a tinted
+     accent used everywhere. See project_ha_wall_kiosk_pwa_ambient memory for the
+     approved Master Bedroom mockup this was matched against. */
   :root {
-    --base: #0A0A0C;
-    --base-raised: #161618;
-    --hairline: #232326;
-    --hairline-soft: #1C1C1E;
-    --text: #F5F5F7;
-    --text-dim: #8E8E93;
-    --text-faint: #545456;
-    --accent: #FFFFFF;
-    --accent-dim: rgba(255, 255, 255, 0.10);
-    --on: #34C759;
-    --on-dim: rgba(52, 199, 89, 0.16);
+    --base: #0c0c0e;
+    --base-raised: #18181b;
+    --hairline: #29292d;
+    --hairline-soft: #202023;
+    --text: #edecea;
+    --text-dim: #87868c;
+    --text-faint: #4f4e54;
+    --accent: #e7e5e0;
+    --accent-dim: rgba(231, 229, 224, 0.10);
+    --on: #7fd99a;
+    --on-dim: rgba(127, 217, 154, 0.16);
     --heat: #FF9F0A;
     --cool: #0A84FF;
-    /* -apple-system/BlinkMacSystemFont render actual San Francisco on Mac/iPad/iPhone —
-       Savant's app is Apple-first (Siri, HomeKit, Apple TV), this is almost certainly
-       the real font. Inter is the fallback everywhere else (closest open cousin). */
-    --font-head: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-    --font-body: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-    --font-mono: "JetBrains Mono", monospace;
+    --font-head: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-body: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
     --rail-w: 84px;
   }
 
@@ -250,7 +248,7 @@
   .media-name { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 16px; }
   .music-art {
     width: 140px; height: 140px; border-radius: 16px; margin-bottom: 18px; color: var(--text-faint);
-    background: linear-gradient(160deg, #232326 0%, #141416 60%, #0A0A0C 100%);
+    background: linear-gradient(160deg, #29292d 0%, #18181b 60%, #0c0c0e 100%);
     display: flex; align-items: center; justify-content: center;
   }
   .music-track-title { font-size: 17px; font-weight: 600; text-align: center; }
@@ -973,7 +971,7 @@ const ROOMS = {
   living: {
     name: "Living Room",
     photoImg: "photos/living.jpg",
-    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "72°F · Clear",
     scenes: ["Evening", "Movie Night", "Reading", "Away"],
     activeScene: "Evening",
@@ -989,7 +987,7 @@ const ROOMS = {
   kitchen: {
     name: "Kitchen",
     photoImg: "photos/kitchen.jpg",
-    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "72°F · Clear",
     scenes: ["Cooking", "Cleanup", "Night Light"],
     activeScene: "Cooking",
@@ -1003,7 +1001,7 @@ const ROOMS = {
   master: {
     name: "Master Bedroom",
     photoImg: "photos/master.jpg",
-    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "72°F · Clear",
     scenes: ["Wind Down", "Reading", "Sleep", "Wake"],
     activeScene: "Wind Down",
@@ -1017,7 +1015,7 @@ const ROOMS = {
   office: {
     name: "Office",
     photoImg: "photos/office.jpg",
-    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "72°F · Clear",
     scenes: ["Focus", "Call", "Evening"],
     activeScene: "Focus",
@@ -1031,7 +1029,7 @@ const ROOMS = {
   utility: {
     name: "Utility Room",
     photoImg: "photos/utility.jpg",
-    photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "72°F · Clear",
     scenes: ["Entry", "Laundry", "Night"],
     activeScene: "Entry",
@@ -1048,7 +1046,7 @@ const ROOMS = {
   // rooms (see defaultRoomShape()) since only lighting is wired here.
   dining: {
     name: "Dining Room",
-    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photoImg: "", photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
@@ -1056,7 +1054,7 @@ const ROOMS = {
   },
   bedroom4: {
     name: "Guest West",
-    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photoImg: "", photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
@@ -1064,7 +1062,7 @@ const ROOMS = {
   },
   bedroom3: {
     name: "Guest East",
-    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photoImg: "", photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
@@ -1072,7 +1070,7 @@ const ROOMS = {
   },
   remote: {
     name: "Remote",
-    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photoImg: "", photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
@@ -1084,7 +1082,7 @@ const ROOMS = {
   // "remote" hosting only Quick Actions with nothing else wired.
   masterbath: {
     name: "Master Bathroom",
-    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photoImg: "", photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
@@ -4480,7 +4478,7 @@ function defaultRoomShape(name) {
   // (and maybe a media player) actually wired.
   return {
     name,
-    photoImg: "", photo: "linear-gradient(160deg, #232326 0%, #141416 55%, #0A0A0C 100%)",
+    photoImg: "", photo: "linear-gradient(160deg, #29292d 0%, #18181b 55%, #0c0c0e 100%)",
     outdoor: "", scenes: [], activeScene: "",
     lighting: [],
     media: { name: "", track: "—", artist: "", source: "", playing: false, volume: 0, elapsed: 0, duration: 0, shuffle: false, repeat: false, favorites: [] },
