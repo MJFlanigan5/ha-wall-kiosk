@@ -1138,7 +1138,14 @@ const ROOMS = {
   },
 };
 
-const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "masterbath", "dining", "bedroom4", "bedroom3", "remote"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js); masterbath added 2026-09-09 for its 4 moods
+// "remote" removed from this list 2026-09-25 — it duplicated the rail's
+// own dedicated Remote entry (added further down in renderRail, alongside
+// Energy/Security/Music/etc.) since renderContent() always short-circuits
+// currentRoom === "remote" to renderRemoteContent() before ever reading
+// ROOMS.remote; that room object was unreachable dead data, not a second
+// destination. Left ROOMS.remote itself in place — masterbath's shape
+// was deliberately modeled on it (see its comment above).
+const ROOM_ORDER = ["living", "kitchen", "utility", "office", "master", "masterbath", "dining", "bedroom4", "bedroom3"]; // expanded 2026-08-06 — every room with real wired lighting (see rooms.config.js); masterbath added 2026-09-09 for its 4 moods
 // Real bug found 2026-08-19: sliders/wheels only tracked drag state in a
 // local closure var, invisible to the render functions. Any background
 // state_changed event for the room (or, for Ambient, any of several gating
@@ -3582,7 +3589,15 @@ function render() { renderRail(); renderContent(); }
 function haStateToLightItem(entityId, state) {
   const attrs = state.attributes || {};
   const brightnessPct = attrs.brightness != null ? Math.round((attrs.brightness / 255) * 100) : 0;
-  const hasColor = (attrs.supported_color_modes || []).some(m => ["rgb", "hs", "xy"].includes(m));
+  // rgbw/rgbww added 2026-09-25 — the Master Bathroom light (WiZ RGBW,
+  // supported_color_modes: ["color_temp","rgbw"]) has real color capability
+  // but reported no color swatch/wheel at all, since this check only knew
+  // about "rgb"/"hs"/"xy". HA's own supported_color_modes vocabulary is
+  // exactly these 5 color-capable modes (the rest — onoff/brightness/
+  // color_temp — aren't full-color); writes still go through hs_color via
+  // haSyncLight regardless of which of these modes the device natively
+  // uses, since HA's light.turn_on service converts automatically.
+  const hasColor = (attrs.supported_color_modes || []).some(m => ["rgb", "hs", "xy", "rgbw", "rgbww"].includes(m));
   let hue, sat;
   if (attrs.hs_color) { hue = Math.round(attrs.hs_color[0]); sat = Math.round(attrs.hs_color[1]); }
   return {

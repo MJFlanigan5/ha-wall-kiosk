@@ -120,4 +120,16 @@ const ROOM_ENTITY_MAP = {
     media_player: "media_player.bedroom_3_speaker",
     airQuality: { pm25: "sensor.bedroom_3_air_quality_pm25", temp: "sensor.bedroom_3_air_quality_temperature", humidity: "sensor.bedroom_3_air_quality_humidity" },
   },
+  // Master Bathroom (added 2026-09-25) — previously had no lighting entry
+  // at all here, so masterbath's lighting array stayed permanently empty
+  // (see index.html's ROOMS.masterbath comment, which only mentioned the
+  // 4 real moods). One real light in this area (confirmed live via
+  // search_entities/get_state, area_id: master_bathroom): a WiZ RGBW
+  // tunable bulb, supported_color_modes ["color_temp","rgbw"], currently
+  // off. No media_player/TV/airQuality candidates in this area.
+  masterbath: {
+    lighting: [
+      "light.wiz_rgbw_tunable_89a260",
+    ],
+  },
 };
