@@ -41,7 +41,8 @@ const ROOM_ENTITY_MAP = {
   kitchen: {
     lighting: [
       "light.kitchen_lifx_ceiling",
-      "light.cob_kitchen_sink_2",
+      // "COB Kitchen Sink" exists only in Homey now (id 1b271f7c-a102-477a-acd3-9608485a531a);
+      // its HA light entity is gone. Re-add here only if it comes back into HA.
     ],
     media_player: "media_player.utility_room",
     tv: "media_player.kitchen_tv_2",
@@ -58,7 +59,7 @@ const ROOM_ENTITY_MAP = {
       "light.entry_smells_diffuser_nightlight",
     ],
     tv: "media_player.utility_room_tv_2",
-    airQuality: { pm25: "sensor.utility_room_air_quality_pm25", temp: "sensor.utility_room_aq_temperature", humidity: "sensor.utility_room_aq_humidity" },
+    airQuality: { pm25: "sensor.utility_room_air_quality_pm25", temp: "sensor.utility_room_air_quality_temperature", humidity: "sensor.utility_room_air_quality_humidity" },
   },
   // Speaker is "Veda" (a real house nickname for this room's Google Home,
   // not a mistake) — not area-tagged in HA's registry the way Kitchen's
@@ -93,7 +94,7 @@ const ROOM_ENTITY_MAP = {
   // (DINING_ROOM_AQ_DEVICE_ID / pollDiningRoomAQ), not through this map.
   dining: {
     lighting: [
-      "light.dining_room_right",
+      "light.dining_room_right_2",
     ],
     media_player: "media_player.dining_room_speaker",
     tv: "media_player.dining_room_tcl_tv",
@@ -114,9 +115,9 @@ const ROOM_ENTITY_MAP = {
   // cleanup as other ceiling-fan light pairs this session — just using
   // one of the two here). No TV device exists in this room.
   bedroom3: {
-    lighting: [
-      "light.rocco_ceiling_1",
-    ],
+    // Rocco Ceiling's HA light entities were MQTT/Homie ghosts and are deleted
+    // (neither HA nor Homey has a real light for this room, verified 2026-10-14).
+    lighting: [],
     media_player: "media_player.bedroom_3_speaker",
     airQuality: { pm25: "sensor.bedroom_3_air_quality_pm25", temp: "sensor.bedroom_3_air_quality_temperature", humidity: "sensor.bedroom_3_air_quality_humidity" },
   },

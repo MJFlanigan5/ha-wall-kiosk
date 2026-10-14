@@ -2781,7 +2781,9 @@ const LIVING_ROOM_MEDIA_FLOWS = [
 const REMOTE_QUICK_ACTIONS = [
   { script: "script.office_focus_mode", name: "Office Focus Mode" },
   { script: "script.heading_out", name: "Heading Out" },
-  { script: "script.utility_room_chore_tap", name: "Utility Room Chore" },
+  { script: "script.dryer_lint_chore_tap", name: "Dryer Lint Chore" },
+  { script: "script.trash_curb_chore_tap", name: "Trash Curb Chore" },
+  { script: "script.feed_plant_chore_tap", name: "Feed Plant Chore" },
 ];
 
 // Living Room Sony Bravia 7 — connected in Homey via the dedicated native
@@ -3956,20 +3958,34 @@ function refreshWaterHeaterFromHA() {
   };
 }
 
-// Per-room presence for Ambient Mode cards (2026-08-06) — real Magic Areas
-// aggregate presence sensors (per-room automation config already confirmed
-// these entity_ids live tonight while fixing the Utility Room automation).
-const PRESENCE_ENTITY_BY_ROOM = {
-  living: "binary_sensor.magic_areas_presence_tracking_living_room_area_state",
-  kitchen: "binary_sensor.magic_areas_presence_tracking_kitchen_area_state",
-  utility: "binary_sensor.magic_areas_presence_tracking_utility_room_area_state",
-  office: "binary_sensor.magic_areas_presence_tracking_office_area_state",
-  master: "binary_sensor.magic_areas_presence_tracking_master_bedroom_area_state",
-  dining: "binary_sensor.magic_areas_presence_tracking_dining_room_area_state",
-  bedroom4: "binary_sensor.magic_areas_presence_tracking_bedroom_4_area_state",
-  bedroom3: "binary_sensor.magic_areas_presence_tracking_bedroom_3_area_state",
+// Per-room presence for Ambient Mode cards — Homey zone activity (Homey owns
+// presence). Magic Areas was removed from HA (2026-10), so the old
+// binary_sensor.magic_areas_presence_tracking_* entities no longer exist.
+// Only rooms whose Homey zone actually has presence/motion sensing are listed
+// (verified 2026-10-14: Living Room, Office and both guest bedrooms have no
+// sensing feeding their zone, so they get no dot rather than a permanently
+// false one). Add a room here once its zone has a sensor.
+const PRESENCE_ZONE_BY_ROOM = {
+  kitchen: "Kitchen",
+  utility: "Utility Room",
+  master: "Master Bedroom",
+  dining: "Dining Room",
 };
 let ambientPresenceStates = {};
+
+async function pollHomeyPresence() {
+  if (!window.homeyClient) return;
+  try {
+    const zones = await window.homeyClient.listZones();
+    for (const [roomId, zoneName] of Object.entries(PRESENCE_ZONE_BY_ROOM)) {
+      const zone = zones.find(z => z.name === zoneName);
+      if (zone) ambientPresenceStates[roomId] = { state: zone.active ? "on" : "off" };
+    }
+    if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+  } catch (e) { /* Homey unreachable — keep last known presence */ }
+}
+setInterval(pollHomeyPresence, 30000);
+setTimeout(pollHomeyPresence, 3000);
 
 // Day/night theme shift (2026-08-06, roadmap item 3) — uses HA's real
 // sun.sun entity (state: above_horizon/below_horizon) rather than a
@@ -4306,9 +4322,6 @@ async function hydrateStatesFromHA(client) {
   for (const entityId of AMBIENT_PACKAGE_ENTITIES) {
     ambientPackageStates[entityId] = stateById.get(entityId) || null;
   }
-  for (const [roomId, entityId] of Object.entries(PRESENCE_ENTITY_BY_ROOM)) {
-    ambientPresenceStates[roomId] = stateById.get(entityId) || null;
-  }
   const sunState = stateById.get(SUN_ENTITY);
   if (sunState) applyNightMode(sunState.state === "below_horizon");
 }
@@ -4422,12 +4435,6 @@ async function initLiveData() {
         if (entityId === WATER_HEATER_FLOW_ENTITY) waterHeaterFlowState = newState;
         refreshWaterHeaterFromHA();
         if (currentRoom === "power" && powerTab === "waterheater") renderPowerContent();
-        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
-        return;
-      }
-      const presenceRoom = Object.keys(PRESENCE_ENTITY_BY_ROOM).find(r => PRESENCE_ENTITY_BY_ROOM[r] === entityId);
-      if (presenceRoom) {
-        ambientPresenceStates[presenceRoom] = newState;
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
@@ -5235,7 +5242,7 @@ function renderAmbientActions() {
     if (!r) return "";
     const pState = ambientPresenceStates[id];
     const isPresent = pState && pState.state === "on";
-    const presenceDot = PRESENCE_ENTITY_BY_ROOM[id]
+    const presenceDot = PRESENCE_ZONE_BY_ROOM[id]
       ? `<span class="ambient-presence-dot ${isPresent ? "is-present" : ""}" title="${isPresent ? "Presence" : "No presence"}"></span>` : "";
     // No light assigned (2026-08-06, Guest West) — still shows on Ambient
     // instead of dropping off the grid entirely; fixture's being replaced,
