@@ -19,5 +19,26 @@ services:
       # completing setup and it reverted to showing the setup form again.
       - foyer-auth:/etc/nginx/auth
 
+  # Foyer MCP server: headless Chromium driving the app through the agent
+  # listener, served as MCP over HTTP on :8092 behind FOYER_MCP_TOKEN. LAN only.
+  foyer-mcp:
+    build: ../foyer-mcp
+    container_name: foyer-mcp
+    restart: unless-stopped
+    depends_on:
+      - ha-wall-kiosk-pwa
+    ports:
+      - "8092:8092"
+    environment:
+      FOYER_URL: http://ha-wall-kiosk-pwa:8082
+      FOYER_TOKEN: ${FOYER_AGENT_TOKEN}
+      FOYER_HA_URL: ws://192.168.2.87:8123/api/websocket
+      FOYER_HA_TOKEN: ${FOYER_HA_TOKEN}
+      FOYER_MCP_TOKEN: ${FOYER_MCP_TOKEN}
+      FOYER_HOMEY_URL: ${FOYER_HOMEY_URL:-}
+      FOYER_HOMEY_TOKEN: ${FOYER_HOMEY_TOKEN:-}
+    shm_size: 256m
+    mem_limit: 900m
+
 volumes:
   foyer-auth:
