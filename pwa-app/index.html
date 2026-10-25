@@ -1179,6 +1179,16 @@ function showErrorToast(message) {
   clearTimeout(errorToastTimer);
   errorToastTimer = setTimeout(() => el.classList.remove("visible"), 3500);
 }
+// Shower Prep used to bail silently when HA was disconnected and gave no sign
+// on success, so a press while the pump was already on looked dead.
+function runShowerPrep() {
+  if (!window.haClient || !window.haClient.connected) { showErrorToast("Not connected — hot water not started"); return; }
+  const alreadyOn = waterHeaterRecircState && waterHeaterRecircState.state === "on";
+  window.haClient.callService("script", "turn_on", "script.shower_prep_now")
+    .then(() => showErrorToast(alreadyOn ? "Recirculation pump already running" : "Recirculation pump starting"))
+    .catch(handleWriteError);
+}
+
 function handleWriteError(err) {
   console.error(err);
   showErrorToast("Didn't go through — check connection and try again");
@@ -1696,10 +1706,7 @@ function renderPowerContent() {
     }
   });
   const showerPrepTabBtn = document.querySelector("[data-shower-prep]");
-  if (showerPrepTabBtn) showerPrepTabBtn.addEventListener("click", () => {
-    if (!window.haClient || !window.haClient.connected) return;
-    window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(handleWriteError);
-  });
+  if (showerPrepTabBtn) showerPrepTabBtn.addEventListener("click", runShowerPrep);
 
   document.querySelectorAll("[data-energy-mode]").forEach(el => {
     el.addEventListener("click", () => { energyMode = el.dataset.energyMode; renderPowerContent(); });
@@ -5359,7 +5366,7 @@ function renderAmbientActions() {
     <div class="ambient-card-primary" style="margin-top:12px">${POWER.waterHeater.setTemp != null ? POWER.waterHeater.setTemp + "°" : "—"}</div>
     <div class="ambient-card-sub">Water Heater</div>
     <div class="ambient-card-controls">
-      <button class="ambient-stepper-btn" data-ambient-shower-prep style="flex:1">Hot Water</button>
+      <button class="ambient-stepper-btn" data-ambient-shower-prep style="flex:1">${waterHeaterRecircState && waterHeaterRecircState.state === "on" ? "Pump on" : "Hot Water"}</button>
     </div>
   </div>`;
 
@@ -5544,8 +5551,7 @@ function renderAmbientActions() {
   if (showerPrepBtn) {
     showerPrepBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (!window.haClient || !window.haClient.connected) return;
-      window.haClient.callService("script", "turn_on", "script.shower_prep_now").catch(handleWriteError);
+      runShowerPrep();
     });
   }
 
