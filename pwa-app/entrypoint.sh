@@ -55,6 +55,22 @@ fi
 # before, hitting /setup on an env-var-configured deploy returned a bare
 # 502 instead of that message, since nothing was listening on 8081 at all
 # — found via actually curling it, not just reading the code back.
+# Optional header-token listener for automation clients (see
+# nginx-agent.conf). Absent unless FOYER_AGENT_TOKEN is set, and separate
+# from default.conf so setup-server.py's config swap never touches it.
+if [ -n "$FOYER_AGENT_TOKEN" ]; then
+  case "$FOYER_AGENT_TOKEN" in
+    *[!A-Za-z0-9_-]*) echo "ERROR: FOYER_AGENT_TOKEN must be URL-safe (A-Z a-z 0-9 _ -)." >&2; exit 1;;
+  esac
+  if [ "${#FOYER_AGENT_TOKEN}" -lt 32 ]; then
+    echo "ERROR: FOYER_AGENT_TOKEN must be at least 32 characters." >&2; exit 1
+  fi
+  sed "s|__TOKEN__|$FOYER_AGENT_TOKEN|" /etc/nginx/templates/nginx-agent.conf > /etc/nginx/conf.d/agent.conf
+  echo "Agent listener enabled on :8082."
+else
+  rm -f /etc/nginx/conf.d/agent.conf
+fi
+
 python3 /setup-server.py &
 
 exec "$@"

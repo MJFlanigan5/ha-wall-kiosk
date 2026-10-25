@@ -5,9 +5,12 @@ services:
     restart: unless-stopped
     ports:
       - "8090:80"
+      # Header-token listener for automation (foyer-mcp-server). LAN only.
+      - "8091:8082"
     environment:
       BASIC_AUTH_USER: ${BASIC_AUTH_USER}
       BASIC_AUTH_PASS: ${BASIC_AUTH_PASS}
+      FOYER_AGENT_TOKEN: ${FOYER_AGENT_TOKEN:-}
     volumes:
       # Without this, the login only ever lived in the container's own
       # writable layer — every redeploy (docker compose up --build,
