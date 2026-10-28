@@ -19,3 +19,6 @@ are returned but not sent. Pass `send=True` to fire them.
 Secrets live in Infisical (`FOYER_AGENT_TOKEN`, `HA_LONG_LIVED_TOKEN`).
 HA-only: Homey-backed features (thermostat, moods) are not seeded.
 To share it, run this server beside the app on the Foyer LXC; it only needs the three env vars.
+
+## Known offline devices (do not flag)
+Apollo MSR-2 (`apollo-msr-2-2b99c4`, 192.168.3.220, ~77 `apollo_msr_*` entities) is deliberately offline until it goes back into the master closet, sometime in 2027. Its "Can't connect to ESPHome API" warnings and unavailable entities are expected. Don't report or "fix" them; the entities are kept so history and dashboards survive the return.
