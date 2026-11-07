@@ -17,16 +17,17 @@
 // original 3 (many devices in this house have a dead/unavailable twin).
 
 const ROOM_ENTITY_MAP = {
-  // No media_player here — the only speaker in this area is the Home
-  // Assistant Voice PE, confirmed defective this session (zero streamed
-  // output audio, refund requested). TV is the real Apple TV
-  // (media_player.living_room_2, area_id: living_room, confirmed live).
+  // media_player is the Harman Kardon Aura over AirPlay via Music Assistant
+  // (added 2026-11-07; it plays the arrival jazz). The Home Assistant Voice
+  // PE here was confirmed defective, so it is not used. TV is the real
+  // Apple TV (media_player.living_room_2, area_id: living_room).
   living: {
     lighting: [
       "light.living_room_couch",
       "light.spot",
       "light.floor",
     ],
+    media_player: "media_player.hk_aura_wf",
     tv: "media_player.living_room_2",
     airQuality: { pm25: "sensor.h5106_3136_pm25", temp: "sensor.h5106_3136_temperature", humidity: "sensor.h5106_3136_humidity" },
   },
