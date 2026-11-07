@@ -128,10 +128,13 @@ const ROOM_ENTITY_MAP = {
   // 4 real moods). One real light in this area (confirmed live via
   // search_entities/get_state, area_id: master_bathroom): a WiZ RGBW
   // tunable bulb, supported_color_modes ["color_temp","rgbw"], currently
-  // off. No media_player/TV/airQuality candidates in this area.
+  // off. media_player added 2026-11-07: the Music Assistant entity for the
+  // Master Bathroom Sonos, which is what script.weekday_shower_flow moves the
+  // queue to. No TV/airQuality candidates in this area.
   masterbath: {
     lighting: [
       "light.wiz_rgbw_tunable_89a260",
     ],
+    media_player: "media_player.master_bathroom_ma",
   },
 };
