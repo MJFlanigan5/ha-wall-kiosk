@@ -207,6 +207,18 @@ class HAClient {
     });
   }
 
+  // Raw state history since startTime (used by Security's "Today" tile).
+  async getHistory(entityIds, startTime) {
+    return this._send({
+      type: "history/history_during_period",
+      start_time: startTime,
+      entity_ids: entityIds,
+      minimal_response: true,
+      no_attributes: true,
+      significant_changes_only: false,
+    });
+  }
+
   async getDeviceRegistry() {
     return this._send({ type: "config/device_registry/list" });
   }

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Foyer Pages Redesign</title>
+<style>
+:root{
+  --bg:#0c0d10; --tile:#1b1c21; --ring:#2a2c33; --text:#e9e7e2; --mute:#8b8d94; --dim:#5d6068;
+  --accent:#d9a066; --blue:#03a9f4; --green:#5fd38a; --red:#ef6b6b; --amber:#ffb340;
+  --ease:cubic-bezier(0.2,0.7,0.2,1); --ease-ui:cubic-bezier(0.2,0,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:34px;letter-spacing:-.8px;margin:0 0 4px}
+h2{font-size:22px;margin:60px 0 6px;letter-spacing:-.3px}
+p,li{color:#c9c8c3;max-width:840px}
+.sub{color:var(--mute)}
+ul.notes{margin:8px 0 0;padding-left:20px}
+ul.notes li{margin:3px 0}
+.k{color:var(--accent);font-weight:600}
+.cut{color:var(--red);font-weight:600}
+button.replay{background:var(--tile);color:var(--text);border:1px solid var(--ring);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer;margin:10px 0}
+
+/* screen */
+.screen{position:relative;width:100%;max-width:1120px;aspect-ratio:16/10;border-radius:18px;overflow:hidden;border:1px solid var(--ring);background:#0e0f12;margin-top:6px}
+.lbl{position:absolute;top:10px;right:14px;font-size:10px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;z-index:5}
+.bg{position:absolute;inset:-4%;background:
+  radial-gradient(120% 90% at 85% 0%,var(--t1,rgba(217,160,102,.18)),transparent 55%),
+  radial-gradient(90% 80% at 0% 100%,var(--t2,rgba(3,169,244,.09)),transparent 60%),#0e0f12;
+  animation:kb 28s ease-in-out infinite alternate}
+@keyframes kb{to{transform:scale(1.045)}}
+.rail{position:absolute;left:0;top:0;bottom:0;width:7%;display:flex;flex-direction:column;align-items:center;gap:12px;padding-top:4%;z-index:2}
+.rail i{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10)}
+.rail i.on{background:rgba(217,160,102,.35);border-color:rgba(217,160,102,.6);box-shadow:0 0 12px rgba(217,160,102,.35)}
+.body{position:absolute;left:8%;right:4%;top:6%;bottom:4%;z-index:2}
+.head{display:flex;justify-content:space-between;align-items:flex-end}
+.title{font:700 50px/1 -apple-system,"Manrope",sans-serif;letter-spacing:-2px}
+.meta{font:10px ui-monospace,monospace;color:var(--mute);letter-spacing:1.5px;text-align:right;text-transform:uppercase}
+.meta b{display:block;font:600 32px/1 "IBM Plex Mono",ui-monospace,monospace;color:#cfcac2;letter-spacing:1px;margin-bottom:4px;text-transform:none}
+.chips{display:flex;gap:7px;margin:12px 0 14px;flex-wrap:wrap}
+.chip{font-size:11px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#dcd9d2}
+.chip.on{background:rgba(217,160,102,.25);border-color:rgba(217,160,102,.5)}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;align-content:start}
+.sect{grid-column:1/-1;font:10px ui-monospace,monospace;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-top:2px}
+.g{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 11px;font-size:10px;color:var(--mute);position:relative;overflow:hidden;min-height:70px;backdrop-filter:blur(16px) saturate(1.2)}
+.g b{display:block;color:var(--text);font-size:15px;margin:5px 0 1px;font-weight:700}
+.g b.big{font-size:26px;letter-spacing:-.5px}
+.g.on{background:rgba(217,160,102,.20);border-color:rgba(217,160,102,.45)}
+.g.ok{background:rgba(95,211,138,.12);border-color:rgba(95,211,138,.35)}
+.g.warn{background:rgba(255,179,64,.12);border-color:rgba(255,179,64,.35)}
+.g.bad{background:rgba(239,107,107,.12);border-color:rgba(239,107,107,.35)}
+.g .ic{width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.12)}
+.g.on .ic{background:var(--accent);box-shadow:0 0 12px rgba(217,160,102,.7)}
+.g .bar{position:absolute;right:8px;top:10px;bottom:10px;width:5px;border-radius:3px;background:rgba(255,255,255,.08)}
+.g .bar span{position:absolute;bottom:0;left:0;right:0;border-radius:3px;background:var(--accent)}
+.g .pill{display:inline-block;margin-top:7px;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:var(--text);font-size:10px;cursor:pointer}
+.g .pill.on{background:rgba(217,160,102,.28);border-color:rgba(217,160,102,.55)}
+.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s6{grid-column:1/-1}.r2{grid-row:span 2}.r3{grid-row:span 3}
+.mono{font-family:ui-monospace,monospace}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
+
+/* motion: rise only on replay */
+.screen.play .grid>*{opacity:0;transform:translateY(10px);animation:rise .5s var(--ease) forwards}
+.screen.play .grid>*:nth-child(2){animation-delay:.05s}.screen.play .grid>*:nth-child(3){animation-delay:.1s}
+.screen.play .grid>*:nth-child(4){animation-delay:.15s}.screen.play .grid>*:nth-child(5){animation-delay:.2s}
+.screen.play .grid>*:nth-child(n+6){animation-delay:.25s}
+@keyframes rise{to{opacity:1;transform:none}}
+.shimmer{animation:shim 1.6s ease-in-out infinite alternate}
+@keyframes shim{from{opacity:.45}to{opacity:1}}
+.wave{display:flex;gap:2px;align-items:flex-end;height:14px;margin-top:6px}
+.wave i{width:3px;background:var(--accent);border-radius:2px;animation:eq 1s var(--ease-ui) infinite alternate}
+.wave i:nth-child(2){animation-delay:.2s}.wave i:nth-child(3){animation-delay:.45s}.wave i:nth-child(4){animation-delay:.1s}
+@keyframes eq{from{height:20%}to{height:100%}}
+.ring{width:38px;height:38px}
+.ring circle{fill:none;stroke-width:5}.ring .tr{stroke:rgba(255,255,255,.1)}
+.ring .v{stroke-linecap:round;stroke-dasharray:113;stroke-dashoffset:113;animation:draw 1.2s var(--ease) .3s forwards}
+@keyframes draw{to{stroke-dashoffset:var(--off)}}
+.bars{display:flex;gap:6px;align-items:flex-end;height:70px;margin-top:8px}
+.bars div{flex:1;display:flex;flex-direction:column-reverse;gap:1px;height:100%}
+.bars span{display:block;border-radius:2px;transform-origin:bottom;animation:growY .8s var(--ease) both}
+@keyframes growY{from{transform:scaleY(0)}}
+.days{display:flex;gap:6px;font:9px ui-monospace,monospace;color:var(--dim);margin-top:4px}.days span{flex:1;text-align:center}
+.spark path{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:300;stroke-dashoffset:300;animation:sp 1.6s var(--ease) .2s forwards}
+@keyframes sp{to{stroke-dashoffset:0}}
+.live{position:absolute;top:10px;right:11px;font:9px ui-monospace,monospace;color:var(--green);letter-spacing:1px}
+.cam{background:linear-gradient(160deg,#2c3340,#14171d 60%,#1d1a16);}
+.cam .scan{position:absolute;inset:0;background:linear-gradient(transparent 0,rgba(255,255,255,.04) 50%,transparent 100%);background-size:100% 8px;opacity:.6}
+.rec{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:5px;animation:shim 1s ease-in-out infinite alternate}
+.seg{display:flex;gap:6px;margin-top:8px}
+.seg span{flex:1;text-align:center;padding:9px 0;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#dcd9d2;font-size:11px}
+.seg span.on{background:rgba(95,211,138,.18);border-color:rgba(95,211,138,.5);color:var(--green)}
+.dpad{position:relative;width:118px;height:118px;margin:6px auto 0;border-radius:50%;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05)}
+.dpad i{position:absolute;width:0;height:0;border:6px solid transparent}
+.dpad .u{top:12px;left:53px;border-bottom-color:#bbb}.dpad .d{bottom:12px;left:53px;border-top-color:#bbb}
+.dpad .l{left:12px;top:53px;border-right-color:#bbb}.dpad .r{right:12px;top:53px;border-left-color:#bbb}
+.dpad b{position:absolute;inset:36px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);margin:0}
+.app{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--text);font-size:12px;min-height:46px}
+.toast{position:absolute;left:50%;bottom:22px;transform:translate(-50%,18px) scale(.96);opacity:0;background:rgba(30,31,36,.92);border:1px solid rgba(255,255,255,.14);color:var(--text);font-size:12px;padding:8px 14px;border-radius:999px;transition:all .35s var(--ease);z-index:9;white-space:nowrap}
+.toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.pop{animation:pop .35s var(--ease-ui)}
+@keyframes pop{45%{transform:scale(1.06)}}
+/* ambient */
+.amb{position:absolute;inset:0;padding:4% 6%;display:flex;flex-direction:column;align-items:center;background:#0b0c0e}
+.amb .clock{font:600 80px/1 "Manrope",-apple-system,sans-serif;color:#cfcac2;letter-spacing:-1px}
+.amb .date{font:10px ui-monospace,monospace;color:var(--mute);letter-spacing:2px;margin:10px 0 18px}
+.agrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;width:100%}
+.at{background:#18191d;border:1px solid #26282e;border-radius:11px;padding:9px;min-height:96px;font-size:9.5px;color:var(--mute);position:relative}
+.at b{display:block;color:var(--text);font-size:14px;margin:6px 0 2px}
+.at .vb{position:absolute;left:9px;bottom:9px;width:8px;height:34px;border-radius:5px;background:rgba(255,255,255,.08)}
+.at .vb span{position:absolute;bottom:0;left:0;right:0;border-radius:5px}
+.mark{position:absolute;right:6px;top:6px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#1a1208;font:700 11px/20px -apple-system,sans-serif;text-align:center;z-index:6;box-shadow:0 0 0 3px rgba(217,160,102,.25)}
+.flow svg{width:100%;height:100%}
+@media (max-width:760px){.title{font-size:28px}.meta b{font-size:20px}.grid{grid-template-columns:repeat(3,1fr)}.s4,.s3{grid-column:span 3}.screen{aspect-ratio:auto;min-height:620px}.agrid{grid-template-columns:repeat(4,1fr)}.amb .clock{font-size:44px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+<h1>Foyer: ambient tweaks and the utility pages</h1>
+<p class="sub">Drawings only, 2026-11-11. Same tile language as the room pages you approved. Every number is a real reading from HA or Foyer taken today, except where a note says otherwise. Nothing in the app changes until you pick.</p>
+
+<h2>The rule: every tap answers</h2>
+<p>You like what the shower button does: you tap it, a toast confirms (&ldquo;Recirculation pump starting&rdquo;), and the button itself changes to &ldquo;Pump on&rdquo;. I'd make that the rule for every button on every page: <span class="k">a toast that says what happened, the tile changes state, and a small pop</span>. If it fails, the toast says so. Try it:</p>
+<div class="screen" style="aspect-ratio:auto;height:170px;max-width:540px">
+  <div class="bg"></div>
+  <div class="body" style="left:4%;top:12%">
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);max-width:480px">
+      <div class="g" id="demoTile"><div class="ic"></div><b>135&deg;</b>Water heater<br><span class="pill" id="demoBtn">Hot water</span></div>
+      <div class="g"><div class="ic"></div><b>Off</b>Porch lights<br><span class="pill" id="demoBtn2">Turn on</span></div>
+    </div>
+  </div>
+  <div class="toast" id="demoToast"></div>
+</div>
+
+<h2>1. Ambient screen: keep the layout, fix five things</h2>
+<p>The layout and the pieces are right, so I wouldn't redesign it. These are the things that look broken or out of step with the new inner pages. The numbers on the drawing match the list.</p>
+<div class="screen" id="ambS">
+  <span class="lbl">Ambient, small changes</span>
+  <div class="amb">
+    <div class="clock">6:24</div>
+    <div class="date">WEDNESDAY, NOVEMBER 11 &middot; PM</div>
+    <div class="agrid">
+      <div class="at" style="grid-column:span 2">Music<b>Paused</b>HK Aura WF</div>
+      <div class="at">Hallway<b>68&deg;</b>cools to 76&deg;</div>
+      <div class="at">Packages<b>2</b>at the door</div>
+      <div class="at flow" style="padding:9px"><span class="mark">5</span>Energy<b>1.41 kW</b>from grid
+        <svg viewBox="0 0 100 30" style="position:absolute;left:9px;right:9px;bottom:8px;width:calc(100% - 18px);height:26px"><path d="M2 26 Q 50 26 98 4" stroke="rgba(239,107,107,.35)" stroke-width="1.5" fill="none"/>
+          <circle r="2.2" fill="#ef6b6b"><animateMotion dur="2.1s" repeatCount="indefinite" path="M2 26 Q 50 26 98 4"/></circle>
+          <circle r="2.2" fill="#ef6b6b"><animateMotion dur="2.1s" begin="-1.05s" repeatCount="indefinite" path="M2 26 Q 50 26 98 4"/></circle></svg>
+      </div>
+      <div class="at">Water today<b>50.6 gal</b></div>
+      <div class="at">Water heater<b>135&deg;</b><span style="display:inline-block;margin-top:6px;padding:3px 9px;border-radius:999px;border:1px solid #33353c;color:var(--text)">Pump on</span></div>
+      <div class="at"><span class="mark">4</span>Living Room<b style="color:var(--accent)">Dim</b>Couch<div class="vb"><span style="height:20%;background:var(--accent)"></span></div></div>
+      <div class="at">Kitchen<b>Off</b>Ceiling<div class="vb"></div></div>
+      <div class="at"><span class="mark">1</span>Dining Room<b>Off</b>Right pendant<div class="vb"></div></div>
+      <div class="at">Office<b style="color:var(--accent)">Dim</b>Floor lamp<div class="vb"><span style="height:18%;background:var(--accent)"></span></div></div>
+      <div class="at"><span class="mark">2</span>Master Bedroom<b style="color:var(--accent)">On</b>Under bed<div class="vb"><span style="height:45%;background:var(--accent)"></span></div></div>
+      <div class="at">Guest East<b>Off</b>Ceiling<div class="vb"></div></div>
+      <div class="at" style="border-color:rgba(95,211,138,.3)"><span class="mark">3</span>Security<b style="color:var(--green)">Disarmed</b>Front door quiet</div>
+    </div>
+  </div>
+</div>
+<ul class="notes">
+  <li><span class="k">1. Real names, not entity ids.</span> Two tiles show <span class="mono">light.dining_room_right</span> and <span class="mono">light.rocco_ceiling_1</span>. They become &ldquo;Right pendant&rdquo; and &ldquo;Ceiling&rdquo;.</li>
+  <li><span class="k">2. Master Bedroom label.</span> It wraps and pushes a stray dot under it. One line, same as the others.</li>
+  <li><span class="k">3. Guest West &ldquo;No light, Fixture pending&rdquo;.</span> A dead tile. Hide it until the fixture is in, which lets Security sit in the row without squeezing.</li>
+  <li><span class="k">4. One &ldquo;on&rdquo; color.</span> Ambient lights glow green, the new inner pages glow amber. I'd use amber for lights everywhere and keep green for &ldquo;safe/OK&rdquo; (Disarmed, all good). Your call.</li>
+  <li><span class="k">5. A little Fluvy life.</span> The energy tile gets the same moving dots as the Energy page, numbers fade when they change, and tiles rise once when the screen wakes. Nothing moves constantly except the energy dots.</li>
+</ul>
+
+<h2>2. Energy</h2>
+<p>Today the page is a 2&times;2 grid of small cards, and two of them (Eco Mode and the Automation tab) are placeholder content copied from the Savant brochure, with no real data behind them. The redesign leads with the live flow, then today, then the week.</p>
+<button class="replay" data-replay="enS">Replay entrance</button>
+<div class="screen" id="enS" style="--t1:rgba(255,179,64,.16)">
+  <span class="lbl">Proposed: Energy</span><div class="bg"></div>
+  <div class="rail"><i></i><i></i><i></i><i></i><i></i><i class="on"></i><i></i><i></i></div>
+  <div class="body">
+    <div class="head"><div class="title">Energy</div><div class="meta"><b>6:24 PM</b>1.41 kW from the grid</div></div>
+    <div class="chips"><span class="chip on">Now</span><span class="chip">Week</span><span class="chip">Water heater</span></div>
+    <div class="grid">
+      <div class="g s4 r2 flow" style="min-height:220px"><span class="live shimmer">&bull; LIVE</span>Power flow
+        <svg viewBox="0 0 400 190" preserveAspectRatio="xMidYMid meet" style="position:absolute;left:10px;top:24px;width:calc(100% - 20px);height:calc(100% - 30px)">
+          <path id="pGrid" d="M60 150 Q 200 150 200 95" stroke="rgba(239,107,107,.5)" stroke-width="2" fill="none"/>
+          <path d="M60 40 Q 200 40 200 95" stroke="rgba(255,255,255,.1)" stroke-width="2" fill="none" stroke-dasharray="3 6"/>
+          <path d="M200 95 L 340 95" stroke="rgba(255,255,255,.1)" stroke-width="2" fill="none" stroke-dasharray="3 6"/>
+          <circle r="3.5" fill="#ef6b6b"><animateMotion dur="2.1s" repeatCount="indefinite" path="M60 150 Q 200 150 200 95"/></circle>
+          <circle r="3.5" fill="#ef6b6b"><animateMotion dur="2.1s" begin="-.7s" repeatCount="indefinite" path="M60 150 Q 200 150 200 95"/></circle>
+          <circle r="3.5" fill="#ef6b6b"><animateMotion dur="2.1s" begin="-1.4s" repeatCount="indefinite" path="M60 150 Q 200 150 200 95"/></circle>
+          <circle cx="200" cy="95" r="24" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.18)"/>
+          <circle cx="200" cy="95" r="24" fill="none" stroke="rgba(217,160,102,.6)"><animate attributeName="r" values="24;36" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".9;0" dur="2.4s" repeatCount="indefinite"/></circle>
+          <text x="200" y="100" text-anchor="middle" fill="#e9e7e2" font-size="13" font-weight="700">1.41</text>
+          <text x="200" y="138" text-anchor="middle" fill="#8b8d94" font-size="10">House kW</text>
+          <text x="60" y="34" text-anchor="middle" fill="#5d6068" font-size="11">Solar 0.0</text>
+          <text x="60" y="170" text-anchor="middle" fill="#ef6b6b" font-size="11" font-weight="700">Grid 1.41</text>
+          <text x="345" y="88" text-anchor="middle" fill="#5d6068" font-size="11">Battery</text>
+          <text x="345" y="104" text-anchor="middle" fill="#8b8d94" font-size="11">20% idle</text>
+        </svg>
+      </div>
+      <div class="g s2"><div class="ic"></div><b class="big">26.9</b>kWh used today
+        <svg class="spark" viewBox="0 0 100 20" style="position:absolute;right:10px;bottom:10px;width:46%;height:22px"><path d="M0 16 L12 15 L24 12 L36 13 L48 8 L60 10 L72 6 L84 9 L100 4"/></svg></div>
+      <div class="g"><svg class="ring" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" class="tr"/><circle cx="22" cy="22" r="18" class="v" transform="rotate(-90 22 22)" style="stroke:var(--green);--off:90"/></svg><b>20%</b>Battery, idle</div>
+      <div class="g"><div class="ic"></div><b>50.6</b>gal water today</div>
+      <div class="g s4"><span class="sect" style="display:block">Last 7 days</span>
+        <div class="bars" id="bars"></div><div class="days"><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span></div>
+      </div>
+      <div class="g s2 on" id="whTile"><div class="ic"></div><b class="big">135&deg;</b>Water heater, recirculation off<br><span class="pill on" id="whBtn">Hot water</span></div>
+    </div>
+  </div>
+  <div class="toast" id="whToast"></div>
+</div>
+<ul class="notes">
+  <li><span class="k">Flow hero:</span> dots run along whichever legs are live, faster with more kW (already built and working in the preview). Idle legs are a faint dashed line. The house node breathes while power flows.</li>
+  <li><span class="k">Today strip:</span> kWh with a sparkline that draws in, the battery ring, gallons of water.</li>
+  <li><span class="k">Week:</span> stacked bars that grow in, from HA's daily statistics (the bar heights here are placeholders; the real ones come from the existing History tab data).</li>
+  <li><span class="k">Water heater</span> moves onto the main page with the same Hot water button and toast as ambient. Tap it in the drawing.</li>
+  <li><span class="cut">Remove:</span> Eco Mode / Storm Watch / Power Outage card, and the Automation tab (&ldquo;3/12 Loads Enabled&rdquo; etc.). Both are brochure placeholders with no entities behind them.</li>
+</ul>
+
+<h2>3. Security</h2>
+<p>Today: three round arm buttons floating in the middle, a camera icon tab, and one wide &ldquo;Turn On Porch Lights&rdquo; bar. The camera is hidden behind a tab even though it's the thing you most want to see.</p>
+<button class="replay" data-replay="seS">Replay entrance</button>
+<div class="screen" id="seS" style="--t1:rgba(95,211,138,.12);--t2:rgba(3,169,244,.08)">
+  <span class="lbl">Proposed: Security</span><div class="bg"></div>
+  <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i><i></i></div>
+  <div class="body">
+    <div class="head"><div class="title">Security</div><div class="meta"><b>6:24 PM</b>Disarmed &middot; ready to arm</div></div>
+    <div class="grid" style="margin-top:16px">
+      <div class="g s4 r3 cam" style="min-height:300px"><div class="scan"></div><span style="position:absolute;left:12px;top:10px;color:#dcd9d2"><span class="rec"></span>Front door &middot; live</span>
+        <span style="position:absolute;left:12px;bottom:10px" class="mono">Tap for full screen</span></div>
+      <div class="g s2 ok"><span class="dot" style="background:var(--green)"></span>Alarm<b class="big" style="color:var(--green)">Disarmed</b>
+        <div class="seg"><span>Stay</span><span class="on">Off</span><span>Away</span></div></div>
+      <div class="g"><div class="ic"></div><b class="big">2</b>Packages at the door</div>
+      <div class="g"><div class="ic"></div><b>Off</b>Porch lights<br><span class="pill">Turn on</span></div>
+      <div class="g s2"><span class="sect" style="display:block">Today</span>
+        <div style="margin-top:6px;line-height:1.7"><span class="mono">5:52 PM</span> &nbsp;Person at front door<br><span class="mono">2:10 PM</span> &nbsp;Package delivered<br><span class="mono">8:31 AM</span> &nbsp;Disarmed</div></div>
+    </div>
+  </div>
+</div>
+<ul class="notes">
+  <li><span class="k">Camera is the hero</span>, live with a soft pulse on the red dot. Tap for full screen.</li>
+  <li><span class="k">Arm state</span> becomes one tile with a Stay / Off / Away switch that slides, plus the toast (&ldquo;Armed Away, 60s to leave&rdquo;).</li>
+  <li><span class="k">Packages and porch lights</span> become regular tiles.</li>
+  <li><span class="k">Today:</span> a short event list. <em>Unverified:</em> the times in the drawing are illustrative. I'd have to confirm Protect gives us person and package events in HA before building this tile; if not, it drops.</li>
+</ul>
+
+<h2>4. Music</h2>
+<p>Today: a list of 19 rooms, each &ldquo;Not playing&rdquo;, including the crawl space and carport. It reads like a settings list, not a music page.</p>
+<button class="replay" data-replay="muS">Replay entrance</button>
+<div class="screen" id="muS">
+  <span class="lbl">Proposed: Music</span><div class="bg"></div>
+  <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i></div>
+  <div class="body">
+    <div class="head"><div class="title">Music</div><div class="meta"><b>6:24 PM</b>1 room playing</div></div>
+    <div class="chips"><span class="chip">Play everywhere</span><span class="chip">Linn Jazz</span><span class="chip">Radio Swiss Jazz</span><span class="chip">Stop all</span></div>
+    <div class="grid">
+      <div class="g s3 r2 on" style="min-height:160px"><div style="display:flex;gap:12px"><div style="width:84px;height:84px;border-radius:10px;background:linear-gradient(135deg,#6b4b2e,#2b3a4d)"></div>
+        <div><b class="big" style="font-size:20px">Midnight Moon</b>vbnd &middot; Living Room, HK Aura<div class="wave"><i></i><i></i><i></i><i></i></div></div></div>
+        <div style="display:flex;gap:7px;margin-top:14px"><span class="pill">&#9198;</span><span class="pill on">&#10074;&#10074;</span><span class="pill">&#9197;</span><span class="pill">Vol 50</span><span class="pill">Group rooms</span></div>
+        <div class="bar"><span style="height:50%"></span></div></div>
+      <div class="g"><div class="ic"></div><b>Idle</b>Kitchen<div class="bar"><span style="height:0%"></span></div></div>
+      <div class="g"><div class="ic"></div><b>Idle</b>Office<div class="bar"><span style="height:25%;background:#666"></span></div></div>
+      <div class="g"><div class="ic"></div><b>Idle</b>Master Bedroom<div class="bar"><span style="height:20%;background:#666"></span></div></div>
+      <div class="g"><div class="ic"></div><b>Idle</b>Master Bath<div class="bar"><span style="height:45%;background:#666"></span></div></div>
+      <div class="g"><div class="ic"></div><b>Idle</b>Dining Room<div class="bar"><span style="height:80%;background:#666"></span></div></div>
+      <div class="g"><div class="ic"></div><b>Idle</b>Utility<div class="bar"><span style="height:0%"></span></div></div>
+    </div>
+  </div>
+</div>
+<ul class="notes">
+  <li><span class="k">Now playing is the hero:</span> art, track, the room it's in, transport, and a vertical volume edge like the lights.</li>
+  <li><span class="k">Speaker tiles</span> only for rooms that actually have a speaker; tap to play there or join the group. Rooms with no player (crawl space, carport, server rack&hellip;) drop off.</li>
+  <li><span class="k">Station pills</span> on top: your two jazz stations, Play everywhere, Stop all. Each one answers with a toast.</li>
+</ul>
+
+<h2>5. Sensors</h2>
+<p>Today: a list of areas with entity counts (&ldquo;Server Rack (311)&rdquo;, &ldquo;Other (1265)&rdquo;). The counts tell you nothing about the house. Proposed: one tile per room with the readings that matter, and the full list one tap deeper.</p>
+<button class="replay" data-replay="snS">Replay entrance</button>
+<div class="screen" id="snS" style="--t1:rgba(3,169,244,.12)">
+  <span class="lbl">Proposed: Sensors</span><div class="bg"></div>
+  <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i></div>
+  <div class="body">
+    <div class="head"><div class="title">Sensors</div><div class="meta"><b>6:24 PM</b>Outside 60% humidity</div></div>
+    <div class="chips"><span class="chip on">Rooms</span><span class="chip">Water and leaks</span><span class="chip">All sensors</span></div>
+    <div class="grid" id="sensGrid"></div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Real readings from this afternoon. The humidity ring fills in; amber above 60%, as in Master Bedroom and Guest Bath East.</li>
+  <li><span class="k">Water and leaks</span> tab: Flo shutoff, crawl space, water today.</li>
+  <li><span class="k">All sensors</span> keeps today's area list for when you need to dig.</li>
+  <li>The kitchen sensor (Apollo MTR-1) reads 60&deg; and the hallway one 55&deg;, well below the rooms around them. Worth checking whether that's real or a sensor offset before it goes on a tile.</li>
+</ul>
+
+<h2>6. Health</h2>
+<p>Today: two long lists, error text in small mono, nothing that tells you how worried to be. Proposed: score first, then what's wrong, worst first, each with one action.</p>
+<button class="replay" data-replay="heS">Replay entrance</button>
+<div class="screen" id="heS" style="--t1:rgba(255,179,64,.12)">
+  <span class="lbl">Proposed: Health</span><div class="bg"></div>
+  <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i></div>
+  <div class="body">
+    <div class="head"><div class="title">Health</div><div class="meta"><b>6:24 PM</b>Checked 2 min ago</div></div>
+    <div class="grid" style="margin-top:16px">
+      <div class="g s2 r2 warn" style="min-height:150px"><svg viewBox="0 0 44 44" style="width:84px;height:84px"><circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="4"/><circle class="v" cx="22" cy="22" r="18" fill="none" stroke="#ffb340" stroke-width="4" stroke-linecap="round" stroke-dasharray="113" transform="rotate(-90 22 22)" style="stroke-dashoffset:113;--off:40;animation:draw 1.3s var(--ease) .3s forwards"/></svg>
+        <b class="big">65%</b>System health &middot; 8 things need a look</div>
+      <div class="g s2"><span class="dot" style="background:var(--amber)"></span>Homey<b>5 apps unavailable</b>Xbox Live, Xbox Series X, Claude Usage, TrueNAS, Washing Machine<br><span class="pill">Restart apps</span></div>
+      <div class="g s2"><span class="dot" style="background:var(--amber)"></span>HA<b>3 new errors</b>Spotify timeout, iPhone notify failed, printbuddy sensor<br><span class="pill">Open log</span></div>
+      <div class="g s4"><span class="sect" style="display:block">Good</span><div style="margin-top:6px;line-height:1.8">
+        <span class="dot" style="background:var(--green)"></span>HA up &nbsp; <span class="dot" style="background:var(--green)"></span>Homey up &nbsp; <span class="dot" style="background:var(--green)"></span>TrueNAS, 21 apps &nbsp; <span class="dot" style="background:var(--green)"></span>MQTT bridge &nbsp; <span class="dot" style="background:var(--green)"></span>Better Stack heartbeats</div></div>
+    </div>
+  </div>
+</div>
+<ul class="notes">
+  <li><span class="k">Score ring</span> draws in, colored by band: green 85+, amber 60&ndash;84, red below.</li>
+  <li><span class="k">Problem tiles</span> group by system with one plain-English line and one action button. The action buttons follow the toast rule, and anything that restarts something asks first.</li>
+  <li><span class="k">Good row</span> so you can see what's fine at a glance. <em>Unverified:</em> which of these Foyer can already check is something I'd confirm before building; the ones it can't, drop.</li>
+</ul>
+
+<h2>7. Remote</h2>
+<p>Today: a long list of rows (Power, Mute, Volume, HDMI 1&ndash;4, ten apps each with an &ldquo;Open&rdquo; button), then Quick Actions like &ldquo;Dryer Lint Chore&rdquo; that have nothing to do with the TV.</p>
+<button class="replay" data-replay="reS">Replay entrance</button>
+<div class="screen" id="reS" style="--t2:rgba(120,110,230,.12)">
+  <span class="lbl">Proposed: Remote</span><div class="bg"></div>
+  <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i></div>
+  <div class="body">
+    <div class="head"><div class="title">Remote</div><div class="meta"><b>6:24 PM</b>Living Room TV</div></div>
+    <div class="chips"><span class="chip on">Living Room</span><span class="chip">Master</span><span class="chip">HDMI 1</span><span class="chip">HDMI 2</span><span class="chip">HDMI 3</span><span class="chip">HDMI 4</span><span class="chip">TV speaker</span><span class="chip on">Audio system</span></div>
+    <div class="grid">
+      <div class="g s2 r3" style="min-height:240px"><div class="dpad"><i class="u"></i><i class="d"></i><i class="l"></i><i class="r"></i><b></b></div>
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:12px"><span class="pill">Back</span><span class="pill">Home</span><span class="pill">&#9199;</span></div>
+        <div class="bar" style="right:10px"><span style="height:35%"></span></div></div>
+      <div class="g"><div class="ic"></div><b>Off</b>Power</div>
+      <div class="g"><div class="ic"></div><b>Unmuted</b>Mute</div>
+      <div class="g"><div class="ic"></div><b>Off</b>Screen off</div>
+      <div class="g"><div class="ic"></div><b>&mdash;</b>Volume, TV off</div>
+      <div class="g app">Plex</div><div class="g app">Netflix</div><div class="g app">Disney+</div><div class="g app">HBO Max</div>
+      <div class="g app">Prime Video</div><div class="g app">Hulu</div><div class="g app">YouTube</div><div class="g app">Apple TV</div>
+    </div>
+  </div>
+</div>
+<ul class="notes">
+  <li><span class="k">A real remote:</span> D-pad with Back/Home/Play, the volume edge, and Power / Mute / Screen off as tiles.</li>
+  <li><span class="k">Inputs and audio output</span> become pill chips along the top; the TV picker sits first so the same page drives other TVs later.</li>
+  <li><span class="k">Apps</span> become a tile grid (tap launches, toast confirms). HDHomeRun and Spotify go in an overflow &ldquo;More&rdquo; tile.</li>
+  <li><span class="cut">Move out:</span> Quick Actions (Office Focus Mode, Heading Out, chores). They belong on Settings or the ambient screen, not the TV remote.</li>
+</ul>
+
+<h2>What I need from you</h2>
+<ul class="notes">
+  <li>Ambient: all five tweaks, or a subset? And amber for lights everywhere, yes or no?</li>
+  <li>OK to remove the placeholder Energy content (Eco/Storm/Outage card, Automation tab)?</li>
+  <li>Which pages to build first. My suggestion: Energy and Remote (biggest gap), then Music, Security, Sensors, Health.</li>
+</ul>
+</main>
+<script>
+document.querySelectorAll('[data-replay]').forEach(b=>b.addEventListener('click',()=>{const s=document.getElementById(b.dataset.replay);s.classList.remove('play');void s.offsetWidth;s.classList.add('play');}));
+document.querySelectorAll('.screen').forEach(s=>s.classList.add('play'));
+// week bars (placeholder heights)
+const wk=[[2,18,0],[1,22,0],[3,16,1],[0,25,0],[2,20,0],[1,24,0],[0,27,0]];
+document.getElementById('bars').innerHTML=wk.map((d,i)=>`<div>${[['#ef6b6b',d[1]],['#ffd60a',d[0]],['#5fd38a',d[2]]].map(([c,v])=>`<span style="height:${v*2.2}px;background:${c};animation-delay:${.3+i*.05}s"></span>`).join('')}</div>`).join('');
+// sensors (real readings, 2026-11-11 afternoon)
+const S=[['Living Room','72°',59,'occupied'],['Office','78°',43,''],['Master Bedroom','67°',63,''],['Dining Room','68°',57,''],['Utility','70°',55,'fan 70°'],['Guest East','69°',58,''],['Guest West','70°',56,''],['Guest Bath East','74°',64,''],['Kitchen','60°?',null,'check sensor'],['Hallway','55°?',null,'check sensor'],['Crawl Space','80°',null,'Flo water temp'],['Outside','—',60,'humidity']];
+document.getElementById('sensGrid').innerHTML=S.map(([n,t,h,x])=>`<div class="g">${h!=null?`<svg class="ring" viewBox="0 0 44 44" style="position:absolute;right:9px;top:9px;width:30px;height:30px"><circle cx="22" cy="22" r="18" class="tr"/><circle cx="22" cy="22" r="18" class="v" transform="rotate(-90 22 22)" style="stroke:${h>60?'#ffb340':'#03a9f4'};--off:${113-113*h/100}"/></svg>`:''}<b class="big" style="font-size:22px">${t}</b>${n}${h!=null?` &middot; ${h}%`:''}${x?`<br><span style="color:var(--dim)">${x}</span>`:''}</div>`).join('');
+// every tap answers
+function answer(btn,tile,toast,msgOn,msgOff,onLabel,offLabel){let on=false;btn.addEventListener('click',()=>{on=!on;btn.textContent=on?onLabel:offLabel;btn.classList.toggle('on',on);tile.classList.toggle('on',on);tile.classList.remove('pop');void tile.offsetWidth;tile.classList.add('pop');toast.textContent=on?msgOn:msgOff;toast.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>toast.classList.remove('show'),2200);});}
+answer(document.getElementById('demoBtn'),document.getElementById('demoTile'),document.getElementById('demoToast'),'Recirculation pump starting','Recirculation pump already running','Pump on','Hot water');
+answer(document.getElementById('demoBtn2'),document.getElementById('demoBtn2').parentElement,document.getElementById('demoToast'),'Porch lights on','Porch lights off','Turn off','Turn on');
+answer(document.getElementById('whBtn'),document.getElementById('whTile'),document.getElementById('whToast'),'Recirculation pump starting','Recirculation pump already running','Pump on','Hot water');
+</script>
+</body>
+</html>
