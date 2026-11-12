@@ -93,6 +93,13 @@ const ROOM_ENTITY_MAP = {
   // (qingping_cgs1 integration won't load). Real data is pulled straight from
   // Qingping's Cloud API via a Homey flow and polled directly in index.html
   // (DINING_ROOM_AQ_DEVICE_ID / pollDiningRoomAQ), not through this map.
+  // Hallway (added 2026-11-12): Hallway 1 and 2 (color_temp + hs, confirmed live)
+  // and the Nest thermostat, which Homey drives (same device as the Ambient
+  // Comfort tile), so tapping that tile lands on real controls.
+  hallway: {
+    lighting: ["light.galaxy_bk", "light.galaxy_bk_2"],
+    climateDeviceId: "7d030c67-4001-483b-8765-75f7d34efa59",
+  },
   dining: {
     lighting: [
       "light.dining_room_right_2",
