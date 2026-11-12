@@ -4946,6 +4946,7 @@ async function initLiveData() {
       if (entityId === SECURITY_PORCH_ENTITY) {
         extraStateCache[entityId] = newState;
         if (currentRoom === "security" && securityCameraFullscreen === null) renderSecurityContent();
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
         return;
       }
       if (SECURITY_EVENT_SOURCES.some(x => x.entityId === entityId)) {
@@ -6055,7 +6056,18 @@ function renderAmbientActions() {
   const isArmed = alarmState && (alarmState.startsWith("armed") || alarmState === "arming" || alarmState === "pending");
   const alarmLabel = alarmState ? alarmState.replace("armed_", "Armed ").replace(/^\w/, c => c.toUpperCase()) : "—";
   const shownRooms = AMBIENT_ROOMS.filter(id => ROOMS[id] && ROOMS[id].lighting.length).length;
-  const securitySpan = Math.min(2, Math.max(1, 8 - shownRooms)); // takes the slot a hidden room leaves
+  const securitySpan = Math.min(2, Math.max(1, 8 - shownRooms - 1)); // takes any slot a hidden room leaves (porch uses one)
+  // Front porch lights (2026-11-11): Foyer sits by the front door. Tap toggles.
+  const porch = extraStateCache[SECURITY_PORCH_ENTITY];
+  const porchOn = porch && porch.state === "on";
+  const porchCard = `<div class="ambient-card ambient-light ${porchOn ? "is-on" : ""}" data-ambient-porch ${porchOn ? `style="--lc:${kelvinHex(2700)}"` : ""}>
+    <div class="ambient-card-header">
+      ${ico("lamp-wall-up", "ambient-card-icon")}
+      <div class="ambient-card-roomlabel">Front Porch</div>
+    </div>
+    <div class="ambient-card-primary">${porch ? (porchOn ? "On" : "Off") : "—"}</div>
+    <div class="ambient-card-sub">Porch lights</div>
+  </div>`;
   const securityCard = `<div class="ambient-card ${isArmed ? "is-on" : ""}" data-ambient-nav="security" style="grid-column: span ${securitySpan}">
     <div class="ambient-card-header">
       ${ico(isArmed ? "shield-check" : "shield", "ambient-card-icon")}
@@ -6075,7 +6087,7 @@ function renderAmbientActions() {
   // per this spec.
   const roomCards = AMBIENT_ROOMS.map(id => lightCard(id)).join("");
   el.innerHTML = musicCard + comfortCard + packagesCard + energyCard + waterUsageCard + energyProducedCard
-    + waterHeaterCard + roomCards + securityCard;
+    + waterHeaterCard + roomCards + porchCard + securityCard;
   icons(el);
 
   el.querySelectorAll("[data-ambient-nav]").forEach(card => {
@@ -6166,6 +6178,19 @@ function renderAmbientActions() {
     track.addEventListener("click", e => e.stopPropagation());
   });
 
+
+  const porchTile = el.querySelector("[data-ambient-porch]");
+  if (porchTile) porchTile.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!window.haClient || !window.haClient.connected) { showErrorToast("Not connected — porch lights unchanged"); return; }
+    if (porchTile.dataset.busy) return;
+    porchTile.dataset.busy = "1";
+    const on = porchTile.classList.contains("is-on");
+    tapPop(porchTile);
+    window.haClient.callService("homeassistant", on ? "turn_off" : "turn_on", SECURITY_PORCH_ENTITY)
+      .then(() => showErrorToast(on ? "Porch lights off" : "Porch lights on")).catch(handleWriteError)
+      .finally(() => { delete porchTile.dataset.busy; });
+  });
 
   const alarmToggleBtn = el.querySelector("[data-ambient-alarm-toggle]");
   if (alarmToggleBtn) {

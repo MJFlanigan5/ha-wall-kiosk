@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kith Display Options</title>
+<style>
+  :root { --bg:#0f1013; --card:#1a1b1f; --card-b:#25262b; --t1:#ecebe7; --t2:#b9b7b1; --t3:#85837d; --t4:#55534e; --sep:#26272c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#060607; color:var(--t1); font:14px/1.45 -apple-system,"DM Sans","Inter",system-ui,sans-serif; padding:28px 16px 60px; }
+  .wrap { max-width:1180px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 6px; font-weight:600; }
+  h2 { font-size:18px; margin:46px 0 6px; font-weight:600; }
+  p.lead { color:var(--t3); margin:0 0 16px; max-width:780px; }
+  .notes { color:var(--t3); padding-left:18px; max-width:900px; }
+  .notes b { color:var(--t1); font-weight:600; }
+  .screen { background:var(--bg); border:1px solid #1d1e22; border-radius:18px; padding:2.6% 2.6% 2.2%; aspect-ratio:16/9; overflow:hidden; position:relative; display:flex; flex-direction:column; gap:12px; }
+  .lbl { font-size:10px; font-weight:700; color:var(--t3); text-transform:uppercase; letter-spacing:.1em; margin-bottom:10px; }
+  .card { background:var(--card); border:1px solid var(--card-b); border-radius:20px; padding:16px 18px; min-height:0; overflow:hidden; position:relative; }
+  .clock { font-weight:800; letter-spacing:-.05em; line-height:.9; }
+  .clock small { font-size:.3em; font-weight:400; color:var(--t3); letter-spacing:0; margin-left:4px; }
+  .muted { color:var(--t3); } .faint { color:var(--t4); }
+  .ev { border-radius:8px; padding:7px 10px; margin-bottom:5px; border-left:3px solid var(--c,#34C759); background:color-mix(in srgb, var(--c,#34C759) 12%, transparent); }
+  .ev b { display:block; font-size:13px; font-weight:600; }
+  .ev span { font-size:11px; color:var(--t3); }
+  .day { font-size:10px; font-weight:700; color:var(--t3); text-transform:uppercase; letter-spacing:.08em; margin:10px 0 6px; }
+  .day:first-child { margin-top:0; }
+  .chore { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--sep); font-size:13px; }
+  .chore:last-child { border-bottom:0; }
+  .chk { width:18px; height:18px; border-radius:50%; border:1.5px solid var(--t4); flex-shrink:0; }
+  .chore em { margin-left:auto; font-style:normal; font-size:11px; color:var(--t3); }
+  .big { font-size:30px; font-weight:800; letter-spacing:-.03em; line-height:1.1; }
+  .fc { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; border-top:1px solid var(--sep); padding-top:10px; margin-top:12px; text-align:center; font-size:11px; }
+  .fc div b { display:block; color:var(--t1); font-size:13px; }
+  .fc i { font-style:normal; display:block; font-size:15px; margin:2px 0; }
+  .dots { display:flex; gap:5px; justify-content:center; margin-bottom:10px; }
+  .dots i { width:5px; height:5px; border-radius:50%; background:var(--t4); }
+  .dots i.on { width:7px; height:7px; background:var(--t2); }
+  .prog { position:absolute; left:18px; right:18px; bottom:10px; height:2px; background:var(--sep); border-radius:2px; overflow:hidden; }
+  .prog::after { content:""; position:absolute; inset:0; background:var(--t3); transform-origin:left; animation:grow 10s linear infinite; }
+  @keyframes grow { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+  .slide { animation:rise .42s cubic-bezier(.2,0,0,1) both; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px) scale(.985); } to { opacity:1; transform:none; } }
+  .chip { display:inline-block; padding:3px 9px; border-radius:999px; background:#22232a; border:1px solid #2e3037; font-size:11px; color:var(--t2); margin:0 4px 4px 0; }
+  .fact { display:flex; justify-content:space-between; align-items:baseline; padding:9px 0; border-bottom:1px solid var(--sep); font-size:13px; }
+  .fact:last-child { border-bottom:0; }
+  .fact b { font-size:15px; }
+  .tline { position:relative; padding-left:18px; }
+  .tline::before { content:""; position:absolute; left:5px; top:4px; bottom:4px; width:1px; background:var(--sep); }
+  .tline .dot { position:absolute; left:1px; width:9px; height:9px; border-radius:50%; background:var(--bg); border:1.5px solid var(--t3); margin-top:5px; }
+  .tline .now { border-color:var(--t1); background:var(--t1); }
+  @media (max-width:760px) { .screen { aspect-ratio:auto; } .g3, .g2, .gb { grid-template-columns:1fr !important; } .clock { font-size:56px !important; } }
+  @media (prefers-reduced-motion: reduce) { .prog::after, .slide { animation:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Kith display: options</h1>
+  <p class="lead">Three layouts for the Kith wall display, drawn with Kith's real data as of Wednesday night, Nov 11. Today is Veterans Day, with AT&amp;T and Sungage due. Clean House and Feed Johnny are due Friday, the lawn and dryer lint Saturday, trash on Sunday. A USPS package is due Friday. No dinners are planned and the grocery list is empty. Clarkston weather from Homey: 55° tonight, light rain tomorrow.</p>
+
+  <h2>Two problems every option fixes</h2>
+  <ul class="notes">
+    <li><b>The flash.</b> The middle panel is picked by its position in a list that changes size whenever music starts or stops, or a widget drops out for a moment. The same position then points at a different panel, which fades to black and back. The fix is to track the panel by name instead of position, and slide between panels instead of fading to black.</li>
+    <li><b>75 packages stuck "in transit".</b> Kith logs Amazon's "Delivered" emails as new in-transit packages and never marks them delivered, so the list goes back to October. Anything showing a package count is wrong until that's fixed. Really, only a few are in transit right now.</li>
+  </ul>
+
+  <h2>A. Same three columns, calmer</h2>
+  <p class="lead">Today's layout, kept: upcoming on the left, one rotating panel in the middle, weather on the right. The middle panel cycles through only household things (dinner, chores, countdowns, packages, music, grocery) instead of about 40 panel types. Stocks, Product Hunt, GitHub, Reddit, Beehiiv, YouTube, Etsy, uptime, NextDNS, Beszel and UniFi come off the family screen. Panels slide in, and a thin line at the bottom shows when the next one is coming.</p>
+  <div class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end">
+      <div class="clock" style="font-size:84px">11:48<small>PM</small></div>
+      <div style="text-align:right"><div style="font-size:22px">Wed, November 11</div><div class="faint" style="font:11px ui-monospace,monospace;margin-top:4px">● synced</div></div>
+    </div>
+    <div class="g3" style="flex:1;display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:12px;min-height:0">
+      <div class="card"><div class="lbl">Upcoming</div>
+        <div class="day">Today</div>
+        <div class="ev" style="--c:#8e8cf0"><b>Veterans Day</b><span>All day</span></div>
+        <div class="ev" style="--c:#e0a458"><b>AT&amp;T</b><span>Bill due</span></div>
+        <div class="ev" style="--c:#e0a458"><b>Sungage Financial</b><span>Bill due</span></div>
+        <div class="day">Thursday</div>
+        <div class="ev" style="--c:#6aa8e8"><b>Delivery: Arts &amp; Crafts</b><span>Amazon</span></div>
+        <div class="day">Friday</div>
+        <div class="ev" style="--c:#6aa8e8"><b>USPS package</b><span>By 9 PM</span></div>
+      </div>
+      <div class="card slide"><div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+        <div class="lbl">This week's chores</div>
+        <div class="chore"><span class="chk"></span>Clean House<em>Fri</em></div>
+        <div class="chore"><span class="chk"></span>Feed Johnny 🌱<em>Fri</em></div>
+        <div class="chore"><span class="chk"></span>Cut the grass<em>Sat</em></div>
+        <div class="chore"><span class="chk"></span>Clean dryer lint trap<em>Sat</em></div>
+        <div class="chore"><span class="chk"></span>Trash can to the curb<em>Sun</em></div>
+        <div class="prog"></div>
+      </div>
+      <div class="card"><div class="lbl">Weather</div>
+        <div class="big" style="font-size:44px">55°</div><div class="muted">Light clouds · light rain tomorrow</div>
+        <div class="fc"><div>Thu<i>🌦</i><b>59°</b>43°</div><div>Fri<i>☁️</i><b>50°</b>39°</div><div>Sat<i>🌤</i><b>51°</b>38°</div><div>Sun<i>🌤</i><b>52°</b>32°</div><div>Mon<i>☁️</i><b>54°</b>38°</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>B. Today board (no rotation)</h2>
+  <p class="lead">Nothing rotates, so nothing can flash. On the left are the clock, the weather and a short list of household facts. On the right is one timeline for today through Sunday that mixes events, bills, deliveries and chores in time order. A dot marks "now". This is the calmest of the three and the closest to the clean ambient screen on Foyer.</p>
+  <div class="screen">
+    <div class="g2" style="flex:1;display:grid;grid-template-columns:1fr 1.5fr;gap:14px;min-height:0">
+      <div style="display:flex;flex-direction:column;gap:12px;min-height:0">
+        <div style="padding:6px 4px 4px"><div class="clock" style="font-size:104px">11:48<small>PM</small></div><div class="muted" style="font-size:18px;margin-top:8px">Wednesday, November 11</div></div>
+        <div class="card"><div style="display:flex;align-items:baseline;gap:12px"><div class="big" style="font-size:40px">55°</div><div class="muted">Light clouds · tomorrow 59°/43°, light rain</div></div></div>
+        <div class="card" style="flex:1">
+          <div class="fact"><span class="muted">Dinner tonight</span><b class="faint">Not planned</b></div>
+          <div class="fact"><span class="muted">Arriving</span><b>2 by Fri</b></div>
+          <div class="fact"><span class="muted">Grocery list</span><b class="faint">Empty</b></div>
+          <div class="fact"><span class="muted">Next birthday</span><b>Erica · 92 days</b></div>
+        </div>
+      </div>
+      <div class="card"><div class="lbl">Today to Sunday</div>
+        <div class="tline">
+          <div class="day">Today</div>
+          <div style="position:relative"><span class="dot now"></span><div class="ev" style="--c:#8e8cf0"><b>Veterans Day</b><span>All day</span></div></div>
+          <div style="position:relative"><span class="dot"></span><div class="ev" style="--c:#e0a458"><b>AT&amp;T and Sungage Financial</b><span>Bills due</span></div></div>
+          <div class="day">Thursday</div>
+          <div style="position:relative"><span class="dot"></span><div class="ev" style="--c:#6aa8e8"><b>Arts &amp; Crafts arrives</b><span>Amazon</span></div></div>
+          <div class="day">Friday</div>
+          <div style="position:relative"><span class="dot"></span><div class="ev" style="--c:#6aa8e8"><b>USPS package</b><span>By 9 PM</span></div></div>
+          <div style="position:relative"><span class="dot"></span><div class="ev" style="--c:#7fc49a"><b>Clean House · Feed Johnny 🌱</b><span>Chores</span></div></div>
+          <div class="day">Saturday</div>
+          <div style="position:relative"><span class="dot"></span><div class="ev" style="--c:#7fc49a"><b>Cut the grass · Dryer lint trap</b><span>Chores</span></div></div>
+          <div style="position:relative"><span class="dot"></span><div class="ev" style="--c:#e0a458"><b>Japandi Supply House</b><span>Bill due</span></div></div>
+          <div class="day">Sunday</div>
+          <div style="position:relative"><span class="dot"></span><div class="ev" style="--c:#7fc49a"><b>Trash can to the curb</b><span>Chore</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>C. Glance and one story</h2>
+  <p class="lead">Built like the Foyer ambient screen. A large clock and weather sit on top, with a row of four small fact tiles under them. One wide card at the bottom rotates slowly, using the same household panels as A.</p>
+  <div class="screen">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><div class="clock" style="font-size:110px">11:48<small>PM</small></div><div class="muted" style="font-size:18px;margin-top:6px">Wednesday, November 11 · Veterans Day</div></div>
+      <div style="text-align:right"><div class="big" style="font-size:56px">55°</div><div class="muted">Light rain tomorrow · 59°/43°</div></div>
+    </div>
+    <div class="gb" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      <div class="card"><div class="lbl">Bills today</div><div class="big">2</div><div class="muted">AT&amp;T · Sungage</div></div>
+      <div class="card"><div class="lbl">Chores this week</div><div class="big">5</div><div class="muted">Next: Clean House, Fri</div></div>
+      <div class="card"><div class="lbl">Arriving</div><div class="big">2</div><div class="muted">Thu and Fri</div></div>
+      <div class="card"><div class="lbl">Dinner</div><div class="big faint">—</div><div class="muted">Nothing planned</div></div>
+    </div>
+    <div class="card slide" style="flex:1"><div class="lbl">Coming up</div>
+      <div style="display:flex;gap:36px;align-items:baseline;flex-wrap:wrap">
+        <div><div class="big">🎉 Erica's birthday</div><div class="muted">February 11 · 92 days</div></div>
+        <div><div class="big" style="font-size:22px">🎉 Mike's 40th</div><div class="muted">March 30 · 139 days</div></div>
+      </div>
+      <div class="prog"></div>
+    </div>
+  </div>
+
+  <h2>Things to decide</h2>
+  <ul class="notes">
+    <li><b>Layout:</b> A, B or C.</li>
+    <li><b>The work widgets</b> (stocks, GitHub, Beehiiv, YouTube, Etsy, uptime and similar): drop them from the display, or keep them as a single "Studio" panel?</li>
+    <li><b>Colour:</b> the event colours come from each calendar. Do you want those, or plain grey like the Foyer ambient screen?</li>
+  </ul>
+</div>
+</body>
+</html>
