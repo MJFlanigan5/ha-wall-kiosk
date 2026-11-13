@@ -96,6 +96,11 @@ const ROOM_ENTITY_MAP = {
   // Hallway (added 2026-11-12): Hallway 1 and 2 (color_temp + hs, confirmed live)
   // and the Nest thermostat, which Homey drives (same device as the Ambient
   // Comfort tile), so tapping that tile lands on real controls.
+  // Foyer (added 2026-11-13): the Front Foyer light by the wall tablet
+  // (Tuya, HA area "foyer"). Replaces Master on the ambient screen.
+  foyer: {
+    lighting: ["light.galaxy_bk_3"],
+  },
   hallway: {
     lighting: ["light.galaxy_bk", "light.galaxy_bk_2"],
     climateDeviceId: "7d030c67-4001-483b-8765-75f7d34efa59",
