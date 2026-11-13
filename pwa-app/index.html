@@ -1042,6 +1042,20 @@
   .rail-item .icon-wrap { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.10); color: rgba(231,229,224,0.45); }
   .rail-item .icon-wrap svg { width: 16px; height: 16px; }
   .rail-item.active .icon-wrap { background: rgba(217,160,102,0.35); border-color: rgba(217,160,102,0.6); color: #f3e2cc; box-shadow: 0 0 14px rgba(217,160,102,0.35); }
+  .rail-item.is-open .icon-wrap { background: rgba(255,255,255,0.16); color: var(--text); }
+  /* More panel (2026-11-13): opens beside the rail with the rooms and house
+     pages that no longer fit on it. */
+  .rail-more { position: fixed; left: calc(var(--rail-w) + 6px); bottom: clamp(12px, 3vh, 32px); z-index: 900; width: 300px; padding: 14px 14px 10px; border-radius: 20px; background: rgba(28,29,33,0.94); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 18px 48px rgba(0,0,0,0.5); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); opacity: 0; transform: translateX(-8px); pointer-events: none; transition: opacity 0.18s ease, transform 0.18s ease; }
+  .rail-more.open { opacity: 1; transform: none; pointer-events: auto; }
+  .rail-more-title { font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(231,229,224,0.5); margin: 2px 4px 8px; }
+  .rail-more-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+  .rail-more-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 2px; border: none; border-radius: 14px; background: transparent; color: #dcd9d2; font: 500 11.5px/1.2 var(--font-body); cursor: pointer; }
+  .rail-more-item:active { background: rgba(255,255,255,0.08); }
+  .rail-more-item .icon-wrap { position: relative; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.10); color: rgba(231,229,224,0.7); }
+  .rail-more-item .icon-wrap svg { width: 17px; height: 17px; }
+  .rail-more-item.active .icon-wrap { background: rgba(217,160,102,0.35); border-color: rgba(217,160,102,0.6); color: #f3e2cc; }
+  .rail-more-item .rail-health-dot { top: 0; right: 0; }
+  @media (max-width: 640px) { .rail-more { display: none; } }
   #content .room-grid .rg-media { grid-row: span 1; }
   /* Pass 5 (2026-11-11): same look on the utility pages (Energy, Security,
      Music, Sensors, Health, Remote, Settings). CSS only. */
@@ -1631,17 +1645,38 @@ function roomHasContent(id) {
     || r.airQuality || r.climateDeviceId || (ROOM_EXTRA_TILES[id] || []).length));
 }
 
+// Tablet rail (2026-11-13, Mike): everyday rooms plus Security and Music stay
+// on the rail; every other room and the house pages (Energy, Sensors,
+// Health, Remote, Settings) move into a More panel so the rail fits
+// without scrolling. The phone layout keeps its full scrolling list.
+const RAIL_PRIMARY_ROOMS = ["living", "kitchen", "dining", "master", "bedroom3", "bedroom4"];
+const RAIL_MORE_PAGES = [["power", "Energy"], ["sensors", "Sensors"], ["health", "Health"], ["remote", "Remote"], ["settings", "Settings"]];
+let railMoreOpen = false;
+document.addEventListener("pointerdown", (e) => {
+  if (!railMoreOpen || e.target.closest("#railMore, [data-rail-more]")) return;
+  railMoreOpen = false;
+  const panel = document.getElementById("railMore");
+  if (panel) panel.classList.remove("open");
+  const btn = document.querySelector("[data-rail-more]");
+  if (btn) btn.classList.toggle("is-open", false);
+});
+
 function renderRail() {
   const rail = document.getElementById("rail");
   const mobileRail = document.getElementById("mobileRail");
   rail.innerHTML = `<button class="rail-brand" data-rail-home title="Home">${ico("home", "i20")}</button>`;
   mobileRail.innerHTML = "";
-  ROOM_ORDER.filter(id => roomHasContent(id) || id === currentRoom).forEach(id => {
+  const roomItem = (id) => {
     const room = ROOMS[id];
     const active = id === currentRoom ? "active" : "";
     const badge = RAIL_BADGES[id] ? `<span class="rail-badge">${RAIL_BADGES[id]}</span>` : "";
-    const itemHtml = `<button class="rail-item ${active}" data-room="${id}" title="${esc(room.name)}"><div class="icon-wrap">${ico(railIcon(id), "i20")}${badge}</div><span class="label">${room.name}</span></button>`;
-    rail.insertAdjacentHTML("beforeend", itemHtml);
+    return `<button class="rail-item ${active}" data-room="${id}" title="${esc(room.name)}"><div class="icon-wrap">${ico(railIcon(id), "i20")}${badge}</div><span class="label">${room.name}</span></button>`;
+  };
+  const shownRooms = ROOM_ORDER.filter(id => roomHasContent(id) || id === currentRoom);
+  const moreRooms = shownRooms.filter(id => !RAIL_PRIMARY_ROOMS.includes(id));
+  shownRooms.forEach(id => {
+    const itemHtml = roomItem(id);
+    if (RAIL_PRIMARY_ROOMS.includes(id)) rail.insertAdjacentHTML("beforeend", itemHtml);
     mobileRail.insertAdjacentHTML("beforeend", itemHtml);
   });
   const powerActive = currentRoom === "power" ? "active" : "";
@@ -1659,20 +1694,46 @@ function renderRail() {
   const remoteHtml = `<button class="rail-item ${remoteActive}" data-room="remote"><div class="icon-wrap">${ico(railIcon("remote"), "i20")}</div><span class="label">Remote</span></button>`;
   const settingsActive = currentRoom === "settings" ? "active" : "";
   const settingsHtml = `<button class="rail-item ${settingsActive}" data-room="settings"><div class="icon-wrap">${ico(railIcon("settings"), "i20")}</div><span class="label">Settings</span></button>`;
-  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + settingsHtml);
+  const moreIds = moreRooms.concat(RAIL_MORE_PAGES.map(p => p[0]));
+  const moreActive = moreIds.includes(currentRoom) ? "active" : "";
+  const moreHtml = `<button class="rail-item ${moreActive} ${railMoreOpen ? "is-open" : ""}" data-rail-more title="More">${healthDot}<div class="icon-wrap">${ico("layout-grid", "i20")}</div><span class="label">More</span></button>`;
+  rail.insertAdjacentHTML("beforeend", `<div class="rail-divider"></div>` + securityHtml + musicHtml + moreHtml);
   mobileRail.insertAdjacentHTML("beforeend", powerHtml + securityHtml + musicHtml + sensorsHtml + healthHtml + remoteHtml + settingsHtml);
+
+  let panel = document.getElementById("railMore");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "railMore";
+    panel.className = "rail-more";
+    document.body.appendChild(panel);
+  }
+  const moreTile = (id, label, extra) => `<button class="rail-more-item ${id === currentRoom ? "active" : ""}" data-room="${id}">
+      <div class="icon-wrap">${ico(railIcon(id), "i20")}${extra || ""}</div><span>${esc(label)}</span></button>`;
+  panel.innerHTML = (moreRooms.length ? `<div class="rail-more-title">Rooms</div><div class="rail-more-grid">${moreRooms.map(id =>
+      moreTile(id, ROOMS[id].name, RAIL_BADGES[id] ? `<span class="rail-badge">${RAIL_BADGES[id]}</span>` : "")).join("")}</div>` : "")
+    + `<div class="rail-more-title">House</div><div class="rail-more-grid">${RAIL_MORE_PAGES.map(([id, label]) =>
+      moreTile(id, label, id === "health" ? healthDot : "")).join("")}</div>`;
+  panel.classList.toggle("open", railMoreOpen);
 
   document.querySelectorAll("[data-room]").forEach(el => {
     el.addEventListener("click", () => goToRoom(el.dataset.room));
   });
   const homeBtn = document.querySelector("[data-rail-home]");
   if (homeBtn) homeBtn.addEventListener("click", () => showAmbient());
+  const moreBtn = rail.querySelector("[data-rail-more]");
+  if (moreBtn) moreBtn.addEventListener("click", () => {
+    railMoreOpen = !railMoreOpen;
+    panel.classList.toggle("open", railMoreOpen);
+    moreBtn.classList.toggle("is-open", railMoreOpen);
+  });
   icons(rail); // only #rail's brand button actually has an icon — #mobileRail is text-label-only
+  icons(panel);
 }
 
 // Shared by the rail nav and Ambient Mode's card-tap-to-enter (2026-08-06) —
 // same reset-state list either path used to duplicate inline.
 function goToRoom(id) {
+  railMoreOpen = false;
   currentRoom = id; currentService = "lighting"; lightingView = "slider"; colorWheelIndex = null;
   mediaView = "now"; powerTab = "overview"; securityView = "arm";
   render();
@@ -4587,6 +4648,7 @@ function refreshWaterHeaterFromHA() {
 // sensing feeding their zone, so they get no dot rather than a permanently
 // false one). Add a room here once its zone has a sensor.
 const PRESENCE_ZONE_BY_ROOM = {
+  foyer: "Foyer", // Homey Foyer zone (2026-11-13): Apollo R_PRO-1 Foyer + Front Foyer light
   kitchen: "Kitchen",
   utility: "Utility Room",
   master: "Master Bedroom",
