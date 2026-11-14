@@ -2236,7 +2236,24 @@ function renderLighting(room) {
 function renderClimate(room) {
   const device = climateLiveCache[room.climateDeviceId];
   if (!device) {
-    return `<div class="dc-grid"><div class="dc-card"><div class="dc-card-label" style="opacity:0.5">Loading…</div></div></div>`;
+    // No Homey data on this tablet: show HA's read-only mirror of the same
+    // thermostat instead of "Loading…" forever (Nest device only).
+    const haTemp = room.climateDeviceId === NEST_THERMOSTAT_DEVICE_ID ? thermoHaNum("temp") : null;
+    if (haTemp == null) {
+      return `<div class="dc-grid"><div class="dc-card"><div class="dc-card-label" style="opacity:0.5">Loading…</div></div></div>`;
+    }
+    const heat = thermoHaNum("heat"), cool = thermoHaNum("cool"), hum = thermoHaNum("hum");
+    const mode = thermoHaStr("mode"), hvac = thermoHaStr("hvac") || "";
+    const cls = /heat/.test(hvac) ? "state-heat" : /cool/.test(hvac) ? "state-cool" : "";
+    return `<div class="dc-grid">
+      <div class="dc-card dc-climate-card ${cls}">
+        <div class="dc-card-label">Climate${hvac ? `<div class="dc-card-sub">${hvac}</div>` : ""}</div>
+        <div class="dc-card-body"><div class="dc-big-num">${Math.round(haTemp)}°</div></div>
+        <div class="dc-card-sub" style="margin-top:14px">${[mode ? "Mode · " + mode : "", heat != null ? "Heat · " + Math.round(heat) + "°" : "", cool != null ? "Cool · " + Math.round(cool) + "°" : ""].filter(Boolean).join("  ·  ")}</div>
+        ${hum != null ? `<div class="dc-card-sub" style="margin-top:12px">Humidity · ${Math.round(hum)}%</div>` : ""}
+        <div class="dc-card-sub" style="margin-top:12px; opacity:0.6">Controls need Homey · Settings → Homey</div>
+      </div>
+    </div>`;
   }
   const caps = homeyThermostatCapabilities(device);
   const activityLabel = caps.activityCap
@@ -4474,6 +4491,26 @@ let ambientKitchenTempState = null;
 // bridged into HA at all). Read via window.homeyClient, HomeyConfig
 // permitting — see homey-client.js.
 const NEST_THERMOSTAT_DEVICE_ID = "7d030c67-4001-483b-8765-75f7d34efa59";
+// Read-only HA mirror of the same Nest (Homey -> MQTT bridge). Used only when
+// this tablet's Homey connection is missing or failing, so the temperature
+// and setpoints still show; writes still need Homey.
+const THERMO_HA = {
+  temp: "sensor.thermostat_temperature",
+  hum: "sensor.thermostat_humidity",
+  heat: "sensor.thermostat_heat_temperature",
+  cool: "sensor.thermostat_cool_temperature",
+  mode: "sensor.thermostat_thermostat_mode",
+  hvac: "sensor.thermostat_hvac",
+};
+function thermoHaNum(key) {
+  const s = extraStateCache[THERMO_HA[key]];
+  const v = s ? parseFloat(s.state) : NaN;
+  return isNaN(v) ? null : v;
+}
+function thermoHaStr(key) {
+  const s = extraStateCache[THERMO_HA[key]];
+  return s && s.state !== "unavailable" && s.state !== "unknown" ? s.state : null;
+}
 
 // All 14 real Homey moods (confirmed live via moods_list, 2026-09-09) —
 // previously only Movie Night/Dinner Guests were wired, the other 12 sat
@@ -4984,6 +5021,7 @@ async function hydrateStatesFromHA(client) {
     for (const t of list) { const state = stateById.get(t.entityId); if (state) extraStateCache[t.entityId] = state; }
   }
   { const porch = stateById.get(SECURITY_PORCH_ENTITY); if (porch) extraStateCache[SECURITY_PORCH_ENTITY] = porch; }
+  for (const id of Object.values(THERMO_HA)) { const s = stateById.get(id); if (s) extraStateCache[id] = s; }
   for (const [entityId, loc] of airQualityEntityLocations) {
     const state = stateById.get(entityId);
     if (state && ROOMS[loc.roomId].airQuality) ROOMS[loc.roomId].airQuality[loc.field] = parseFloat(state.state);
@@ -5037,6 +5075,12 @@ async function initLiveData() {
         extraStateCache[entityId] = newState;
         if (currentRoom === "security" && securityCameraFullscreen === null) renderSecurityContent();
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (Object.values(THERMO_HA).includes(entityId)) {
+        extraStateCache[entityId] = newState;
+        if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        if (currentRoom === "hallway" && !climateLiveCache[NEST_THERMOSTAT_DEVICE_ID]) renderContent();
         return;
       }
       if (SECURITY_EVENT_SOURCES.some(x => x.entityId === entityId)) {
@@ -6015,10 +6059,24 @@ function renderAmbientActions() {
   // not HA — climate.hallway is a dead restored entity with no real backing.
   const nestDevice = climateLiveCache[NEST_THERMOSTAT_DEVICE_ID];
   const nestCaps = nestDevice ? homeyThermostatCapabilities(nestDevice) : null;
-  const thermoTemp = nestCaps && nestCaps.measureTemp ? nestCaps.measureTemp.value : null;
+  // Homey first (live, writable); HA's mirrored sensors fill in when this
+  // tablet's Homey connection is missing, so the tile never sits on "—".
+  const thermoTemp = nestCaps && nestCaps.measureTemp ? nestCaps.measureTemp.value : thermoHaNum("temp");
+  const heatCap = nestCaps ? nestCaps.targets.find(t => t.id === "target_temperature") : null;
   const coolCap = nestCaps ? nestCaps.targets.find(t => t.id === "target_temperature.cool") : null;
-  const thermoCool = coolCap ? coolCap.value : null;
-  const comfortControls = (window.homeyClient && thermoCool != null) ? `
+  const thermoHeat = heatCap ? heatCap.value : thermoHaNum("heat");
+  const thermoCool = coolCap ? coolCap.value : thermoHaNum("cool");
+  const thermoMode = String((nestCaps && nestCaps.modeCap ? nestCaps.modeCap.value : thermoHaStr("mode")) || "").toLowerCase();
+  const isHeat = /heat/.test(thermoMode), isCool = /cool/.test(thermoMode);
+  // The +/- steps whichever setpoint the current mode actually uses.
+  // Heat+cool and off have no single setpoint, so the tile hides +/-
+  // there; the Hallway room page has both setpoints and the mode buttons.
+  const activeTarget = isHeat && !isCool ? { id: "target_temperature", value: thermoHeat }
+    : isCool && !isHeat ? { id: "target_temperature.cool", value: thermoCool } : null;
+  const comfortSub = isHeat && isCool && thermoHeat != null && thermoCool != null ? `Holding ${Math.round(thermoHeat)}–${Math.round(thermoCool)}°`
+    : activeTarget && activeTarget.value != null ? `${isHeat ? "Heating" : "Cooling"} to ${Math.round(activeTarget.value)}°`
+    : /off/.test(thermoMode) ? "Off" : "Comfort";
+  const comfortControls = (window.homeyClient && nestCaps && activeTarget && activeTarget.value != null) ? `
     <div class="ambient-card-controls">
       <button class="ambient-stepper-btn" data-comfort-temp="down" style="flex:1">−</button>
       <button class="ambient-stepper-btn" data-comfort-temp="up" style="flex:1">+</button>
@@ -6037,7 +6095,7 @@ function renderAmbientActions() {
       <div class="ambient-card-roomlabel">Hallway</div>
     </div>
     <div class="ambient-card-primary">${thermoTemp != null ? Math.round(thermoTemp) + "°" : "—"}</div>
-    <div class="ambient-card-sub">${thermoCool != null ? "Comfort · cools to " + Math.round(thermoCool) + "°" : "Comfort"}</div>
+    <div class="ambient-card-sub">${comfortSub}</div>
     ${comfortControls}
   </div>`;
 
@@ -6313,11 +6371,11 @@ function renderAmbientActions() {
   el.querySelectorAll("[data-comfort-temp]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (!window.homeyClient || thermoCool == null) return;
-      const target = Math.round(thermoCool) + (btn.dataset.comfortTemp === "up" ? 1 : -1);
+      if (!window.homeyClient || !activeTarget || activeTarget.value == null) return;
+      const target = Math.round(activeTarget.value) + (btn.dataset.comfortTemp === "up" ? 1 : -1);
       // Eco-off-before-write and readback both now live in the shared
       // writeClimateCapability (see its own comment for why).
-      await writeClimateCapability(NEST_THERMOSTAT_DEVICE_ID, "target_temperature.cool", target);
+      await writeClimateCapability(NEST_THERMOSTAT_DEVICE_ID, activeTarget.id, target);
       if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
     });
   });
