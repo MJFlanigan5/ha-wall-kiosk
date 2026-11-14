@@ -1328,6 +1328,46 @@
 <script src="ha-client.js"></script>
 <script src="homey-client.js"></script>
 <script src="rooms.config.js"></script>
+<script type="module" src="number-flow.js"></script>
+<script>
+// NumberFlow (number-flow@0.6.2, vendored as number-flow.js): changing numbers
+// roll to the new value instead of jumping. Foyer redraws cards from HTML
+// strings, so every number has a key; a redrawn element starts at the last
+// value shown for its key and rolls to the new one. The plain text inside
+// the tag shows if the module never loads.
+const NF_LAST = {};
+function nf(key, value, format) {
+  const v = Number(value);
+  if (value == null || !isFinite(v)) return "—";
+  const fmt = format || { maximumFractionDigits: 0 };
+  return `<number-flow data-nf="${key}" data-nf-v="${v}" data-nf-fmt='${JSON.stringify(fmt)}'>${new Intl.NumberFormat(undefined, fmt).format(v)}</number-flow>`;
+}
+function nfHydrate(el) {
+  const key = el.dataset.nf, v = Number(el.dataset.nfV), prev = NF_LAST[key];
+  el.format = JSON.parse(el.dataset.nfFmt);
+  NF_LAST[key] = v;
+  if (prev == null || prev === v) { el.update(v); return; }
+  el.update(prev);
+  requestAnimationFrame(() => el.update(v));
+}
+// Instant feedback on a tap, before the device confirms the write.
+function nfSet(root, key, value) {
+  const el = root && root.querySelector(`number-flow[data-nf="${key}"]`);
+  if (!el || !el.update) return;
+  NF_LAST[key] = value;
+  el.update(value);
+}
+customElements.whenDefined("number-flow").then(() => {
+  document.querySelectorAll("number-flow[data-nf]").forEach(nfHydrate);
+  new MutationObserver(muts => {
+    for (const m of muts) for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.matches("number-flow[data-nf]")) nfHydrate(n);
+      n.querySelectorAll("number-flow[data-nf]").forEach(nfHydrate);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+});
+</script>
 <script>
 // Only one real camera position exists in this HA instance (checked live
 // via search_entities 2026-08-07) — Front Door, with a high-res main feed
@@ -1771,6 +1811,8 @@ function renderFlowDiagram() {
   const battD = POWER.battery.charging ? "M200 95 L 340 95" : "M340 95 L 200 95";
   const live = POWER.totalKw > 0;
   const lbl = (x, y, text, on, color) => `<text x="${x}" y="${y}" text-anchor="middle" font-size="11" ${on ? `fill="${color}" font-weight="700"` : `fill="#5d6068"`}>${text}</text>`;
+  // Same label as lbl, but HTML in a foreignObject so the number can roll.
+  const numLbl = (x, y, name, key, kw, digits, on, color) => `<foreignObject x="${x - 60}" y="${y - 13}" width="120" height="16"><div style="text-align:center;font-size:11px;line-height:16px;${on ? `color:${color};font-weight:700` : "color:#5d6068"}">${name} ${nf(key, kw, { minimumFractionDigits: digits, maximumFractionDigits: digits })}</div></foreignObject>`;
   return `
     <svg class="up-flow-svg" viewBox="0 0 400 190" preserveAspectRatio="xMidYMid meet">
       ${leg(solarD, "#FFD60A", producing)}
@@ -1778,10 +1820,10 @@ function renderFlowDiagram() {
       ${leg(battD, "#5fd38a", battKw)}
       <circle cx="200" cy="95" r="26" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.18)" />
       ${live ? `<circle cx="200" cy="95" r="26" fill="none" stroke="rgba(217,160,102,.6)"><animate attributeName="r" values="26;38" dur="2.4s" repeatCount="indefinite" /><animate attributeName="opacity" values=".9;0" dur="2.4s" repeatCount="indefinite" /></circle>` : ""}
-      <text x="200" y="100" text-anchor="middle" fill="#e9e7e2" font-size="14" font-weight="700">${POWER.totalKw.toFixed(2)}</text>
+      <foreignObject x="170" y="85" width="60" height="20"><div style="text-align:center;color:#e9e7e2;font-size:14px;font-weight:700;line-height:20px">${nf("pw-house", POWER.totalKw, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></foreignObject>
       <text x="200" y="138" text-anchor="middle" fill="#8b8d94" font-size="10">House kW</text>
-      ${lbl(60, 30, `Solar ${producing.toFixed(1)}`, producing > 0, "#FFD60A")}
-      ${lbl(60, 172, `Grid ${importing.toFixed(2)}`, importing > 0, "#ef6b6b")}
+      ${numLbl(60, 30, "Solar", "pw-solar", producing, 1, producing > 0, "#FFD60A")}
+      ${numLbl(60, 172, "Grid", "pw-grid", importing, 2, importing > 0, "#ef6b6b")}
       ${lbl(350, 88, "Battery", battKw > 0, "#5fd38a")}
       <text x="350" y="104" text-anchor="middle" fill="#8b8d94" font-size="11">${POWER.battery.pct}% ${POWER.battery.charging ? "charging" : battKw > 0 ? "in use" : "idle"}</text>
     </svg>`;
@@ -1820,8 +1862,8 @@ function renderPowerOverview() {
   return `
     <div class="room-grid up-grid">
       <div class="dc-card rg-tile up-s4 up-r2 up-flow"><span class="up-live">● LIVE</span><div class="rg-name">Power flow</div>${renderFlowDiagram()}</div>
-      <div class="dc-card rg-tile up-s2"><div class="rg-chip"></div><div class="rg-val up-big">${POWER.liveConsumption.totalToday.toFixed(1)}</div><div class="rg-name">kWh used today</div>${renderTodaySpark()}</div>
-      <div class="dc-card rg-tile">${renderRingSvg(b.pct, "#5fd38a", 38)}<div class="rg-val">${b.pct}%</div><div class="rg-name">Battery, ${b.charging ? `charging ${b.rate}` : battKw > 0 ? `in use ${b.rate}` : "idle"}</div></div>
+      <div class="dc-card rg-tile up-s2"><div class="rg-chip"></div><div class="rg-val up-big">${nf("pw-today", POWER.liveConsumption.totalToday, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div class="rg-name">kWh used today</div>${renderTodaySpark()}</div>
+      <div class="dc-card rg-tile">${renderRingSvg(b.pct, "#5fd38a", 38)}<div class="rg-val">${nf("pw-batt", b.pct)}%</div><div class="rg-name">Battery, ${b.charging ? `charging ${b.rate}` : battKw > 0 ? `in use ${b.rate}` : "idle"}</div></div>
       <div class="dc-card rg-tile"><div class="rg-chip"></div><div class="rg-val">${isNaN(gal) ? "—" : gal.toFixed(1)}</div><div class="rg-name">gal water today</div></div>
       <div class="dc-card rg-tile up-s4" data-powertab="history"><div class="rg-label up-inline">Last 7 days</div>${renderWeekBars()}</div>
       <div class="dc-card rg-tile up-s2 ${pumpOn ? "is-on" : ""}" data-up-pump><div class="rg-chip"></div><div class="rg-val up-big">${wh.setTemp != null ? wh.setTemp + "°" : "—"}</div><div class="rg-name">Water heater, recirculation ${pumpOn ? "on" : "off"}</div><button class="up-pill ${pumpOn ? "on" : ""}" data-shower-prep>${pumpOn ? "Pump on" : "Hot water"}</button></div>
@@ -2259,11 +2301,11 @@ function renderClimate(room) {
   const activityLabel = caps.activityCap
     ? (caps.activityCap.values.find(v => v.id === caps.activityCap.value) || {}).title || caps.activityCap.value : "";
   const tempHtml = caps.measureTemp
-    ? `<div class="dc-big-num">${caps.measureTemp.value}°</div>` : "";
+    ? `<div class="dc-big-num">${nf("climate-temp", caps.measureTemp.value, { maximumFractionDigits: 1 })}°</div>` : "";
   const targetsHtml = caps.targets.map(t => `
     <div class="dc-steppers" style="margin-top:14px">
       <button class="dc-stepper-btn" data-climate-target-down="${t.id}">−</button>
-      <div class="dc-card-sub target" data-climate-target-label="${t.id}" style="flex:1; text-align:center; font-size:12px">${t.title || t.id} · ${t.value}°</div>
+      <div class="dc-card-sub target" data-climate-target-label="${t.id}" style="flex:1; text-align:center; font-size:12px">${t.title || t.id} · ${nf("climate-" + t.id, t.value, { maximumFractionDigits: 1 })}°</div>
       <button class="dc-stepper-btn" data-climate-target-up="${t.id}">+</button>
     </div>`).join("");
   const modeHtml = caps.modeCap
@@ -4219,6 +4261,7 @@ function wireInteractions(room) {
       el.addEventListener("click", () => {
         const next = Math.min(cap.max, cap.value + 1);
         cap.value = next;
+        nfSet(document, "climate-" + cap.id, next);
         writeClimateCapability(deviceId, cap.id, next).then(rerenderIfStillHere);
       });
     });
@@ -4228,6 +4271,7 @@ function wireInteractions(room) {
       el.addEventListener("click", () => {
         const next = Math.max(cap.min, cap.value - 1);
         cap.value = next;
+        nfSet(document, "climate-" + cap.id, next);
         writeClimateCapability(deviceId, cap.id, next).then(rerenderIfStillHere);
       });
     });
@@ -6073,8 +6117,8 @@ function renderAmbientActions() {
   // there; the Hallway room page has both setpoints and the mode buttons.
   const activeTarget = isHeat && !isCool ? { id: "target_temperature", value: thermoHeat }
     : isCool && !isHeat ? { id: "target_temperature.cool", value: thermoCool } : null;
-  const comfortSub = isHeat && isCool && thermoHeat != null && thermoCool != null ? `Holding ${Math.round(thermoHeat)}–${Math.round(thermoCool)}°`
-    : activeTarget && activeTarget.value != null ? `${isHeat ? "Heating" : "Cooling"} to ${Math.round(activeTarget.value)}°`
+  const comfortSub = isHeat && isCool && thermoHeat != null && thermoCool != null ? `Holding ${nf("thermo-heat", Math.round(thermoHeat))}–${nf("thermo-cool", Math.round(thermoCool))}°`
+    : activeTarget && activeTarget.value != null ? `${isHeat ? "Heating" : "Cooling"} to ${nf("thermo-target", Math.round(activeTarget.value))}°`
     : /off/.test(thermoMode) ? "Off" : "Comfort";
   const comfortControls = (window.homeyClient && nestCaps && activeTarget && activeTarget.value != null) ? `
     <div class="ambient-card-controls">
@@ -6094,7 +6138,7 @@ function renderAmbientActions() {
       ${ico("thermometer", "ambient-card-icon")}
       <div class="ambient-card-roomlabel">Hallway</div>
     </div>
-    <div class="ambient-card-primary">${thermoTemp != null ? Math.round(thermoTemp) + "°" : "—"}</div>
+    <div class="ambient-card-primary">${thermoTemp != null ? nf("thermo-temp", Math.round(thermoTemp)) + "°" : "—"}</div>
     <div class="ambient-card-sub">${comfortSub}</div>
     ${comfortControls}
   </div>`;
@@ -6373,6 +6417,7 @@ function renderAmbientActions() {
       e.stopPropagation();
       if (!window.homeyClient || !activeTarget || activeTarget.value == null) return;
       const target = Math.round(activeTarget.value) + (btn.dataset.comfortTemp === "up" ? 1 : -1);
+      nfSet(el, "thermo-target", target);
       // Eco-off-before-write and readback both now live in the shared
       // writeClimateCapability (see its own comment for why).
       await writeClimateCapability(NEST_THERMOSTAT_DEVICE_ID, activeTarget.id, target);

@@ -20,7 +20,7 @@ COPY setup-server.py /setup-server.py
 RUN chmod +x /entrypoint.sh
 
 COPY index.html config.js ha-client.js homey-client.js rooms.config.js \
-     manifest.json sw.js /usr/share/nginx/html/
+     manifest.json sw.js number-flow.js /usr/share/nginx/html/
 COPY icons/ /usr/share/nginx/html/icons/
 
 EXPOSE 80
