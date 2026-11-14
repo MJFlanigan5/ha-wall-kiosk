@@ -6233,17 +6233,17 @@ function renderAmbientActions() {
   // Energy Flow: real Tesla Powerwall breakdown — solar/battery/grid feed
   // alongside the home load figure. Read-only (sensors, not controls),
   // tapping opens the real Power screen for the fuller view.
-  const kw = (state) => state && !isNaN(parseFloat(state.state)) ? `${parseFloat(state.state).toFixed(2)} kW` : "—";
+  const kw = (state, key) => state && !isNaN(parseFloat(state.state)) ? `${nf(key, parseFloat(state.state), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW` : "—";
   const energyCard = `<div class="ambient-card" data-ambient-nav="power">
     <div class="ambient-card-header">
       ${ico("zap", "ambient-card-icon")}
     </div>
-    <div class="ambient-card-primary">${kw(ambientPowerState)}</div>
+    <div class="ambient-card-primary">${kw(ambientPowerState, "amb-house")}</div>
     <div class="ambient-card-sub">Energy Flow</div>
     <div class="ambient-energy-rows">
-      <div class="ambient-energy-row"><span class="label">Solar</span><span class="value">${kw(ambientSolarState)}</span></div>
-      <div class="ambient-energy-row"><span class="label">Battery</span><span class="value">${kw(ambientBatteryState)}</span></div>
-      <div class="ambient-energy-row"><span class="label">Grid</span><span class="value">${kw(ambientGridState)}</span></div>
+      <div class="ambient-energy-row"><span class="label">Solar</span><span class="value">${kw(ambientSolarState, "amb-solar")}</span></div>
+      <div class="ambient-energy-row"><span class="label">Battery</span><span class="value">${kw(ambientBatteryState, "amb-batt")}</span></div>
+      <div class="ambient-energy-row"><span class="label">Grid</span><span class="value">${kw(ambientGridState, "amb-grid")}</span></div>
     </div>
     ${ambientPowerState && parseFloat(ambientPowerState.state) > 0.05 ? ambientFlowLine(2.2).replace("ambient-flowline", "ambient-flowline at-top") : ""}
   </div>`;
