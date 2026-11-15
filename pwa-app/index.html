@@ -998,6 +998,18 @@
   .rg-vol-label { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); margin-left: 6px; }
   .rg-tv-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
   .rg-tv-actions .rg-pill { padding: 4px 10px; font-size: 11px; }
+  /* Split-flap board tile + sheet (2026-11-15): a small live copy of the board. */
+  #content .room-grid .rg-sf { grid-column: span 3; }
+  .sf-board { margin-top: 10px; background: #0b0b0c; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px; font-family: var(--font-mono); font-size: 12px; line-height: 1.4; letter-spacing: 1px; color: #f2efe8; white-space: pre; overflow: hidden; text-align: left; }
+  .sf-board div { min-height: 1.4em; }
+  .sf-board .sf-off { color: var(--text-faint); letter-spacing: 0; }
+  .sf-card { max-width: 520px; }
+  .sf-card .sf-board { font-size: 15px; margin: 4px 0 16px; }
+  .sf-send { display: flex; gap: 10px; margin-bottom: 14px; }
+  .sf-send textarea { flex: 1; resize: none; background: var(--base); color: var(--text); border: 1px solid var(--hairline); border-radius: 10px; padding: 10px 12px; font-family: var(--font-mono); font-size: 14px; text-transform: uppercase; }
+  .sf-send .confirm-card-btn { flex: 0 0 96px; }
+  .sf-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .sf-chips .dc-pill { cursor: pointer; }
   .rg-tv-open { grid-column: span 2; grid-row: span 2; display: flex; flex-direction: column; gap: 8px; }
   .rg-tv-open .dc-grid { display: block; }
   .rg-tv-close { align-self: flex-start; }
@@ -1321,6 +1333,23 @@
       <div class="confirm-card-title" id="confirmCardTitle"></div>
       <div class="confirm-card-message" id="confirmCardMessage"></div>
       <div class="confirm-card-actions" id="confirmCardActions"></div>
+    </div>
+  </div>
+
+  <div class="confirm-card-overlay" id="sfOverlay">
+    <div class="confirm-card sf-card">
+      <div class="confirm-card-title">Split-flap board</div>
+      <div class="sf-board" data-sf-rows></div>
+      <div class="sf-send">
+        <textarea id="sfText" rows="2" maxlength="140" placeholder="Type a message"></textarea>
+        <button class="confirm-card-btn primary" id="sfSendBtn">Send</button>
+      </div>
+      <div class="sf-chips" id="sfBoards"></div>
+      <div class="confirm-card-actions">
+        <button class="confirm-card-btn" id="sfSnoozeBtn">Snooze 1h</button>
+        <button class="confirm-card-btn" id="sfTvBtn">TV</button>
+        <button class="confirm-card-btn" id="sfCloseBtn">Close</button>
+      </div>
     </div>
   </div>
 
@@ -3889,6 +3918,117 @@ function renderTvTile(room) {
   </div>`;
 }
 
+// Split-flap board (2026-11-15): live copy of the living-room board TV plus a
+// sheet to send a message, show a saved board, snooze, and power the TV.
+// The board lives on LXC 117; this container's nginx proxies /splitflap/ to
+// it and adds the API key (see entrypoint.sh). The tile updates in place from
+// the board's event stream, so a new message never re-renders the page.
+const SPLITFLAP_TV = "remote.splitflap_board";
+const splitflap = { rows: null, state: null, es: null };
+function splitflapFeed() {
+  if (splitflap.es && splitflap.es.readyState !== EventSource.CLOSED) return;
+  splitflap.es = new EventSource("/splitflap/stream");
+  splitflap.es.addEventListener("display", e => {
+    try { splitflap.rows = JSON.parse(e.data).rows || null; } catch { return; }
+    paintSplitflap();
+  });
+}
+function sfRowsHtml() {
+  if (!splitflap.rows) return `<div class="sf-off">Connecting to the board…</div>`;
+  return splitflap.rows.map(r => `<div>${esc(r)}</div>`).join("");
+}
+function paintSplitflap() {
+  document.querySelectorAll("[data-sf-rows]").forEach(el => { el.innerHTML = sfRowsHtml(); });
+}
+function sfTvOn() {
+  const s = extraStateCache[SPLITFLAP_TV];
+  return Boolean(s && s.state === "on");
+}
+function renderSplitflapTile() {
+  splitflapFeed();
+  const on = sfTvOn();
+  return `<div class="dc-card rg-tile rg-sf ${on ? "is-on" : ""}" data-sf-open>
+    <div class="rg-chip">${ico("layout-grid", "i14")}</div>
+    <div class="sf-board" data-sf-rows>${sfRowsHtml()}</div>
+    <div class="rg-name">Split-flap board${on ? "" : " · TV off"}</div>
+  </div>`;
+}
+async function sfApi(path, method = "GET", body) {
+  const r = await fetch("/splitflap/" + path, {
+    method, credentials: "same-origin",
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!r.ok) throw new Error("board " + r.status);
+  return r.json();
+}
+// Every tap answers: the pressed button says what happened for a moment.
+function sfFlash(btn, text) {
+  const was = btn.dataset.label || btn.textContent;
+  btn.dataset.label = was;
+  btn.textContent = text;
+  clearTimeout(btn._sfT);
+  btn._sfT = setTimeout(() => { btn.textContent = btn.dataset.label; }, 1600);
+}
+function paintSplitflapSheet() {
+  const snoozed = Boolean(splitflap.state && splitflap.state.snoozed_until);
+  const snoozeBtn = document.getElementById("sfSnoozeBtn");
+  snoozeBtn.textContent = snoozeBtn.dataset.label = snoozed ? "Unsnooze" : "Snooze 1h";
+  const tvBtn = document.getElementById("sfTvBtn");
+  tvBtn.textContent = tvBtn.dataset.label = sfTvOn() ? "TV off" : "TV on";
+}
+async function openSplitflapSheet() {
+  document.getElementById("sfOverlay").classList.add("visible");
+  paintSplitflap();
+  paintSplitflapSheet();
+  const chips = document.getElementById("sfBoards");
+  try {
+    const [boards, state] = await Promise.all([sfApi("boards"), sfApi("state")]);
+    splitflap.state = state;
+    paintSplitflapSheet();
+    chips.innerHTML = boards.map(b => `<button class="dc-pill ${b.id === state.current_board_id ? "active" : ""}" data-sf-board="${b.id}">${esc(b.name)}</button>`).join("");
+  } catch (err) {
+    console.error(err);
+    chips.innerHTML = "";
+    showErrorToast("Can't reach the board right now");
+  }
+}
+document.getElementById("sfCloseBtn").addEventListener("click", () => document.getElementById("sfOverlay").classList.remove("visible"));
+document.getElementById("sfOverlay").addEventListener("click", e => { if (e.target.id === "sfOverlay") e.target.classList.remove("visible"); });
+document.getElementById("sfSendBtn").addEventListener("click", async e => {
+  const btn = e.currentTarget, box = document.getElementById("sfText");
+  const text = box.value.trim();
+  if (!text) { box.focus(); return; }
+  sfFlash(btn, "Sending…");
+  try {
+    await sfApi("message", "POST", { text, source: "manual", author: "Foyer" });
+    box.value = "";
+    sfFlash(btn, "Sent");
+    document.querySelectorAll("[data-sf-board]").forEach(c => c.classList.remove("active"));
+  } catch (err) { btn.textContent = btn.dataset.label; handleWriteError(err); }
+});
+document.getElementById("sfBoards").addEventListener("click", async e => {
+  const chip = e.target.closest("[data-sf-board]");
+  if (!chip) return;
+  document.querySelectorAll("[data-sf-board]").forEach(c => c.classList.toggle("active", c === chip));
+  try { await sfApi(`boards/${chip.dataset.sfBoard}/show`, "POST"); sfFlash(chip, "Showing"); }
+  catch (err) { chip.classList.remove("active"); handleWriteError(err); }
+});
+document.getElementById("sfSnoozeBtn").addEventListener("click", async e => {
+  const btn = e.currentTarget;
+  const snoozed = Boolean(splitflap.state && splitflap.state.snoozed_until);
+  try {
+    splitflap.state = await sfApi("snooze", snoozed ? "DELETE" : "POST", snoozed ? undefined : { minutes: 60 });
+    paintSplitflapSheet();
+    sfFlash(btn, snoozed ? "Back on" : "Snoozed");
+  } catch (err) { handleWriteError(err); }
+});
+document.getElementById("sfTvBtn").addEventListener("click", async e => {
+  const btn = e.currentTarget, on = sfTvOn();
+  try { await sfApi("tv", "POST", { on: !on }); sfFlash(btn, on ? "Turning off…" : "Turning on…"); }
+  catch (err) { handleWriteError(err); }
+});
+
 function ringSvg(pct, color) {
   const c = 113, off = c - (Math.max(0, Math.min(100, pct)) / 100) * c;
   return `<svg class="rg-ring" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" class="tr"/><circle cx="22" cy="22" r="18" class="v" transform="rotate(-90 22 22)" style="stroke:${color};--off:${off}"/></svg>`;
@@ -3902,6 +4042,7 @@ function renderRoomGrid(room) {
   if (room.media && room.media.entityId) media += renderMediaTile(room);
   media += extras.filter(t => t.row !== "lights").map(renderExtraTile).join("");
   if (room.tv && room.tv.entityId) media += renderTvTile(room);
+  if (currentRoom === "living") media += renderSplitflapTile();
   if (room.climateDeviceId) media += renderClimate(room);
   const aq = room.airQuality;
   if (aq && aq.pm25 != null) {
@@ -4064,6 +4205,7 @@ function wireInteractions(room) {
     track.addEventListener("pointercancel", () => { dragging = false; activeDragCount = Math.max(0, activeDragCount - 1); });
     track.addEventListener("click", e => e.stopPropagation());
   });
+  document.querySelectorAll("[data-sf-open]").forEach(el => el.addEventListener("click", openSplitflapSheet));
   document.querySelectorAll("[data-extra-toggle]").forEach(el => {
     el.addEventListener("click", () => {
       const id = el.dataset.extraToggle;
@@ -5065,6 +5207,7 @@ async function hydrateStatesFromHA(client) {
     for (const t of list) { const state = stateById.get(t.entityId); if (state) extraStateCache[t.entityId] = state; }
   }
   { const porch = stateById.get(SECURITY_PORCH_ENTITY); if (porch) extraStateCache[SECURITY_PORCH_ENTITY] = porch; }
+  { const sf = stateById.get(SPLITFLAP_TV); if (sf) extraStateCache[SPLITFLAP_TV] = sf; }
   for (const id of Object.values(THERMO_HA)) { const s = stateById.get(id); if (s) extraStateCache[id] = s; }
   for (const [entityId, loc] of airQualityEntityLocations) {
     const state = stateById.get(entityId);
@@ -5119,6 +5262,12 @@ async function initLiveData() {
         extraStateCache[entityId] = newState;
         if (currentRoom === "security" && securityCameraFullscreen === null) renderSecurityContent();
         if (document.getElementById("ambientOverlay").classList.contains("visible")) renderAmbientActions();
+        return;
+      }
+      if (entityId === SPLITFLAP_TV) {
+        extraStateCache[entityId] = newState;
+        if (document.getElementById("sfOverlay").classList.contains("visible")) paintSplitflapSheet();
+        if (currentRoom === "living") renderContent();
         return;
       }
       if (Object.values(THERMO_HA).includes(entityId)) {

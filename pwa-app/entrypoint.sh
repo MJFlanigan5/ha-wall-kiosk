@@ -71,6 +71,29 @@ else
   rm -f /etc/nginx/conf.d/agent.conf
 fi
 
+# Split-flap board proxy (Living Room tile). nginx adds the board's API key
+# so it never reaches the browser; only the routes the tile uses pass.
+if [ -n "$SPLITFLAP_URL" ] && [ -n "$SPLITFLAP_API_KEY" ]; then
+  case "$SPLITFLAP_URL$SPLITFLAP_API_KEY" in
+    *[!A-Za-z0-9_:/.-]*) echo "ERROR: SPLITFLAP_URL/SPLITFLAP_API_KEY contain unexpected characters." >&2; exit 1;;
+  esac
+  cat > /etc/nginx/splitflap.conf <<EOF
+location ~ ^/splitflap/(stream|state|boards|boards/[0-9]+/show|message|snooze|tv)\$ {
+    rewrite ^/splitflap/(.*)\$ /api/\$1 break;
+    proxy_pass $SPLITFLAP_URL;
+    proxy_set_header X-API-Key "$SPLITFLAP_API_KEY";
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 1h;
+    add_header Cache-Control "no-store";
+}
+EOF
+  echo "Split-flap proxy enabled."
+else
+  rm -f /etc/nginx/splitflap.conf
+fi
+
 python3 /setup-server.py &
 
 exec "$@"

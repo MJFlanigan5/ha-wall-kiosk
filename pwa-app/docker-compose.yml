@@ -11,6 +11,8 @@ services:
       BASIC_AUTH_USER: ${BASIC_AUTH_USER}
       BASIC_AUTH_PASS: ${BASIC_AUTH_PASS}
       FOYER_AGENT_TOKEN: ${FOYER_AGENT_TOKEN:-}
+      SPLITFLAP_URL: ${SPLITFLAP_URL:-}
+      SPLITFLAP_API_KEY: ${SPLITFLAP_API_KEY:-}
     volumes:
       # Without this, the login only ever lived in the container's own
       # writable layer — every redeploy (docker compose up --build,
