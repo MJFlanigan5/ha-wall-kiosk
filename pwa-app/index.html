@@ -643,7 +643,6 @@
   .ambient-overlay .ambient-light.is-on .ambient-card-icon,
   .ambient-overlay .ambient-light.is-on .ambient-card-primary { color: var(--lc); }
   .ambient-overlay .ambient-light.is-on .ambient-vpill-fill { background: var(--lc); box-shadow: 0 0 10px var(--lc); }
-  .ambient-flowline { position: absolute; left: 14px; right: 14px; bottom: 10px; height: 22px; width: calc(100% - 28px); pointer-events: none; }
   .ambient-water { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; pointer-events: none; overflow: hidden; }
   .ambient-water svg { position: absolute; left: 0; bottom: 0; width: 200%; height: 100%; animation: ambientWave 7s linear infinite; }
   .ambient-water svg + svg { animation-duration: 11s; animation-direction: reverse; height: 85%; }
@@ -653,10 +652,6 @@
   @media (prefers-reduced-motion: reduce) { .ambient-water svg { animation: none; } }
   .ambient-overlay .ambient-card-primary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ambient-overlay .ambient-security .ambient-card-primary { font-size: clamp(15px, 1.1vw + 5px, 22px); }
-  .ambient-flowline.at-top { top: 16px; bottom: auto; left: 45%; width: calc(55% - 14px); }
-  .ambient-flowline path { stroke: rgba(255,255,255,0.18); stroke-width: 1.2; fill: none; }
-  .ambient-flowline circle { fill: rgba(255,255,255,0.75); }
-  @media (prefers-reduced-motion: reduce) { .ambient-flowline circle { display: none; } }
   /* Card anatomy rebuilt 2026-08-06 to literally match the real Loxone
      Favorites screenshot (docs reference, not the marketing hero image):
      small icon top-left, room/zone label top-right (bare text, no chip),
@@ -911,9 +906,12 @@
       radial-gradient(110% 80% at 88% 0%, var(--room-tint), transparent 58%),
       radial-gradient(80% 70% at 0% 100%, var(--room-tint-2), transparent 62%),
       var(--base);
-    animation: roomKb 28s ease-in-out infinite alternate;
   }
-  @keyframes roomKb { to { transform: scale(1.045); } }
+  /* Power (2026-11-19): the iPad wasn't keeping its charge. Nothing behind the
+     ambient screen needs to move while it's up, so pause it all. */
+  body:has(#ambientOverlay.visible) #content *,
+  body:has(#ambientOverlay.visible) #content *::before,
+  body:has(#ambientOverlay.visible) #content *::after { animation-play-state: paused !important; }
   #content .header h1 { font-size: 52px; letter-spacing: -1.8px; line-height: 1; }
   #content .header .clock { font-family: var(--font-mono); font-size: 30px; font-weight: 500; letter-spacing: 0.5px; }
   #content .dc-card, #content .hero-status-card, #content .dc-pill {
@@ -6182,14 +6180,6 @@ function ambientLightColor(light) {
   if (light.color && light.hue != null) return `hsl(${Math.round(light.hue)}, ${Math.max(45, Math.round(light.sat || 0))}%, 62%)`;
   return kelvinHex(2700); // dimmable white with no reported temperature
 }
-// Slow moving dots along a short line — the one motion on the ambient
-// screen, shown only while energy or water is actually flowing.
-function ambientFlowLine(seconds) {
-  const path = "M2 18 Q 50 18 98 4";
-  const dot = begin => `<circle r="1.8"><animateMotion dur="${seconds}s" begin="${begin}s" repeatCount="indefinite" path="${path}"/></circle>`;
-  return `<svg class="ambient-flowline" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="${path}"/>${dot(0)}${dot(-seconds / 2)}</svg>`;
-}
-
 // Water running (2026-11-12): two slow waves fill the bottom of the Water
 // tile while the Flo meter reports flow, instead of the energy-style dots.
 function ambientWaterWave() {
@@ -6398,7 +6388,6 @@ function renderAmbientActions() {
       <div class="ambient-energy-row"><span class="label">Battery</span><span class="value">${kw(ambientBatteryState, "amb-batt")}</span></div>
       <div class="ambient-energy-row"><span class="label">Grid</span><span class="value">${kw(ambientGridState, "amb-grid")}</span></div>
     </div>
-    ${ambientPowerState && parseFloat(ambientPowerState.state) > 0.05 ? ambientFlowLine(2.2).replace("ambient-flowline", "ambient-flowline at-top") : ""}
   </div>`;
 
   // Security: real Alarmo alarm panel — replaces the old Night Mode tile
