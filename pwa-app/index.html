@@ -5258,6 +5258,10 @@ async function initLiveData() {
 
   client.onStateChanged((entityId, newState) => {
       if (!newState) return;
+      // Remote reload (2026-11-19): pressing input_button.foyer_reload in HA
+      // (or from a Homey Flow / voice) reloads the panel, so a stuck page
+      // can be recovered without walking to the Guided Access iPad.
+      if (entityId === "input_button.foyer_reload") { location.reload(); return; }
       if (entityId === SECURITY_PORCH_ENTITY) {
         extraStateCache[entityId] = newState;
         if (currentRoom === "security" && securityCameraFullscreen === null) renderSecurityContent();
